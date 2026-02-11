@@ -53,8 +53,29 @@ func (r *QuizRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Quiz, err
 }
 
 func (r *QuizRepo) ListByUser(ctx context.Context, userID uuid.UUID) ([]*models.Quiz, error) {
-	query := `SELECT id, user_id, summary_id, title, config_json, questions_json, question_count, created_at
-		FROM quizzes WHERE user_id = $1 ORDER BY created_at DESC`
+	query := `SELECT
+		q.id,
+		q.user_id,
+		q.summary_id,
+		q.title,
+		q.config_json,
+		q.questions_json,
+		q.question_count,
+		q.created_at,
+		qa.score_percent::float8 AS last_score,
+		qa.id AS last_attempt_id
+	FROM quizzes q
+	LEFT JOIN LATERAL (
+		SELECT id, score_percent
+		FROM quiz_attempts
+		WHERE quiz_id = q.id
+		  AND user_id = $1
+		  AND completed_at IS NOT NULL
+		ORDER BY completed_at DESC, started_at DESC
+		LIMIT 1
+	) qa ON true
+	WHERE q.user_id = $1
+	ORDER BY q.created_at DESC`
 
 	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
@@ -65,7 +86,18 @@ func (r *QuizRepo) ListByUser(ctx context.Context, userID uuid.UUID) ([]*models.
 	var quizzes []*models.Quiz
 	for rows.Next() {
 		q := &models.Quiz{}
-		err := rows.Scan(&q.ID, &q.UserID, &q.SummaryID, &q.Title, &q.ConfigJSON, &q.QuestionsJSON, &q.QuestionCount, &q.CreatedAt)
+		err := rows.Scan(
+			&q.ID,
+			&q.UserID,
+			&q.SummaryID,
+			&q.Title,
+			&q.ConfigJSON,
+			&q.QuestionsJSON,
+			&q.QuestionCount,
+			&q.CreatedAt,
+			&q.LastScore,
+			&q.LastAttemptID,
+		)
 		if err != nil {
 			return nil, err
 		}

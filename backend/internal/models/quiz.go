@@ -15,6 +15,8 @@ type Quiz struct {
 	ConfigJSON    json.RawMessage `json:"config"`
 	QuestionsJSON json.RawMessage `json:"questions"`
 	QuestionCount int             `json:"question_count"`
+	LastScore     *float64        `json:"last_score,omitempty"`
+	LastAttemptID *uuid.UUID      `json:"last_attempt_id,omitempty"`
 	CreatedAt     time.Time       `json:"created_at"`
 }
 

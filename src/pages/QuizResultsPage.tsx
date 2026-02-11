@@ -27,6 +27,23 @@ export function QuizResultsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [expandedQuestion, setExpandedQuestion] = useState<number | null>(null)
 
+  const safeParseJSON = (value: any) => {
+    if (typeof value !== 'string') return value
+    try {
+      return JSON.parse(value)
+    } catch {
+      return value
+    }
+  }
+
+  const toNumber = (value: any): number | null => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) {
+      return Number(value)
+    }
+    return null
+  }
+
   useEffect(() => {
     if (!attemptId) return
     async function load() {
@@ -50,7 +67,35 @@ export function QuizResultsPage() {
 
   const attemptMeta = attempt?.attempt || attempt
   const quizMeta = attempt?.quiz || attempt
-  const reviewQuestions = attempt?.questions || attempt?.review || quizMeta?.questions || []
+  const reviewQuestionsRaw = attempt?.questions || attempt?.review || quizMeta?.questions || []
+  const reviewQuestionsParsed = safeParseJSON(reviewQuestionsRaw)
+  const reviewQuestions = Array.isArray(reviewQuestionsParsed) ? reviewQuestionsParsed : []
+
+  const rawAttemptAnswers = safeParseJSON(
+    attemptMeta?.answers ??
+    attemptMeta?.answers_json ??
+    attempt?.answers ??
+    attempt?.answers_json,
+  )
+
+  const answerMap = new Map<number, number>()
+  if (Array.isArray(rawAttemptAnswers)) {
+    rawAttemptAnswers.forEach((entry: any) => {
+      const qIdx = toNumber(entry?.question_index ?? entry?.questionIndex)
+      const aIdx = toNumber(entry?.answer_index ?? entry?.answerIndex ?? entry?.selected_index)
+      if (qIdx !== null && aIdx !== null) {
+        answerMap.set(qIdx, aIdx)
+      }
+    })
+  } else if (rawAttemptAnswers && typeof rawAttemptAnswers === 'object') {
+    Object.entries(rawAttemptAnswers).forEach(([questionIndex, answerIndex]) => {
+      const qIdx = toNumber(questionIndex)
+      const aIdx = toNumber(answerIndex)
+      if (qIdx !== null && aIdx !== null) {
+        answerMap.set(qIdx, aIdx)
+      }
+    })
+  }
 
   if (isLoading) {
     return (
@@ -173,37 +218,56 @@ export function QuizResultsPage() {
             <div className="space-y-4">
               {questions.map((q: any, index: number) => {
                 const qId = q.id || index
-                const selectedIdx =
+                const options = Array.isArray(q.options)
+                  ? q.options
+                  : Array.isArray(q.answers)
+                    ? q.answers
+                    : []
+
+                const selectedIdx = toNumber(
                   q.user_answer_index ??
                   q.answer_index ??
                   q.selected_index ??
-                  q.user_answer
-                const correctIdx = q.correct_index
+                  q.user_answer ??
+                  answerMap.get(index),
+                )
+
+                const correctIdx = toNumber(q.correct_index ?? q.correctIndex)
 
                 const selectedLabel =
-                  typeof selectedIdx === 'number' && Array.isArray(q.options) && q.options[selectedIdx] !== undefined
-                    ? q.options[selectedIdx]
+                  selectedIdx !== null && options[selectedIdx] !== undefined
+                    ? options[selectedIdx]
                     : null
                 const correctLabel =
-                  typeof correctIdx === 'number' && Array.isArray(q.options) && q.options[correctIdx] !== undefined
-                    ? q.options[correctIdx]
-                    : q.correct_answer
+                  correctIdx !== null && options[correctIdx] !== undefined
+                    ? options[correctIdx]
+                    : q.correct_answer ?? q.correctAnswer
+
+                const fallbackUserAnswer =
+                  (typeof q.user_answer === 'string' && q.user_answer) ||
+                  (typeof q.userAnswer === 'string' && q.userAnswer) ||
+                  ''
+
+                const fallbackCorrectAnswer =
+                  (typeof q.correct_answer === 'string' && q.correct_answer) ||
+                  (typeof q.correctAnswer === 'string' && q.correctAnswer) ||
+                  ''
+
+                const userAnswerText = selectedLabel || fallbackUserAnswer || 'No answer'
+                const correctAnswerText = correctLabel || fallbackCorrectAnswer || 'N/A'
+
+                const explicitIsCorrect =
+                  typeof q.is_correct === 'boolean'
+                    ? q.is_correct
+                    : typeof q.isCorrect === 'boolean'
+                      ? q.isCorrect
+                      : null
 
                 const isCorrect =
-                  q.is_correct ??
-                  (selectedIdx !== undefined && selectedIdx !== null && correctIdx !== undefined
+                  explicitIsCorrect ??
+                  (selectedIdx !== null && correctIdx !== null
                     ? selectedIdx === correctIdx
-                    : false)
-
-                const userAnswerText =
-                  selectedLabel ||
-                  (typeof q.user_answer === 'string' ? q.user_answer : '') ||
-                  'No answer'
-
-                const correctAnswerText =
-                  correctLabel ||
-                  (typeof q.correct_answer === 'string' ? q.correct_answer : '') ||
-                  'N/A'
+                    : userAnswerText !== 'No answer' && correctAnswerText !== 'N/A' && userAnswerText === correctAnswerText)
 
                 return (
                   <Card

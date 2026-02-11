@@ -22,6 +22,14 @@ export function QuizzesPage() {
   const [quizzes, setQuizzes] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
+  const toNumber = (value: any): number | null => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) {
+      return Number(value)
+    }
+    return null
+  }
+
   useEffect(() => {
     async function load() {
       try {
@@ -39,7 +47,7 @@ export function QuizzesPage() {
   // Compute stats from real data
   const completedQuizzes = quizzes.filter((q: any) => q.last_score !== undefined && q.last_score !== null)
   const avgScore = completedQuizzes.length > 0
-    ? Math.round(completedQuizzes.reduce((s: number, q: any) => s + (q.last_score || 0), 0) / completedQuizzes.length)
+    ? Math.round(completedQuizzes.reduce((s: number, q: any) => s + (toNumber(q.last_score) ?? 0), 0) / completedQuizzes.length)
     : 0
 
   const stats = [
@@ -163,7 +171,7 @@ export function QuizzesPage() {
               <Card
                 key={quiz.id}
                 className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-l-4 border-l-transparent hover:border-l-primary relative overflow-hidden"
-                onClick={() => navigate(`/quiz/results/${quiz.id}`)}
+                onClick={() => navigate(`/quiz/results/${quiz.last_attempt_id || quiz.id}`)}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                 <CardContent className="p-6 relative z-10">
@@ -197,7 +205,7 @@ export function QuizzesPage() {
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       {quiz.last_score !== undefined && quiz.last_score !== null ? (
-                        <ScoreRing score={quiz.last_score} />
+                        <ScoreRing score={toNumber(quiz.last_score) ?? 0} />
                       ) : (
                         <div className="h-16 w-16 rounded-full border-2 border-dashed border-muted flex items-center justify-center">
                           <span className="text-xs text-muted-foreground">New</span>
@@ -217,7 +225,7 @@ export function QuizzesPage() {
                     </Button>
                     <Button variant="ghost" size="sm"
                       className="flex-1 h-9 text-xs font-medium hover:bg-secondary"
-                      onClick={(e) => { e.stopPropagation(); navigate(`/quiz/results/${quiz.id}`) }}
+                      onClick={(e) => { e.stopPropagation(); navigate(`/quiz/results/${quiz.last_attempt_id || quiz.id}`) }}
                     >
                       <Eye className="mr-2 h-3 w-3" /> View Results
                     </Button>
