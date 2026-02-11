@@ -48,6 +48,10 @@ export function QuizResultsPage() {
     load()
   }, [attemptId])
 
+  const attemptMeta = attempt?.attempt || attempt
+  const quizMeta = attempt?.quiz || attempt
+  const reviewQuestions = attempt?.questions || attempt?.review || quizMeta?.questions || []
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -70,17 +74,17 @@ export function QuizResultsPage() {
     )
   }
 
-  const score = attempt.score ?? attempt.last_score ?? 0
-  const totalQuestions = attempt.total_questions ?? attempt.question_count ?? attempt.questions?.length ?? 0
-  const correctCount = attempt.correct_count ?? Math.round((score / 100) * totalQuestions)
+  const score = attemptMeta?.score_percent ?? attemptMeta?.score ?? quizMeta?.last_score ?? 0
+  const totalQuestions = quizMeta?.question_count ?? attemptMeta?.total_questions ?? reviewQuestions.length ?? 0
+  const correctCount = attemptMeta?.correct_count ?? Math.round((score / 100) * totalQuestions)
   const incorrectCount = totalQuestions - correctCount
-  const timeTaken = attempt.time_taken ?? attempt.duration ?? ''
-  const quizTitle = attempt.quiz_title ?? attempt.title ?? 'Quiz'
-  const quizId = attempt.quiz_id ?? attempt.id
+  const timeTaken = attemptMeta?.time_taken_seconds ?? attemptMeta?.time_taken ?? attemptMeta?.duration ?? ''
+  const quizTitle = quizMeta?.title ?? attemptMeta?.quiz_title ?? 'Quiz'
+  const quizId = attemptMeta?.quiz_id ?? quizMeta?.id ?? null
   const isPass = score >= 70
 
   // Questions with answers for detailed review
-  const questions = attempt.review ?? attempt.questions ?? []
+  const questions = reviewQuestions
 
   const formatTime = (seconds: number | string) => {
     if (typeof seconds === 'string') return seconds
@@ -135,7 +139,7 @@ export function QuizResultsPage() {
 
         {/* Actions */}
         <div className="flex justify-center gap-4 mb-16">
-          <Button size="lg" onClick={() => navigate(`/quiz/take/${quizId}`)}>
+          <Button size="lg" onClick={() => quizId && navigate(`/quiz/take/${quizId}`)} disabled={!quizId}>
             <RotateCcw className="mr-2 h-4 w-4" />
             Retake Quiz
           </Button>
@@ -167,7 +171,11 @@ export function QuizResultsPage() {
             <div className="space-y-4">
               {questions.map((q: any, index: number) => {
                 const qId = q.id || index
-                const isCorrect = q.is_correct ?? (q.user_answer === q.correct_answer)
+                const isCorrect =
+                  q.is_correct ??
+                  (q.user_answer !== undefined && q.user_answer !== null && q.correct_answer !== undefined
+                    ? q.user_answer === q.correct_answer
+                    : false)
                 return (
                   <Card
                     key={qId}
