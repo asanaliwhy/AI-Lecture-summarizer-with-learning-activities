@@ -24,24 +24,70 @@ export function ProcessingPage() {
   const [error, setError] = useState('')
   const [isComplete, setIsComplete] = useState(false)
 
-  const steps = [
-    {
-      title: 'Analyzing Content',
-      description: 'Extracting audio track and identifying content',
-    },
-    {
-      title: 'Extracting Transcript',
-      description: 'Converting speech to text with high accuracy',
-    },
-    {
-      title: 'Generating Summary',
-      description: 'Identifying key concepts and structuring notes',
-    },
-    {
-      title: 'Finalizing',
-      description: 'Applying format and saving results',
-    },
-  ]
+  const getSteps = (jobType?: string) => {
+    if (jobType === 'quiz-generation') {
+      return [
+        {
+          title: 'Preparing Quiz',
+          description: 'Loading summary context and configuration',
+        },
+        {
+          title: 'Generating Questions',
+          description: 'Creating questions based on your summary',
+        },
+        {
+          title: 'Validating Quiz',
+          description: 'Checking structure and answer quality',
+        },
+        {
+          title: 'Finalizing',
+          description: 'Saving quiz and preparing results',
+        },
+      ]
+    }
+
+    if (jobType === 'flashcard-generation') {
+      return [
+        {
+          title: 'Preparing Flashcards',
+          description: 'Loading summary context and configuration',
+        },
+        {
+          title: 'Creating Flashcards',
+          description: 'Generating cards from key concepts',
+        },
+        {
+          title: 'Validating Deck',
+          description: 'Checking card quality and balance',
+        },
+        {
+          title: 'Finalizing',
+          description: 'Saving deck and preparing study mode',
+        },
+      ]
+    }
+
+    return [
+      {
+        title: 'Analyzing Content',
+        description: 'Extracting audio track and identifying content',
+      },
+      {
+        title: 'Extracting Transcript',
+        description: 'Converting speech to text with high accuracy',
+      },
+      {
+        title: 'Generating Summary',
+        description: 'Identifying key concepts and structuring notes',
+      },
+      {
+        title: 'Finalizing',
+        description: 'Applying format and saving results',
+      },
+    ]
+  }
+
+  const steps = getSteps(job?.type)
 
   // Fetch initial job status
   useEffect(() => {
@@ -92,7 +138,15 @@ export function ProcessingPage() {
         if (data.status === 'completed') {
           setIsComplete(true)
           clearInterval(interval)
-          navigate('/dashboard')
+          if (data.type === 'summary-generation') {
+            navigate(`/summary/${data.reference_id}`)
+          } else if (data.type === 'quiz-generation') {
+            navigate(`/quiz/take/${data.reference_id}`)
+          } else if (data.type === 'flashcard-generation') {
+            navigate(`/flashcards/study/${data.reference_id}`)
+          } else {
+            navigate('/dashboard')
+          }
         } else if (data.status === 'failed') {
           setError(data.error_message || 'Processing failed')
 

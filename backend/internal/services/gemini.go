@@ -342,6 +342,9 @@ func (s *GeminiService) GenerateQuiz(ctx context.Context, job *models.Job, summa
 
 	// Validate
 	validQuestions := validateQuizQuestions(questions)
+	if len(validQuestions) == 0 {
+		return fmt.Errorf("quiz generation produced zero valid questions")
+	}
 	questionsJSON, _ := json.Marshal(validQuestions)
 
 	return s.quizRepo.UpdateQuestions(ctx, job.ReferenceID, questionsJSON, len(validQuestions))

@@ -47,6 +47,30 @@ export function QuizTakePage() {
     init()
   }, [quizId])
 
+  // If quiz is created but questions are not ready yet, keep polling briefly.
+  useEffect(() => {
+    if (!quizId || !quiz || (quiz.questions?.length || 0) > 0) return
+
+    let attempts = 0
+    const maxAttempts = 8
+    const timer = setInterval(async () => {
+      attempts += 1
+      try {
+        const fresh = await api.quizzes.get(quizId)
+        setQuiz(fresh)
+        if ((fresh?.questions?.length || 0) > 0 || attempts >= maxAttempts) {
+          clearInterval(timer)
+        }
+      } catch {
+        if (attempts >= maxAttempts) {
+          clearInterval(timer)
+        }
+      }
+    }, 3000)
+
+    return () => clearInterval(timer)
+  }, [quizId, quiz])
+
   // Timer
   useEffect(() => {
     if (isLoading || !quiz) return
@@ -119,7 +143,7 @@ export function QuizTakePage() {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center text-center p-6">
         <h2 className="text-2xl font-bold mb-2">Quiz Not Found</h2>
-        <p className="text-muted-foreground mb-6">This quiz may still be generating or doesn't exist.</p>
+        <p className="text-muted-foreground mb-6">This quiz may still be generating, failed generation, or doesn't exist.</p>
         <Button onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
       </div>
     )
