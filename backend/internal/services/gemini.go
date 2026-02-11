@@ -468,23 +468,52 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Format: Write in flowing academic prose with clear subheadings.\n\n")
 	}
 
-	// Layer 3 — Length
+	// Layer 3 — Length (strict bands)
 	sourceWords := len(strings.Fields(transcript))
 	var targetPercent int
+	var minWords int
+	var maxWords int
+	var lengthLabel string
 	switch length {
 	case "concise":
 		targetPercent = 15
+		minWords = 120
+		maxWords = 220
+		lengthLabel = "Short"
 	case "standard":
 		targetPercent = 25
+		minWords = 260
+		maxWords = 420
+		lengthLabel = "Medium"
 	case "detailed":
 		targetPercent = 40
+		minWords = 500
+		maxWords = 850
+		lengthLabel = "Long"
 	case "comprehensive":
 		targetPercent = 55
+		minWords = 900
+		maxWords = 1600
+		lengthLabel = "Deep Dive"
 	default:
 		targetPercent = 25
+		minWords = 260
+		maxWords = 420
+		lengthLabel = "Medium"
 	}
+
 	targetWords := sourceWords * targetPercent / 100
-	b.WriteString(fmt.Sprintf("Length: The output must be approximately %d words (%d%% of the %d word source).\n\n", targetWords, targetPercent, sourceWords))
+	if targetWords < minWords {
+		targetWords = minWords
+	}
+	if targetWords > maxWords {
+		targetWords = maxWords
+	}
+
+	b.WriteString(fmt.Sprintf("Length preset: %s.\n", lengthLabel))
+	b.WriteString(fmt.Sprintf("Output MUST be between %d and %d words.\n", minWords, maxWords))
+	b.WriteString(fmt.Sprintf("Target about %d words (%d%% of %d source words, clamped to preset range).\n", targetWords, targetPercent, sourceWords))
+	b.WriteString("Do not output less than the minimum or more than the maximum for this preset.\n\n")
 
 	// Layer 4 — Focus areas
 	for _, area := range focusAreas {

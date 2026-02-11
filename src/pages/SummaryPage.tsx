@@ -67,6 +67,58 @@ function normalizeGeneralSummaryText(value: string): string {
   return cleanedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
+function splitIntoSections(value: string): Array<{ title: string; body: string }> {
+  const text = normalizeGeneralSummaryText(value)
+  if (!text) return []
+
+  const lines = text.split('\n')
+  const sections: Array<{ title: string; body: string }> = []
+  let currentTitle = 'Overview'
+  let currentBody: string[] = []
+
+  const flush = () => {
+    const body = currentBody.join('\n').trim()
+    if (body) {
+      sections.push({ title: currentTitle, body })
+    }
+    currentBody = []
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line) continue
+
+    const headingMatch = line.match(/^(.{3,80}):$/)
+    const looksLikeHeading =
+      !line.startsWith('• ') &&
+      line.length <= 80 &&
+      !/[.!?]$/.test(line) &&
+      /[A-Za-zÀ-ÿ]/.test(line)
+
+    if (headingMatch) {
+      flush()
+      currentTitle = headingMatch[1]
+      continue
+    }
+
+    if (looksLikeHeading && currentBody.length > 0) {
+      flush()
+      currentTitle = line
+      continue
+    }
+
+    currentBody.push(line)
+  }
+
+  flush()
+
+  if (sections.length === 0) {
+    return [{ title: 'Summary', body: text }]
+  }
+
+  return sections
+}
+
 function normalizeCornellText(value: string): string {
   if (!value) return ''
 
@@ -206,6 +258,7 @@ export function SummaryPage() {
   const renderedCornellNotes = normalizeCornellText(cornellNotes)
   const renderedCornellSummary = normalizeCornellText(cornellSummary)
   const renderedContentRaw = normalizeGeneralSummaryText(contentRaw)
+  const renderedSections = splitIntoSections(renderedContentRaw)
   const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
 
   // Parse content sections
@@ -416,10 +469,17 @@ export function SummaryPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="prose prose-slate max-w-none">
-                    <div className="whitespace-pre-wrap leading-relaxed text-slate-800">
-                      {renderedContentRaw || 'No content available yet.'}
-                    </div>
+                  <div className="space-y-5">
+                    {(renderedSections.length > 0 ? renderedSections : [{ title: 'Summary', body: renderedContentRaw || 'No content available yet.' }]).map((section, idx) => (
+                      <div key={idx} className="border rounded-lg p-5 bg-white/80">
+                        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
+                          {section.title}
+                        </h3>
+                        <div className="whitespace-pre-wrap leading-relaxed text-slate-800 text-[15px]">
+                          {section.body}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>
