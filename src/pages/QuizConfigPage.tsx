@@ -30,7 +30,8 @@ export function QuizConfigPage() {
   const [quizTitle, setQuizTitle] = useState('Quiz')
   const [questionCount, setQuestionCount] = useState([10])
   const [difficulty, setDifficulty] = useState([2])
-  const [topics, setTopics] = useState<string[]>([])
+  const [availableTopics, setAvailableTopics] = useState<string[]>([])
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([])
   const [questionTypes, setQuestionTypes] = useState<string[]>(['multiple_choice', 'true_false'])
   const [enableTimer, setEnableTimer] = useState(false)
   const [shuffleQuestions, setShuffleQuestions] = useState(true)
@@ -43,8 +44,26 @@ export function QuizConfigPage() {
     if (!summaryId) return
     api.summaries.get(summaryId).then((data: any) => {
       setQuizTitle(`Quiz: ${data.title || 'Untitled'}`)
-      if (data.topics) setTopics(data.topics)
-      else if (data.tags) setTopics(data.tags)
+
+      const rawTopics: unknown[] = Array.isArray(data.topics)
+        ? data.topics
+        : Array.isArray(data.tags)
+          ? data.tags
+          : []
+
+      const normalizedTopics = rawTopics
+        .filter((t): t is string => typeof t === 'string')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+
+      const dedupedTopics: string[] = Array.from(
+        new Set(
+          normalizedTopics,
+        ),
+      )
+
+      setAvailableTopics(dedupedTopics)
+      setSelectedTopics(dedupedTopics)
     }).catch(() => { })
   }, [summaryId])
 
@@ -54,6 +73,10 @@ export function QuizConfigPage() {
     try {
       if (!summaryId) {
         throw new Error('Missing summary ID')
+      }
+
+      if (availableTopics.length > 0 && selectedTopics.length === 0) {
+        throw new Error('Please select at least one topic for this quiz')
       }
 
       const difficultyLabel =
@@ -68,7 +91,7 @@ export function QuizConfigPage() {
         enable_timer: enableTimer,
         shuffle_questions: shuffleQuestions,
         enable_hints: enableHints,
-        topics,
+        topics: selectedTopics,
       })
       if (result.job_id) {
         navigate(`/processing/${result.job_id}`)
@@ -219,7 +242,7 @@ export function QuizConfigPage() {
               </CardContent>
             </Card>
 
-            {topics.length > 0 && (
+            {availableTopics.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle>Topics Covered</CardTitle>
@@ -227,15 +250,27 @@ export function QuizConfigPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
-                    {topics.map((topic) => (
-                      <Badge
-                        key={topic}
-                        variant="secondary"
-                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors px-3 py-1 text-sm"
-                      >
-                        {topic} <CheckCircle2 className="ml-2 h-3 w-3" />
-                      </Badge>
-                    ))}
+                    {availableTopics.map((topic) => {
+                      const isSelected = selectedTopics.includes(topic)
+                      return (
+                        <Badge
+                          key={topic}
+                          variant={isSelected ? 'default' : 'secondary'}
+                          className="cursor-pointer transition-colors px-3 py-1 text-sm"
+                          onClick={() => {
+                            setSelectedTopics((prev) => {
+                              if (prev.includes(topic)) {
+                                return prev.filter((t) => t !== topic)
+                              }
+                              return [...prev, topic]
+                            })
+                          }}
+                        >
+                          {topic}
+                          {isSelected && <CheckCircle2 className="ml-2 h-3 w-3" />}
+                        </Badge>
+                      )
+                    })}
                   </div>
                 </CardContent>
               </Card>

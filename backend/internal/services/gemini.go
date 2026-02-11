@@ -340,8 +340,8 @@ func (s *GeminiService) GenerateQuiz(ctx context.Context, job *models.Job, summa
 		}
 	}
 
-	// Validate
-	validQuestions := validateQuizQuestions(questions)
+	// Validate + enforce config constraints
+	validQuestions := validateQuizQuestions(questions, config)
 	if len(validQuestions) == 0 {
 		return fmt.Errorf("quiz generation produced zero valid questions")
 	}
@@ -552,26 +552,64 @@ func buildQuizPrompt(config models.GenerateQuizRequest, content string) string {
 
 	b.WriteString(fmt.Sprintf("Generate exactly %d questions.\n", config.NumQuestions))
 
-	if len(config.QuestionTypes) > 0 {
-		mcCount := config.NumQuestions * 7 / 10
-		tfCount := config.NumQuestions - mcCount
-		for _, qt := range config.QuestionTypes {
-			if qt == "true_false" {
-				b.WriteString(fmt.Sprintf("Include %d true/false questions and %d multiple choice questions.\n", tfCount, mcCount))
-				break
+	allowedTypes := make([]string, 0, 2)
+	hasMC := false
+	hasTF := false
+	for _, qt := range config.QuestionTypes {
+		switch strings.ToLower(strings.TrimSpace(qt)) {
+		case "multiple_choice":
+			if !hasMC {
+				hasMC = true
+				allowedTypes = append(allowedTypes, "multiple_choice")
+			}
+		case "true_false":
+			if !hasTF {
+				hasTF = true
+				allowedTypes = append(allowedTypes, "true_false")
 			}
 		}
+	}
+	if len(allowedTypes) == 0 {
+		allowedTypes = []string{"multiple_choice", "true_false"}
+		hasMC = true
+		hasTF = true
+	}
+
+	switch {
+	case hasTF && !hasMC:
+		b.WriteString("Question type rule: ALL questions MUST be type=\"true_false\".\n")
+		b.WriteString("Do NOT output any multiple_choice question.\n")
+	case hasMC && !hasTF:
+		b.WriteString("Question type rule: ALL questions MUST be type=\"multiple_choice\".\n")
+		b.WriteString("Do NOT output any true_false question.\n")
+	default:
+		b.WriteString("Question type rule: Use both multiple_choice and true_false questions with balanced distribution.\n")
 	}
 
 	b.WriteString(fmt.Sprintf("Difficulty: %s\n", config.Difficulty))
 
 	switch config.Difficulty {
 	case "easy":
-		b.WriteString("Easy = direct recall from text.\n")
+		b.WriteString("Easy = direct recall from explicit statements in the source.\n")
+		b.WriteString("Avoid multi-step inference, ambiguity, or trick wording.\n")
 	case "medium":
-		b.WriteString("Medium = application of concepts.\n")
+		b.WriteString("Medium = basic application and comparison of concepts from the source.\n")
 	case "hard":
-		b.WriteString("Hard = analysis, synthesis, or inference beyond what is explicitly stated.\n")
+		b.WriteString("Hard = deep analytical questions requiring synthesis across multiple parts of the content.\n")
+		b.WriteString("Use nuanced distinctions, implications, edge cases, and strong distractors.\n")
+	}
+	b.WriteString("Set every item's difficulty field exactly to this requested difficulty value.\n")
+
+	cleanTopics := make([]string, 0, len(config.Topics))
+	for _, t := range config.Topics {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			cleanTopics = append(cleanTopics, t)
+		}
+	}
+	if len(cleanTopics) > 0 {
+		b.WriteString("Topic constraints: every question MUST target one of these topics and set the topic field accordingly.\n")
+		b.WriteString("Allowed topics: " + strings.Join(cleanTopics, ", ") + "\n")
 	}
 
 	b.WriteString(`
@@ -579,6 +617,7 @@ JSON schema per question:
 {"question": "string", "type": "multiple_choice"|"true_false", "options": ["string"], "correct_index": int, "explanation": "string", "hint": "string", "difficulty": "easy"|"medium"|"hard", "topic": "string"}
 
 For multiple_choice: exactly 4 options. For true_false: exactly 2 options ["True", "False"].
+For true_false: correct_index must be 0 or 1.
 `)
 
 	b.WriteString("\n---CONTENT---\n")
@@ -620,19 +659,131 @@ JSON schema per card:
 	return b.String()
 }
 
-func validateQuizQuestions(questions []models.QuizQuestion) []models.QuizQuestion {
-	var valid []models.QuizQuestion
-	for _, q := range questions {
-		if q.Question == "" || len(q.Options) == 0 {
+func validateQuizQuestions(questions []models.QuizQuestion, config models.GenerateQuizRequest) []models.QuizQuestion {
+	targetDifficulty := strings.ToLower(strings.TrimSpace(config.Difficulty))
+	if targetDifficulty != "easy" && targetDifficulty != "medium" && targetDifficulty != "hard" {
+		targetDifficulty = "medium"
+	}
+
+	allowedTypes := map[string]bool{}
+	for _, qt := range config.QuestionTypes {
+		n := normalizeQuestionType(qt)
+		if n != "" {
+			allowedTypes[n] = true
+		}
+	}
+	if len(allowedTypes) == 0 {
+		allowedTypes["multiple_choice"] = true
+		allowedTypes["true_false"] = true
+	}
+
+	originalTopics := make([]string, 0, len(config.Topics))
+	topicLookup := map[string]string{}
+	for _, t := range config.Topics {
+		trimmed := strings.TrimSpace(t)
+		if trimmed == "" {
 			continue
 		}
-		if q.CorrectIndex < 0 || q.CorrectIndex >= len(q.Options) {
-			q.CorrectIndex = 0
+		lower := strings.ToLower(trimmed)
+		if _, ok := topicLookup[lower]; !ok {
+			topicLookup[lower] = trimmed
+			originalTopics = append(originalTopics, trimmed)
 		}
-		if q.Type == "true_false" && len(q.Options) != 2 {
+	}
+	topicIdx := 0
+
+	var valid []models.QuizQuestion
+	limit := config.NumQuestions
+	if limit <= 0 {
+		limit = len(questions)
+	}
+
+	for _, q := range questions {
+		if len(valid) >= limit {
+			break
+		}
+
+		q.Question = strings.TrimSpace(q.Question)
+		if q.Question == "" {
+			continue
+		}
+
+		normalizedType := normalizeQuestionType(q.Type)
+		if normalizedType == "" {
+			if isTrueFalseOptions(q.Options) {
+				normalizedType = "true_false"
+			} else {
+				normalizedType = "multiple_choice"
+			}
+		}
+
+		if !allowedTypes[normalizedType] {
+			continue
+		}
+
+		if normalizedType == "true_false" {
+			if !isTrueFalseOptions(q.Options) {
+				continue
+			}
+
+			if q.CorrectIndex < 0 || q.CorrectIndex >= len(q.Options) {
+				q.CorrectIndex = 0
+			}
+
+			correctText := strings.TrimSpace(strings.ToLower(q.Options[q.CorrectIndex]))
+			if correctText == "false" {
+				q.CorrectIndex = 1
+			} else {
+				q.CorrectIndex = 0
+			}
 			q.Options = []string{"True", "False"}
+		} else {
+			if len(q.Options) < 4 {
+				continue
+			}
+			if len(q.Options) > 4 {
+				q.Options = q.Options[:4]
+			}
+			if q.CorrectIndex < 0 || q.CorrectIndex >= len(q.Options) {
+				q.CorrectIndex = 0
+			}
 		}
+
+		q.Type = normalizedType
+		q.Difficulty = targetDifficulty
+
+		if len(originalTopics) > 0 {
+			topic := strings.TrimSpace(q.Topic)
+			if canonical, ok := topicLookup[strings.ToLower(topic)]; ok {
+				q.Topic = canonical
+			} else {
+				q.Topic = originalTopics[topicIdx%len(originalTopics)]
+				topicIdx++
+			}
+		}
+
 		valid = append(valid, q)
 	}
 	return valid
+}
+
+func normalizeQuestionType(v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	switch v {
+	case "multiple_choice", "multiple-choice", "mcq", "multiplechoice":
+		return "multiple_choice"
+	case "true_false", "true-false", "truefalse", "boolean":
+		return "true_false"
+	default:
+		return ""
+	}
+}
+
+func isTrueFalseOptions(options []string) bool {
+	if len(options) != 2 {
+		return false
+	}
+	a := strings.TrimSpace(strings.ToLower(options[0]))
+	b := strings.TrimSpace(strings.ToLower(options[1]))
+	return (a == "true" && b == "false") || (a == "false" && b == "true")
 }
