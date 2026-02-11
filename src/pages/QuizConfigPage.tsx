@@ -31,6 +31,10 @@ export function QuizConfigPage() {
   const [questionCount, setQuestionCount] = useState([10])
   const [difficulty, setDifficulty] = useState([2])
   const [topics, setTopics] = useState<string[]>([])
+  const [questionTypes, setQuestionTypes] = useState<string[]>(['multiple_choice', 'true_false'])
+  const [enableTimer, setEnableTimer] = useState(false)
+  const [shuffleQuestions, setShuffleQuestions] = useState(true)
+  const [enableHints, setEnableHints] = useState(true)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState('')
 
@@ -48,17 +52,28 @@ export function QuizConfigPage() {
     setIsGenerating(true)
     setError('')
     try {
+      if (!summaryId) {
+        throw new Error('Missing summary ID')
+      }
+
+      const difficultyLabel =
+        difficulty[0] === 1 ? 'easy' : difficulty[0] === 2 ? 'medium' : 'hard'
+
       const result = await api.quizzes.generate({
         summary_id: summaryId,
         title: quizTitle,
-        question_count: questionCount[0],
-        difficulty: difficulty[0],
+        num_questions: questionCount[0],
+        difficulty: difficultyLabel,
+        question_types: questionTypes,
+        enable_timer: enableTimer,
+        shuffle_questions: shuffleQuestions,
+        enable_hints: enableHints,
         topics,
       })
-      if (result.job?.id) {
-        navigate(`/processing/${result.job.id}`)
-      } else if (result.quiz?.id) {
-        navigate(`/quiz/take/${result.quiz.id}`)
+      if (result.job_id) {
+        navigate(`/processing/${result.job_id}`)
+      } else if (result.quiz_id) {
+        navigate(`/quiz/take/${result.quiz_id}`)
       }
     } catch (err: any) {
       setError(err.message || 'Failed to generate quiz')
@@ -144,7 +159,17 @@ export function QuizConfigPage() {
                   <Label>Question Types</Label>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex items-start space-x-2 border p-3 rounded-lg hover:bg-secondary/20 transition-colors">
-                      <Checkbox id="multiple-choice" defaultChecked />
+                      <Checkbox
+                        id="multiple-choice"
+                        checked={questionTypes.includes('multiple_choice')}
+                        onCheckedChange={(checked) => {
+                          setQuestionTypes((prev) => {
+                            if (checked) return Array.from(new Set([...prev, 'multiple_choice']))
+                            const next = prev.filter((t) => t !== 'multiple_choice')
+                            return next.length ? next : ['multiple_choice']
+                          })
+                        }}
+                      />
                       <div className="grid gap-1.5 leading-none">
                         <label htmlFor="multiple-choice" className="text-sm font-medium leading-none">
                           Multiple Choice
@@ -153,7 +178,17 @@ export function QuizConfigPage() {
                       </div>
                     </div>
                     <div className="flex items-start space-x-2 border p-3 rounded-lg hover:bg-secondary/20 transition-colors">
-                      <Checkbox id="true-false" defaultChecked />
+                      <Checkbox
+                        id="true-false"
+                        checked={questionTypes.includes('true_false')}
+                        onCheckedChange={(checked) => {
+                          setQuestionTypes((prev) => {
+                            if (checked) return Array.from(new Set([...prev, 'true_false']))
+                            const next = prev.filter((t) => t !== 'true_false')
+                            return next.length ? next : ['multiple_choice']
+                          })
+                        }}
+                      />
                       <div className="grid gap-1.5 leading-none">
                         <label htmlFor="true-false" className="text-sm font-medium leading-none">
                           True / False
@@ -168,15 +203,15 @@ export function QuizConfigPage() {
                   <Label>Options</Label>
                   <div className="space-y-2">
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="timer" />
+                      <Checkbox id="timer" checked={enableTimer} onCheckedChange={(checked) => setEnableTimer(Boolean(checked))} />
                       <label htmlFor="timer" className="text-sm font-medium">Enable Timer (30s per question)</label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="shuffle" defaultChecked />
+                      <Checkbox id="shuffle" checked={shuffleQuestions} onCheckedChange={(checked) => setShuffleQuestions(Boolean(checked))} />
                       <label htmlFor="shuffle" className="text-sm font-medium">Shuffle Questions</label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="hints" defaultChecked />
+                      <Checkbox id="hints" checked={enableHints} onCheckedChange={(checked) => setEnableHints(Boolean(checked))} />
                       <label htmlFor="hints" className="text-sm font-medium">Allow Hints</label>
                     </div>
                   </div>

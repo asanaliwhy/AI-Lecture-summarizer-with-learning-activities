@@ -198,7 +198,7 @@ export const api = {
     // Quizzes
     quizzes: {
         generate: (data: any) =>
-            apiFetch<{ quiz: any; job: any }>('/quizzes/generate', {
+            apiFetch<{ quiz_id: string; job_id: string }>('/quizzes/generate', {
                 method: 'POST',
                 body: JSON.stringify(data),
             }),
