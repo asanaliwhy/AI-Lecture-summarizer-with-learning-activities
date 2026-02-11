@@ -78,6 +78,7 @@ func main() {
 	jwtAuth := middleware.NewJWTAuth(cfg.JWTSecret)
 	emailService := services.NewEmailService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom, cfg.FrontendURL)
 	youtubeService := services.NewYouTubeService()
+	fileExtractService := services.NewFileExtractService()
 	authService := services.NewAuthService(userRepo, redisClients.Queue, jwtAuth, emailService)
 
 	// ──── Initialize Handlers ────
@@ -96,10 +97,12 @@ func main() {
 		redisClients.Queue,
 		geminiService,
 		youtubeService,
+		fileExtractService,
 		jobRepo,
 		contentRepo,
 		summaryRepo,
 		quizRepo,
+		cfg.StoragePath,
 		5,
 	)
 	workerPool.Start()

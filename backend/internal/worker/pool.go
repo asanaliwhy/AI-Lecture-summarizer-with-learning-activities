@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	urlpkg "net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -22,10 +24,12 @@ type Pool struct {
 	redis       *redis.Client
 	gemini      *services.GeminiService
 	youtube     *services.YouTubeService
+	fileExtract *services.FileExtractService
 	jobRepo     *repository.JobRepo
 	contentRepo *repository.ContentRepo
 	summaryRepo *repository.SummaryRepo
 	quizRepo    *repository.QuizRepo
+	storagePath string
 	workerCount int
 	stopChan    chan struct{}
 }
@@ -34,20 +38,24 @@ func NewPool(
 	redisClient *redis.Client,
 	gemini *services.GeminiService,
 	youtube *services.YouTubeService,
+	fileExtract *services.FileExtractService,
 	jobRepo *repository.JobRepo,
 	contentRepo *repository.ContentRepo,
 	summaryRepo *repository.SummaryRepo,
 	quizRepo *repository.QuizRepo,
+	storagePath string,
 	workerCount int,
 ) *Pool {
 	return &Pool{
 		redis:       redisClient,
 		gemini:      gemini,
 		youtube:     youtube,
+		fileExtract: fileExtract,
 		jobRepo:     jobRepo,
 		contentRepo: contentRepo,
 		summaryRepo: summaryRepo,
 		quizRepo:    quizRepo,
+		storagePath: storagePath,
 		workerCount: workerCount,
 		stopChan:    make(chan struct{}),
 	}
@@ -164,6 +172,17 @@ func (p *Pool) processSummary(ctx context.Context, job *models.Job) error {
 		return fmt.Errorf("failed to get content: %w", err)
 	}
 
+	if content.Type == "file" && (content.Transcript == nil || *content.Transcript == "") {
+		if _, waitErr := p.waitForContentReady(ctx, content.ID, 60*time.Second); waitErr != nil {
+			log.Printf("File transcript not ready for content %s, proceeding with fallback: %v", content.ID, waitErr)
+		}
+
+		refreshed, getErr := p.contentRepo.GetByID(ctx, content.ID)
+		if getErr == nil {
+			content = refreshed
+		}
+	}
+
 	// If summary started before content-processing finished, fetch transcript directly here.
 	if content.Type == "youtube" && (content.Transcript == nil || *content.Transcript == "") {
 		if content.SourceURL == nil {
@@ -228,11 +247,6 @@ func (p *Pool) waitForContentReady(ctx context.Context, contentID uuid.UUID, tim
 			return nil, fmt.Errorf("failed to get content: %w", err)
 		}
 
-		// Uploaded file flow currently may not produce transcript; proceed with fallback prompt.
-		if content.Type == "file" {
-			return content, nil
-		}
-
 		if content.Transcript != nil && *content.Transcript != "" {
 			return content, nil
 		}
@@ -242,7 +256,7 @@ func (p *Pool) waitForContentReady(ctx context.Context, contentID uuid.UUID, tim
 		}
 
 		if content.Status == "completed" {
-			if content.Type == "youtube" && (content.Transcript == nil || *content.Transcript == "") {
+			if content.Transcript == nil || *content.Transcript == "" {
 				return nil, fmt.Errorf("content completed without transcript")
 			}
 			return content, nil
@@ -360,6 +374,64 @@ func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
 		p.contentRepo.UpdateTranscript(ctx, content.ID, transcript)
 
 		log.Printf("Fetched transcript for video %s (%d chars)", videoID, len(transcript))
+	}
+
+	if content.Type == "file" {
+		if content.FilePath == nil || *content.FilePath == "" {
+			p.contentRepo.UpdateStatus(ctx, content.ID, "failed")
+			return fmt.Errorf("file content has no file path")
+		}
+
+		fullPath := filepath.Join(p.storagePath, *content.FilePath)
+		ext := strings.ToLower(filepath.Ext(fullPath))
+
+		var extracted string
+		var extractErr error
+
+		switch ext {
+		case ".txt", ".pdf", ".docx":
+			if p.fileExtract == nil {
+				extractErr = fmt.Errorf("file extraction service is not initialized")
+			} else {
+				extracted, extractErr = p.fileExtract.ExtractTextFromPath(fullPath)
+			}
+		case ".mp3", ".wav", ".mp4":
+			fileBytes, readErr := os.ReadFile(fullPath)
+			if readErr != nil {
+				extractErr = fmt.Errorf("failed to read media file: %w", readErr)
+				break
+			}
+
+			mimeType := "audio/mpeg"
+			switch ext {
+			case ".wav":
+				mimeType = "audio/wav"
+			case ".mp4":
+				mimeType = "video/mp4"
+			}
+
+			extracted, extractErr = p.gemini.TranscribeAudio(ctx, fileBytes, mimeType)
+		default:
+			extractErr = fmt.Errorf("unsupported file type for extraction: %s", ext)
+		}
+
+		if extractErr != nil {
+			fallbackTranscript := buildMetadataFallbackTranscript(content)
+			if saveErr := p.contentRepo.UpdateTranscript(ctx, content.ID, fallbackTranscript); saveErr != nil {
+				p.contentRepo.UpdateStatus(ctx, content.ID, "failed")
+				return fmt.Errorf("failed to extract file text from %s: %v; failed to save fallback transcript: %v", fullPath, extractErr, saveErr)
+			}
+
+			log.Printf("Using metadata-only fallback transcript for file content %s after extraction failure: %v", content.ID, extractErr)
+			return nil
+		}
+
+		if err := p.contentRepo.UpdateTranscript(ctx, content.ID, extracted); err != nil {
+			p.contentRepo.UpdateStatus(ctx, content.ID, "failed")
+			return fmt.Errorf("failed to save extracted file text: %w", err)
+		}
+
+		log.Printf("Extracted file text for content %s (%d chars)", content.ID, len(extracted))
 	}
 
 	return nil

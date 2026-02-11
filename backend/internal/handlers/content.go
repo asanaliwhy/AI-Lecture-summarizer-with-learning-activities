@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -178,15 +181,61 @@ func (h *ContentHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		Title:    header.Filename,
 	}
 
+	absPath := filepath.Join(h.storagePath, storagePath)
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to create upload directory", r))
+		return
+	}
+
+	dst, err := os.Create(absPath)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to store uploaded file", r))
+		return
+	}
+	defer dst.Close()
+
+	written, err := io.Copy(dst, file)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to save uploaded file", r))
+		return
+	}
+
+	meta := map[string]interface{}{
+		"filename":   header.Filename,
+		"mime_type":  mimeType,
+		"size_bytes": written,
+	}
+	metaBytes, _ := json.Marshal(meta)
+	content.MetadataJSON = metaBytes
+
 	if err := h.contentRepo.Create(r.Context(), content); err != nil {
+		_ = os.Remove(absPath)
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to create content record", r))
 		return
+	}
+
+	job := &models.Job{
+		UserID:      userID,
+		Type:        "content-processing",
+		ReferenceID: content.ID,
+	}
+
+	if err := h.jobRepo.Create(r.Context(), job); err == nil {
+		if h.redis == nil {
+			log.Println("CRITICAL: h.redis is nil in Upload, cannot enqueue file content-processing job")
+		} else {
+			jobBytes, _ := json.Marshal(job)
+			h.redis.LPush(r.Context(), "queue:content-processing", string(jobBytes))
+		}
+	} else {
+		log.Printf("failed to create file content-processing job for content %s: %v", content.ID, err)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"content_id": content.ID,
 		"filename":   header.Filename,
 		"mime_type":  mimeType,
+		"size_bytes": fmt.Sprintf("%d", written),
 	})
 }
 
