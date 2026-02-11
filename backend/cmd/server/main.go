@@ -102,6 +102,7 @@ func main() {
 		contentRepo,
 		summaryRepo,
 		quizRepo,
+		flashcardRepo,
 		cfg.StoragePath,
 		5,
 	)

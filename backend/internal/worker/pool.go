@@ -29,6 +29,7 @@ type Pool struct {
 	contentRepo *repository.ContentRepo
 	summaryRepo *repository.SummaryRepo
 	quizRepo    *repository.QuizRepo
+	flashRepo   *repository.FlashcardRepo
 	storagePath string
 	workerCount int
 	stopChan    chan struct{}
@@ -43,6 +44,7 @@ func NewPool(
 	contentRepo *repository.ContentRepo,
 	summaryRepo *repository.SummaryRepo,
 	quizRepo *repository.QuizRepo,
+	flashRepo *repository.FlashcardRepo,
 	storagePath string,
 	workerCount int,
 ) *Pool {
@@ -55,6 +57,7 @@ func NewPool(
 		contentRepo: contentRepo,
 		summaryRepo: summaryRepo,
 		quizRepo:    quizRepo,
+		flashRepo:   flashRepo,
 		storagePath: storagePath,
 		workerCount: workerCount,
 		stopChan:    make(chan struct{}),
@@ -300,7 +303,16 @@ func (p *Pool) processFlashcard(ctx context.Context, job *models.Job) error {
 	}
 	json.Unmarshal(job.ConfigJSON, &config)
 
-	summary, err := p.summaryRepo.GetByID(ctx, config.SummaryID)
+	deck, err := p.flashRepo.GetDeckByID(ctx, job.ReferenceID)
+	if err != nil {
+		return fmt.Errorf("failed to get flashcard deck: %w", err)
+	}
+
+	if deck.SummaryID == nil || *deck.SummaryID == uuid.Nil {
+		return fmt.Errorf("flashcard deck has no linked summary")
+	}
+
+	summary, err := p.summaryRepo.GetByID(ctx, *deck.SummaryID)
 	if err != nil {
 		return fmt.Errorf("failed to get summary: %w", err)
 	}

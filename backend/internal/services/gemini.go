@@ -415,7 +415,12 @@ func (s *GeminiService) GenerateFlashcards(ctx context.Context, job *models.Job,
 		}
 	}
 
-	return s.flashRepo.CreateCards(ctx, job.ReferenceID, modelCards)
+	validCards := validateFlashcardCards(modelCards, config)
+	if len(validCards) == 0 {
+		return fmt.Errorf("flashcard generation produced zero valid cards")
+	}
+
+	return s.flashRepo.CreateCards(ctx, job.ReferenceID, validCards)
 }
 
 // Helper functions
@@ -634,11 +639,47 @@ func buildFlashcardPrompt(config models.GenerateFlashcardsRequest, content strin
 	b.WriteString("CRITICAL: Return ONLY a valid JSON array. No preamble, no markdown, no backticks.\n\n")
 	b.WriteString(fmt.Sprintf("Generate exactly %d flashcards.\n\n", config.NumCards))
 
-	switch config.Strategy {
+	strategy := strings.ToLower(strings.TrimSpace(config.Strategy))
+	switch strategy {
+	case "definitions":
+		strategy = "term_definition"
+	case "qa":
+		strategy = "question_answer"
+	case "":
+		strategy = "term_definition"
+	}
+
+	switch strategy {
 	case "term_definition":
 		b.WriteString("Strategy: Front = term or concept. Back = clear definition.\n")
 	case "question_answer":
 		b.WriteString("Strategy: Front = question. Back = concise answer.\n")
+	default:
+		b.WriteString("Strategy: Mix term/definition and question/answer cards.\n")
+	}
+
+	cleanTopics := make([]string, 0, len(config.Topics))
+	for _, t := range config.Topics {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			cleanTopics = append(cleanTopics, t)
+		}
+	}
+	if len(cleanTopics) > 0 {
+		b.WriteString("Topic constraints: every card topic MUST be one of these topics.\n")
+		b.WriteString("Allowed topics: " + strings.Join(cleanTopics, ", ") + "\n")
+	}
+
+	if config.IncludeMnemonics {
+		b.WriteString("Mnemonic setting: include a mnemonic on most cards when useful.\n")
+	} else {
+		b.WriteString("Mnemonic setting: set mnemonic to null for all cards.\n")
+	}
+
+	if config.IncludeExamples {
+		b.WriteString("Examples setting: include concise contextual examples when useful.\n")
+	} else {
+		b.WriteString("Examples setting: set example to null for all cards.\n")
 	}
 
 	b.WriteString(`
@@ -657,6 +698,80 @@ JSON schema per card:
 	b.WriteString("\n---END---\n")
 
 	return b.String()
+}
+
+func validateFlashcardCards(cards []models.FlashcardCard, config models.GenerateFlashcardsRequest) []models.FlashcardCard {
+	strategy := strings.ToLower(strings.TrimSpace(config.Strategy))
+	if strategy == "definitions" {
+		strategy = "term_definition"
+	}
+	if strategy == "qa" {
+		strategy = "question_answer"
+	}
+
+	allowedTopics := make([]string, 0, len(config.Topics))
+	topicLookup := map[string]string{}
+	for _, t := range config.Topics {
+		trimmed := strings.TrimSpace(t)
+		if trimmed == "" {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if _, ok := topicLookup[lower]; !ok {
+			topicLookup[lower] = trimmed
+			allowedTopics = append(allowedTopics, trimmed)
+		}
+	}
+	topicIdx := 0
+
+	limit := config.NumCards
+	if limit <= 0 {
+		limit = len(cards)
+	}
+
+	valid := make([]models.FlashcardCard, 0, limit)
+	for _, c := range cards {
+		if len(valid) >= limit {
+			break
+		}
+
+		c.Front = strings.TrimSpace(c.Front)
+		c.Back = strings.TrimSpace(c.Back)
+		if c.Front == "" || c.Back == "" {
+			continue
+		}
+
+		if c.Difficulty < 1 || c.Difficulty > 3 {
+			c.Difficulty = 2
+		}
+
+		if strategy == "question_answer" && !strings.HasSuffix(c.Front, "?") {
+			c.Front = strings.TrimSpace(c.Front) + "?"
+		}
+
+		if !config.IncludeMnemonics {
+			c.Mnemonic = nil
+		}
+		if !config.IncludeExamples {
+			c.Example = nil
+		}
+
+		if len(allowedTopics) > 0 {
+			topic := strings.TrimSpace(c.Topic)
+			if canonical, ok := topicLookup[strings.ToLower(topic)]; ok {
+				c.Topic = canonical
+			} else {
+				c.Topic = allowedTopics[topicIdx%len(allowedTopics)]
+				topicIdx++
+			}
+		} else if strings.TrimSpace(c.Topic) == "" {
+			c.Topic = "General"
+		}
+
+		valid = append(valid, c)
+	}
+
+	return valid
 }
 
 func validateQuizQuestions(questions []models.QuizQuestion, config models.GenerateQuizRequest) []models.QuizQuestion {

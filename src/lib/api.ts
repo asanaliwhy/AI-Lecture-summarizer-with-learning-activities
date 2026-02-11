@@ -228,7 +228,7 @@ export const api = {
     // Flashcards
     flashcards: {
         generate: (data: any) =>
-            apiFetch<{ deck: any; job: any }>('/flashcards/generate', {
+            apiFetch<{ deck_id?: string; job_id?: string; deck?: any; job?: any }>('/flashcards/generate', {
                 method: 'POST',
                 body: JSON.stringify(data),
             }),

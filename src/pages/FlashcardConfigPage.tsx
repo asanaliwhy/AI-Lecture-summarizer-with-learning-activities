@@ -23,8 +23,12 @@ export function FlashcardConfigPage() {
   const { summaryId } = useParams()
   const [deckName, setDeckName] = useState('Flashcards')
   const [cardCount, setCardCount] = useState([20])
-  const [topics, setTopics] = useState<string[]>([])
+  const [availableTopics, setAvailableTopics] = useState<string[]>([])
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([])
   const [strategy, setStrategy] = useState('definitions')
+  const [enableSpacedRepetition, setEnableSpacedRepetition] = useState(true)
+  const [includeMnemonics, setIncludeMnemonics] = useState(false)
+  const [includeExamples, setIncludeExamples] = useState(true)
   const [isFlipped, setIsFlipped] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState('')
@@ -34,8 +38,21 @@ export function FlashcardConfigPage() {
     if (!summaryId) return
     api.summaries.get(summaryId).then((data: any) => {
       setDeckName(`Flashcards: ${data.title || 'Untitled'}`)
-      if (data.topics) setTopics(data.topics)
-      else if (data.tags) setTopics(data.tags)
+
+      const rawTopics: unknown[] = Array.isArray(data.topics)
+        ? data.topics
+        : Array.isArray(data.tags)
+          ? data.tags
+          : []
+
+      const normalizedTopics = rawTopics
+        .filter((t): t is string => typeof t === 'string')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+
+      const dedupedTopics: string[] = Array.from(new Set(normalizedTopics))
+      setAvailableTopics(dedupedTopics)
+      setSelectedTopics(dedupedTopics)
     }).catch(() => { })
   }, [summaryId])
 
@@ -43,17 +60,36 @@ export function FlashcardConfigPage() {
     setIsGenerating(true)
     setError('')
     try {
+      if (!summaryId) {
+        throw new Error('Missing summary ID')
+      }
+
+      if (availableTopics.length > 0 && selectedTopics.length === 0) {
+        throw new Error('Please select at least one topic for this deck')
+      }
+
+      const strategyValue = strategy === 'qa' ? 'question_answer' : 'term_definition'
+
       const result = await api.flashcards.generate({
         summary_id: summaryId,
         title: deckName,
-        card_count: cardCount[0],
-        strategy,
-        topics,
+        num_cards: cardCount[0],
+        strategy: strategyValue,
+        topics: selectedTopics,
+        enable_spaced_repetition: enableSpacedRepetition,
+        include_mnemonics: includeMnemonics,
+        include_examples: includeExamples,
       })
-      if (result.job?.id) {
-        navigate(`/processing/${result.job.id}`)
-      } else if (result.deck?.id) {
-        navigate(`/flashcards/study/${result.deck.id}`)
+
+      const jobId = result.job?.id || result.job_id
+      const deckId = result.deck?.id || result.deck_id
+
+      if (jobId) {
+        navigate(`/processing/${jobId}`)
+      } else if (deckId) {
+        navigate(`/flashcards/study/${deckId}`)
+      } else {
+        throw new Error('Flashcard generation did not return a job or deck id')
       }
     } catch (err: any) {
       setError(err.message || 'Failed to generate flashcards')
@@ -167,15 +203,15 @@ export function FlashcardConfigPage() {
                   <Label>Options</Label>
                   <div className="space-y-2">
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="spaced-repetition" defaultChecked />
+                      <Checkbox id="spaced-repetition" checked={enableSpacedRepetition} onCheckedChange={(checked) => setEnableSpacedRepetition(Boolean(checked))} />
                       <label htmlFor="spaced-repetition" className="text-sm font-medium">Enable Spaced Repetition</label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="mnemonics" />
+                      <Checkbox id="mnemonics" checked={includeMnemonics} onCheckedChange={(checked) => setIncludeMnemonics(Boolean(checked))} />
                       <label htmlFor="mnemonics" className="text-sm font-medium">Include Mnemonic Hints</label>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Checkbox id="examples" defaultChecked />
+                      <Checkbox id="examples" checked={includeExamples} onCheckedChange={(checked) => setIncludeExamples(Boolean(checked))} />
                       <label htmlFor="examples" className="text-sm font-medium">Include Contextual Examples</label>
                     </div>
                   </div>
@@ -183,7 +219,7 @@ export function FlashcardConfigPage() {
               </CardContent>
             </Card>
 
-            {topics.length > 0 && (
+            {availableTopics.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle>Topics Covered</CardTitle>
@@ -191,15 +227,27 @@ export function FlashcardConfigPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
-                    {topics.map((topic) => (
-                      <Badge
-                        key={topic}
-                        variant="secondary"
-                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors px-3 py-1 text-sm"
-                      >
-                        {topic} <CheckCircle2 className="ml-2 h-3 w-3" />
-                      </Badge>
-                    ))}
+                    {availableTopics.map((topic) => {
+                      const isSelected = selectedTopics.includes(topic)
+                      return (
+                        <Badge
+                          key={topic}
+                          variant={isSelected ? 'default' : 'secondary'}
+                          className="cursor-pointer transition-colors px-3 py-1 text-sm"
+                          onClick={() => {
+                            setSelectedTopics((prev) => {
+                              if (prev.includes(topic)) {
+                                return prev.filter((t) => t !== topic)
+                              }
+                              return [...prev, topic]
+                            })
+                          }}
+                        >
+                          {topic}
+                          {isSelected && <CheckCircle2 className="ml-2 h-3 w-3" />}
+                        </Badge>
+                      )
+                    })}
                   </div>
                 </CardContent>
               </Card>

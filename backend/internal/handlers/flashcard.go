@@ -36,6 +36,30 @@ func (h *FlashcardHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.SummaryID == uuid.Nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "summary_id is required", r))
+		return
+	}
+
+	if req.NumCards <= 0 {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "num_cards must be greater than 0", r))
+		return
+	}
+
+	if req.Strategy == "" {
+		req.Strategy = "term_definition"
+	}
+	if req.Strategy == "definitions" {
+		req.Strategy = "term_definition"
+	}
+	if req.Strategy == "qa" {
+		req.Strategy = "question_answer"
+	}
+	if req.Strategy != "term_definition" && req.Strategy != "question_answer" {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "strategy must be term_definition or question_answer", r))
+		return
+	}
+
 	userID := middleware.GetUserID(r.Context())
 
 	summary, err := h.summaryRepo.GetByID(r.Context(), req.SummaryID)
@@ -76,6 +100,12 @@ func (h *FlashcardHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"job_id":  job.ID,
 		"deck_id": deck.ID,
+		"job": map[string]interface{}{
+			"id": job.ID,
+		},
+		"deck": map[string]interface{}{
+			"id": deck.ID,
+		},
 	})
 }
 

@@ -34,11 +34,14 @@ type FlashcardCard struct {
 }
 
 type GenerateFlashcardsRequest struct {
-	SummaryID uuid.UUID `json:"summary_id"`
-	Title     string    `json:"title"`
-	NumCards  int       `json:"num_cards"`
-	Strategy  string    `json:"strategy"` // "term_definition" | "question_answer"
-	Topics    []string  `json:"topics"`
+	SummaryID               uuid.UUID `json:"summary_id"`
+	Title                   string    `json:"title"`
+	NumCards                int       `json:"num_cards"`
+	Strategy                string    `json:"strategy"` // "term_definition" | "question_answer"
+	Topics                  []string  `json:"topics"`
+	EnableSpacedRepetition  bool      `json:"enable_spaced_repetition"`
+	IncludeMnemonics        bool      `json:"include_mnemonics"`
+	IncludeExamples         bool      `json:"include_examples"`
 }
 
 type CardRatingRequest struct {
