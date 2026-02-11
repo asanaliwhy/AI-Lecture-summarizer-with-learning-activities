@@ -88,8 +88,10 @@ export function QuizResultsPage() {
 
   const formatTime = (seconds: number | string) => {
     if (typeof seconds === 'string') return seconds
+    if (seconds < 60) return `${seconds}s`
     const m = Math.floor(seconds / 60)
-    return `${m}m`
+    const s = seconds % 60
+    return s === 0 ? `${m}m` : `${m}m ${s}s`
   }
 
   return (
@@ -171,11 +173,38 @@ export function QuizResultsPage() {
             <div className="space-y-4">
               {questions.map((q: any, index: number) => {
                 const qId = q.id || index
+                const selectedIdx =
+                  q.user_answer_index ??
+                  q.answer_index ??
+                  q.selected_index ??
+                  q.user_answer
+                const correctIdx = q.correct_index
+
+                const selectedLabel =
+                  typeof selectedIdx === 'number' && Array.isArray(q.options) && q.options[selectedIdx] !== undefined
+                    ? q.options[selectedIdx]
+                    : null
+                const correctLabel =
+                  typeof correctIdx === 'number' && Array.isArray(q.options) && q.options[correctIdx] !== undefined
+                    ? q.options[correctIdx]
+                    : q.correct_answer
+
                 const isCorrect =
                   q.is_correct ??
-                  (q.user_answer !== undefined && q.user_answer !== null && q.correct_answer !== undefined
-                    ? q.user_answer === q.correct_answer
+                  (selectedIdx !== undefined && selectedIdx !== null && correctIdx !== undefined
+                    ? selectedIdx === correctIdx
                     : false)
+
+                const userAnswerText =
+                  selectedLabel ||
+                  (typeof q.user_answer === 'string' ? q.user_answer : '') ||
+                  'No answer'
+
+                const correctAnswerText =
+                  correctLabel ||
+                  (typeof q.correct_answer === 'string' ? q.correct_answer : '') ||
+                  'N/A'
+
                 return (
                   <Card
                     key={qId}
@@ -208,7 +237,7 @@ export function QuizResultsPage() {
                         </div>
                         {expandedQuestion !== qId && (
                           <p className={cn('text-sm mt-2', isCorrect ? 'text-green-600' : 'text-red-600')}>
-                            Your answer: {q.user_answer || 'No answer'}
+                            Your answer: {userAnswerText}
                           </p>
                         )}
                       </div>
@@ -222,14 +251,14 @@ export function QuizResultsPage() {
                             isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200',
                           )}>
                             <div className="text-xs font-semibold uppercase tracking-wider mb-1 opacity-70">Your Answer</div>
-                            <div className="font-medium">{q.user_answer || 'No answer'}</div>
+                            <div className="font-medium">{userAnswerText}</div>
                           </div>
                           {!isCorrect && (
                             <div className="p-4 rounded-lg border bg-green-50 border-green-200">
                               <div className="text-xs font-semibold uppercase tracking-wider mb-1 opacity-70 text-green-800">
                                 Correct Answer
                               </div>
-                              <div className="font-medium text-green-900">{q.correct_answer}</div>
+                              <div className="font-medium text-green-900">{correctAnswerText}</div>
                             </div>
                           )}
                         </div>
