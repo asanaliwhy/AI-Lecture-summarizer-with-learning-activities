@@ -748,6 +748,9 @@ func validateFlashcardCards(cards []models.FlashcardCard, config models.Generate
 		if strategy == "question_answer" && !strings.HasSuffix(c.Front, "?") {
 			c.Front = strings.TrimSpace(c.Front) + "?"
 		}
+		if strategy == "term_definition" && strings.HasSuffix(strings.TrimSpace(c.Front), "?") {
+			c.Front = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(c.Front), "?"))
+		}
 
 		if !config.IncludeMnemonics {
 			c.Mnemonic = nil

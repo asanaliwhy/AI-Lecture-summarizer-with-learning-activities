@@ -18,6 +18,7 @@ import { QuizTakePage } from './pages/QuizTakePage'
 import { QuizResultsPage } from './pages/QuizResultsPage'
 import { FlashcardConfigPage } from './pages/FlashcardConfigPage'
 import { FlashcardStudyPage } from './pages/FlashcardStudyPage'
+import { FlashcardsPage } from './pages/FlashcardsPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -49,6 +50,7 @@ export function App() {
             <Route path="/quiz/results/:attemptId" element={<ProtectedRoute><QuizResultsPage /></ProtectedRoute>} />
 
             {/* Flashcard Routes */}
+            <Route path="/flashcards" element={<ProtectedRoute><FlashcardsPage /></ProtectedRoute>} />
             <Route path="/flashcards/create/:summaryId" element={<ProtectedRoute><FlashcardConfigPage /></ProtectedRoute>} />
             <Route path="/flashcards/study/:deckId" element={<ProtectedRoute><FlashcardStudyPage /></ProtectedRoute>} />
 

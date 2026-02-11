@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   FileText,
   BrainCircuit,
+  Layers,
   Library,
   Settings,
   LogOut,
@@ -31,6 +32,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
     { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
     { icon: FileText, label: 'Summaries', href: '/summaries' },
     { icon: BrainCircuit, label: 'Quizzes', href: '/quizzes', notification: true },
+    { icon: Layers, label: 'Flashcards', href: '/flashcards' },
     { icon: Library, label: 'Library', href: '/library' },
     { icon: Settings, label: 'Settings', href: '/settings' },
   ]
