@@ -208,7 +208,7 @@ export const api = {
         get: (id: string) => apiFetch<any>(`/quizzes/${id}`),
 
         startAttempt: (quizId: string) =>
-            apiFetch<{ attempt: any }>(`/quizzes/${quizId}/start`, { method: 'POST' }),
+            apiFetch<{ attempt?: any; attempt_id?: string; started_at?: string }>(`/quizzes/${quizId}/start`, { method: 'POST' }),
 
         saveProgress: (attemptId: string, data: any) =>
             apiFetch(`/quiz-attempts/${attemptId}/save-progress`, {
@@ -217,7 +217,7 @@ export const api = {
             }),
 
         submitAttempt: (attemptId: string) =>
-            apiFetch<{ attempt: any }>(`/quiz-attempts/${attemptId}/submit`, {
+            apiFetch<{ attempt?: any; attempt_id?: string; score_percent?: number; correct_count?: number; total?: number }>(`/quiz-attempts/${attemptId}/submit`, {
                 method: 'POST',
             }),
 

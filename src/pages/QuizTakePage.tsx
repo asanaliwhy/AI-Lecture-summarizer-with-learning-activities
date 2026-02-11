@@ -36,8 +36,9 @@ export function QuizTakePage() {
       try {
         const quizData = await api.quizzes.get(quizId!)
         setQuiz(quizData)
-        const { attempt } = await api.quizzes.startAttempt(quizId!)
-        setAttemptId(attempt.id)
+        const start = await api.quizzes.startAttempt(quizId!)
+        const startedAttemptId = start.attempt?.id || start.attempt_id || null
+        setAttemptId(startedAttemptId)
       } catch {
         setQuiz(null)
       } finally {
@@ -116,7 +117,7 @@ export function QuizTakePage() {
       setIsSubmitting(true)
       try {
         const result = await api.quizzes.submitAttempt(attemptId)
-        navigate(`/quiz/results/${result.attempt?.id || attemptId}`)
+        navigate(`/quiz/results/${result.attempt?.id || result.attempt_id || attemptId}`)
       } catch {
         navigate('/dashboard')
       }
