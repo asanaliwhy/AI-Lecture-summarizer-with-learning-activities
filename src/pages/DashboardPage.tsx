@@ -90,7 +90,7 @@ export function DashboardPage() {
       icon: Play,
       color: 'text-orange-600',
       bgColor: 'bg-orange-100',
-      link: '/library?type=flashcards',
+      link: '/flashcards',
       clickable: true,
     },
     {
@@ -443,7 +443,7 @@ export function DashboardPage() {
                     </CardContent>
                   </Card>
                 </Link>
-                <Link to="/library?type=flashcards">
+                <Link to="/flashcards">
                   <Card className="hover:bg-secondary/50 transition-all duration-300 cursor-pointer border-dashed hover:border-solid hover:shadow-md group">
                     <CardContent className="p-4 flex items-center gap-4">
                       <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 group-hover:scale-110 transition-transform">

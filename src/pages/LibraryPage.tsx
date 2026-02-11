@@ -35,11 +35,28 @@ export function LibraryPage() {
   const [typeFilter, setTypeFilter] = useState('all')
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const type = params.get('type')
+    if (!type) return
+
+    if (type === 'flashcards') {
+      setTypeFilter('flashcards')
+      return
+    }
+
+    if (type === 'summary' || type === 'quiz' || type === 'flashcard' || type === 'all') {
+      setTypeFilter(type === 'flashcard' ? 'flashcards' : type)
+    }
+  }, [])
+
+  useEffect(() => {
     async function load() {
       try {
         const params: Record<string, string> = {}
         if (searchQuery) params.search = searchQuery
-        if (typeFilter !== 'all') params.type = typeFilter
+        if (typeFilter !== 'all') {
+          params.type = typeFilter === 'flashcards' ? 'flashcard' : typeFilter
+        }
         const data = await api.library.list(params)
         setItems(data.items || [])
       } catch {
@@ -72,7 +89,8 @@ export function LibraryPage() {
   const getItemRoute = (item: any) => {
     if (item.type === 'summary') return `/summary/${item.id}`
     if (item.type === 'quiz') return `/quiz/take/${item.id}`
-    return `/flashcards/study/${item.id}`
+    if (item.type === 'flashcard' || item.type === 'flashcards') return `/flashcards/study/${item.id}`
+    return '/library'
   }
 
   return (

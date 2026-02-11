@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -138,6 +139,8 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	ctx := r.Context()
 	typeFilter := r.URL.Query().Get("type")
+	searchQuery := strings.TrimSpace(r.URL.Query().Get("search"))
+	searchLike := "%" + strings.ToLower(searchQuery) + "%"
 
 	type LibraryItem struct {
 		ID        uuid.UUID `json:"id"`
@@ -150,8 +153,15 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 	var items []LibraryItem
 
 	if typeFilter == "" || typeFilter == "summary" {
-		rows, _ := h.pool.Query(ctx,
-			"SELECT id, title, tags, created_at FROM summaries WHERE user_id = $1 AND is_archived = FALSE ORDER BY created_at DESC", userID)
+		query := "SELECT id, title, tags, created_at FROM summaries WHERE user_id = $1 AND is_archived = FALSE"
+		args := []interface{}{userID}
+		if searchQuery != "" {
+			query += " AND LOWER(title) LIKE $2"
+			args = append(args, searchLike)
+		}
+		query += " ORDER BY created_at DESC"
+
+		rows, _ := h.pool.Query(ctx, query, args...)
 		for rows.Next() {
 			item := LibraryItem{Type: "summary"}
 			rows.Scan(&item.ID, &item.Title, &item.Tags, &item.CreatedAt)
@@ -161,8 +171,15 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if typeFilter == "" || typeFilter == "quiz" {
-		rows, _ := h.pool.Query(ctx,
-			"SELECT id, title, created_at FROM quizzes WHERE user_id = $1 ORDER BY created_at DESC", userID)
+		query := "SELECT id, title, created_at FROM quizzes WHERE user_id = $1"
+		args := []interface{}{userID}
+		if searchQuery != "" {
+			query += " AND LOWER(title) LIKE $2"
+			args = append(args, searchLike)
+		}
+		query += " ORDER BY created_at DESC"
+
+		rows, _ := h.pool.Query(ctx, query, args...)
 		for rows.Next() {
 			item := LibraryItem{Type: "quiz"}
 			rows.Scan(&item.ID, &item.Title, &item.CreatedAt)
@@ -171,9 +188,16 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		rows.Close()
 	}
 
-	if typeFilter == "" || typeFilter == "flashcard" {
-		rows, _ := h.pool.Query(ctx,
-			"SELECT id, title, created_at FROM flashcard_decks WHERE user_id = $1 ORDER BY created_at DESC", userID)
+	if typeFilter == "" || typeFilter == "flashcard" || typeFilter == "flashcards" {
+		query := "SELECT id, title, created_at FROM flashcard_decks WHERE user_id = $1"
+		args := []interface{}{userID}
+		if searchQuery != "" {
+			query += " AND LOWER(title) LIKE $2"
+			args = append(args, searchLike)
+		}
+		query += " ORDER BY created_at DESC"
+
+		rows, _ := h.pool.Query(ctx, query, args...)
 		for rows.Next() {
 			item := LibraryItem{Type: "flashcard"}
 			rows.Scan(&item.ID, &item.Title, &item.CreatedAt)
