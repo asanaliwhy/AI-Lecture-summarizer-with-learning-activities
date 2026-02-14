@@ -24,14 +24,21 @@ interface SidebarProps {
   onClose: () => void
 }
 
+interface NavItem {
+  icon: any
+  label: string
+  href: string
+  notification?: boolean
+}
+
 export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const location = useLocation()
   const { user, logout } = useAuth()
 
-  const navItems = [
+  const navItems: NavItem[] = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
     { icon: FileText, label: 'Summaries', href: '/summaries' },
-    { icon: BrainCircuit, label: 'Quizzes', href: '/quizzes', notification: true },
+    { icon: BrainCircuit, label: 'Quizzes', href: '/quizzes' },
     { icon: Layers, label: 'Flashcards', href: '/flashcards' },
     { icon: Library, label: 'Library', href: '/library' },
     { icon: Settings, label: 'Settings', href: '/settings' },
