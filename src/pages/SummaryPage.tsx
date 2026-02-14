@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
-import { api } from '../lib/api'
+import DOMPurify from 'dompurify'
+import { api, type SummaryDetailResponse, type SummarySectionResponse } from '../lib/api'
 import { useStudySession } from '../lib/useStudySession'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
@@ -172,7 +173,7 @@ export function SummaryPage() {
   const toast = useToast()
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [title, setTitle] = useState('')
-  const [summary, setSummary] = useState<any>(null)
+  const [summary, setSummary] = useState<SummaryDetailResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -206,7 +207,9 @@ export function SummaryPage() {
     if (id && title !== summary?.title) {
       try {
         await api.summaries.update(id, { title })
-      } catch { }
+      } catch {
+        toast.error('Failed to update title')
+      }
     }
   }
 
@@ -218,7 +221,9 @@ export function SummaryPage() {
       if (job_id) {
         navigate(`/processing/${job_id}`)
       }
-    } catch { } finally {
+    } catch {
+      toast.error('Failed to regenerate summary')
+    } finally {
       setIsRegenerating(false)
     }
   }
@@ -365,7 +370,7 @@ export function SummaryPage() {
   const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
 
   // Parse content sections
-  const sections = (summary.sections || []) as any[]
+  const sections: SummarySectionResponse[] = summary.sections || []
   const hasSections = sections.length > 0
 
   return (
@@ -502,7 +507,7 @@ export function SummaryPage() {
               <CardContent className="p-6 md:p-10 lg:p-12">
                 {hasSections ? (
                   <div className="space-y-10">
-                    {sections.map((section: any, idx: number) => (
+                    {sections.map((section, idx: number) => (
                       <div key={idx} className="border-b border-border/60 pb-8 last:border-b-0">
                         <h2 className="text-2xl md:text-[1.7rem] font-bold text-slate-900 mb-4">
                           {idx + 1}. {section.title}
@@ -525,7 +530,7 @@ export function SummaryPage() {
                           )}
                           <div className={section.key_concepts ? 'md:col-span-2' : 'md:col-span-3'}>
                             <div className="text-slate-800 leading-8 space-y-4 prose prose-slate max-w-[72ch]"
-                              dangerouslySetInnerHTML={{ __html: section.content || section.body || '' }}
+                              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(section.content || section.body || '') }}
                             />
                           </div>
                         </div>

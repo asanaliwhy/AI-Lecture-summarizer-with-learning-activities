@@ -154,6 +154,57 @@ export interface DashboardActivityResponse {
     days?: number[]
 }
 
+export interface SummarySectionResponse {
+    title?: string
+    body?: string
+    content?: string
+    key_concepts?: string[]
+}
+
+export interface SummaryListItemResponse {
+    id: string
+    title?: string
+    source?: string
+    source_type?: string
+    config?: {
+        source?: string
+        source_type?: string
+    }
+    tags?: string[]
+    is_favorite?: boolean
+    created_at?: string
+    read_time?: string
+    readTime?: string
+    word_count?: number
+    wordCount?: number
+    progress?: number
+    completion?: number
+}
+
+export interface SummaryDetailResponse extends SummaryListItemResponse {
+    format?: 'cornell' | 'bullets' | 'paragraph' | string
+    content_raw?: string
+    content?: string
+    body?: string
+    cornell_cues?: string
+    cornell_notes?: string
+    cornell_summary?: string
+    sections?: SummarySectionResponse[]
+    summary_text?: string
+    source_url?: string
+    source_duration?: string
+    duration?: string
+}
+
+export interface GenerateSummaryPayload {
+    content_id: string
+    format: string
+    length: string
+    focus_areas: string[]
+    target_audience: string
+    language: string
+}
+
 // ─── API Methods ───
 export const api = {
     // Auth
@@ -210,7 +261,7 @@ export const api = {
 
     // Summaries
     summaries: {
-        generate: (data: any) =>
+        generate: (data: GenerateSummaryPayload) =>
             apiFetch<{ summary_id: string; job_id: string }>('/summaries/generate', {
                 method: 'POST',
                 body: JSON.stringify(data),
@@ -218,12 +269,12 @@ export const api = {
 
         list: (params?: Record<string, string>) => {
             const qs = params ? '?' + new URLSearchParams(params).toString() : ''
-            return apiFetch<{ summaries: any[]; total: number }>(`/summaries${qs}`)
+            return apiFetch<{ summaries: SummaryListItemResponse[]; total: number }>(`/summaries${qs}`)
         },
 
-        get: (id: string) => apiFetch<any>(`/summaries/${id}`),
+        get: (id: string) => apiFetch<SummaryDetailResponse>(`/summaries/${id}`),
 
-        update: (id: string, data: any) =>
+        update: (id: string, data: { title?: string; tags?: string[] }) =>
             apiFetch(`/summaries/${id}`, {
                 method: 'PUT',
                 body: JSON.stringify(data),

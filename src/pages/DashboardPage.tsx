@@ -240,8 +240,9 @@ export function DashboardPage() {
       }))
       setGoalModalOpen(false)
       toast.success('Weekly goal updated')
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to update weekly goal')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update weekly goal'
+      toast.error(message)
     } finally {
       setIsSavingGoal(false)
     }
@@ -475,6 +476,14 @@ export function DashboardPage() {
                 <Card
                   className="border-l-4 border-l-primary shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer group relative overflow-hidden"
                   onClick={() => navigate(continueStudyItem.link)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate(continueStudyItem.link)
+                    }
+                  }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   <CardContent className="p-6 relative z-10">
@@ -564,6 +573,14 @@ export function DashboardPage() {
                     key={item.id}
                     className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-t-4 border-t-transparent hover:border-t-primary relative overflow-hidden"
                     onClick={() => navigate(item.link)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigate(item.link)
+                      }
+                    }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-transparent to-secondary/30 opacity-0 group-hover:opacity-100 transition-opacity" />
                     <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2 relative z-10">

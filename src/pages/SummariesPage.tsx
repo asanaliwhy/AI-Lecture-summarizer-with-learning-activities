@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, type SummaryListItemResponse } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -26,33 +26,45 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { CardSkeleton } from '../components/ui/Skeleton'
+import { useToast } from '../components/ui/Toast'
 export function SummariesPage() {
   const navigate = useNavigate()
+  const toast = useToast()
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
-  const [summaries, setSummaries] = useState<any[]>([])
+  const [summaries, setSummaries] = useState<SummaryListItemResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [starredItems, setStarredItems] = useState<string[]>([])
 
   useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 300)
+    return () => window.clearTimeout(timeout)
+  }, [searchQuery])
+
+  useEffect(() => {
     async function load() {
+      setIsLoading(true)
       try {
         const data = await api.summaries.list({
-          search: searchQuery,
+          search: debouncedSearchQuery,
           sort: sortOrder === 'az' ? 'title' : sortOrder === 'oldest' ? 'oldest' : 'newest',
         })
         setSummaries(data.summaries || [])
         setStarredItems(
-          (data.summaries || []).filter((s: any) => s.is_favorite).map((s: any) => s.id)
+          (data.summaries || []).filter((s) => s.is_favorite).map((s) => s.id)
         )
       } catch {
         setSummaries([])
+        toast.error('Failed to load summaries')
       } finally {
         setIsLoading(false)
       }
     }
     load()
-  }, [searchQuery, sortOrder])
+  }, [debouncedSearchQuery, sortOrder, toast])
 
   const toggleStar = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
@@ -61,10 +73,12 @@ export function SummariesPage() {
       setStarredItems(prev =>
         prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
       )
-    } catch { }
+    } catch {
+      toast.error('Failed to update favorite')
+    }
   }
 
-  const getSummarySource = (summary: any) => {
+  const getSummarySource = (summary: SummaryListItemResponse) => {
     const raw = String(
       summary?.source ||
       summary?.source_type ||
@@ -80,7 +94,7 @@ export function SummariesPage() {
     }
   }
 
-  const getReadTime = (summary: any) => {
+  const getReadTime = (summary: SummaryListItemResponse) => {
     const direct = summary?.readTime ?? summary?.read_time
     if (typeof direct === 'string' && direct.trim()) return direct
 
@@ -93,7 +107,7 @@ export function SummariesPage() {
     return null
   }
 
-  const getProgress = (summary: any) => {
+  const getProgress = (summary: SummaryListItemResponse) => {
     const raw = Number(summary?.progress ?? summary?.completion)
     if (!Number.isFinite(raw)) return null
     return Math.max(0, Math.min(100, raw))
@@ -200,6 +214,14 @@ export function SummariesPage() {
                     key={summary.id}
                     className="group cursor-pointer hover:shadow-lg transition-all duration-300 border-l-4 border-l-transparent hover:border-l-primary relative overflow-hidden"
                     onClick={() => navigate(`/summary/${summary.id}`)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigate(`/summary/${summary.id}`)
+                      }
+                    }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-transparent to-secondary/20 opacity-0 group-hover:opacity-100 transition-opacity" />
 
