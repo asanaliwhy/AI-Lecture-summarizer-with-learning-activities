@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import {
@@ -777,10 +778,10 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {goalModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {goalModalOpen && createPortal(
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <button
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/55 backdrop-blur-md"
               onClick={() => setGoalModalOpen(false)}
               aria-label="Close modal"
             />
@@ -949,7 +950,8 @@ export function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
     </AppLayout >
