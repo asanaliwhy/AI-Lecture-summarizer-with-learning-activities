@@ -37,7 +37,8 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		SELECT COUNT(*)
 		FROM summaries
 		WHERE user_id = $1
-		  AND created_at >= date_trunc('week', now())
+		  AND is_archived = FALSE
+		  AND created_at >= NOW() - INTERVAL '7 days'
 	`, userID).Scan(&weeklySummaryCount)
 
 	weeklyGoalTarget := 5
