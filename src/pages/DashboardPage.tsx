@@ -8,7 +8,6 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Progress } from '../components/ui/Progress'
 import { Input } from '../components/ui/Input'
-import { Switch } from '../components/ui/Switch'
 import { DashboardSkeleton } from '../components/ui/Skeleton'
 import { useToast } from '../components/ui/Toast'
 import {
@@ -49,7 +48,6 @@ export function DashboardPage() {
   const [quizGoalInput, setQuizGoalInput] = useState('3')
   const [studyHoursGoalInput, setStudyHoursGoalInput] = useState('10')
   const [selectedGoalType, setSelectedGoalType] = useState<GoalType>('summary')
-  const [streakGoalEnabled, setStreakGoalEnabled] = useState(true)
   const [goalError, setGoalError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
 
@@ -846,17 +844,6 @@ export function DashboardPage() {
                     </div>
                     {selectedGoalType === 'flashcard' && goalError && <p className="text-xs text-destructive mt-2">{goalError}</p>}
                   </button>
-                </div>
-
-                <div className="flex items-center justify-between p-4 bg-orange-50 border border-orange-100 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Flame className="h-5 w-5 text-orange-600" />
-                    <div>
-                      <p className="font-semibold text-orange-900 text-sm">Daily Streak Goal</p>
-                      <p className="text-xs text-orange-700">Maintain consecutive days</p>
-                    </div>
-                  </div>
-                  <Switch checked={streakGoalEnabled} onCheckedChange={setStreakGoalEnabled} />
                 </div>
 
                 <div className="pt-1 border-t">
