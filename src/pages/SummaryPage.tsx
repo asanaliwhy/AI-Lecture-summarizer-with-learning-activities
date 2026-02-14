@@ -168,10 +168,109 @@ function normalizeCornellText(value: string): string {
   return normalizeGeneralSummaryText(out.join('\n').replace(/\n{3,}/g, '\n\n').trim())
 }
 
+function normalizeSmartSummaryMarkdown(value: string): string {
+  if (!value) return ''
+
+  const lines = value.replace(/\r\n/g, '\n').split('\n')
+  const out: string[] = []
+
+  const splitColumns = (line: string): string[] =>
+    line
+      .trim()
+      .split(/\s{2,}/)
+      .map((cell) => cleanInlineMarkdown(cell))
+      .filter(Boolean)
+
+  const normalizeRow = (row: string[], size: number): string[] => {
+    if (row.length === size) return row
+    if (row.length > size) {
+      return [...row.slice(0, size - 1), row.slice(size - 1).join(' ')]
+    }
+    return [...row, ...Array(size - row.length).fill('—')]
+  }
+
+  let i = 0
+  while (i < lines.length) {
+    const raw = lines[i].trim()
+    if (!raw) {
+      out.push('')
+      i += 1
+      continue
+    }
+
+    const numberedHeading = raw.match(/^\d+[.)]\s+(.+)$/)
+    if (numberedHeading) {
+      out.push(`## ${cleanInlineMarkdown(numberedHeading[1])}`)
+      i += 1
+      continue
+    }
+
+    if (raw.startsWith('• ')) {
+      out.push(`- ${cleanInlineMarkdown(raw.slice(2))}`)
+      i += 1
+      continue
+    }
+
+    if (/^[-*+]\s+/.test(raw)) {
+      out.push(`- ${cleanInlineMarkdown(raw.replace(/^[-*+]\s+/, ''))}`)
+      i += 1
+      continue
+    }
+
+    const headerCols = splitColumns(raw)
+    const nextRaw = (lines[i + 1] || '').trim()
+    const nextCols = nextRaw ? splitColumns(nextRaw) : []
+    const isTableBlock =
+      headerCols.length >= 2 &&
+      nextCols.length >= 2 &&
+      !/^\d+[.)]\s+/.test(nextRaw)
+
+    if (isTableBlock) {
+      const rows: string[][] = [headerCols, nextCols]
+      let j = i + 2
+
+      while (j < lines.length) {
+        const rowRaw = lines[j].trim()
+        if (!rowRaw || /^\d+[.)]\s+/.test(rowRaw)) break
+        const cols = splitColumns(rowRaw)
+        if (cols.length < 2) break
+        rows.push(cols)
+        j += 1
+      }
+
+      const colCount = Math.max(...rows.map((row) => row.length))
+      const normalizedRows = rows.map((row) => normalizeRow(row, colCount))
+
+      out.push(`| ${normalizedRows[0].join(' | ')} |`)
+      out.push(`| ${Array(colCount).fill('---').join(' | ')} |`)
+      normalizedRows.slice(1).forEach((row) => {
+        out.push(`| ${row.join(' | ')} |`)
+      })
+      out.push('')
+
+      i = j
+      continue
+    }
+
+    const keyValue = raw.match(/^([A-Za-z][A-Za-z\s&/-]{1,40}):\s+(.+)$/)
+    if (keyValue) {
+      out.push(`- **${cleanInlineMarkdown(keyValue[1])}:** ${cleanInlineMarkdown(keyValue[2])}`)
+      i += 1
+      continue
+    }
+
+    out.push(cleanInlineMarkdown(raw))
+    i += 1
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
 function renderSmartSummaryHtml(value: string): string {
   if (!value) return ''
 
-  const html = marked.parse(value, { async: false }) as string
+  const normalized = normalizeSmartSummaryMarkdown(value)
+  const html = marked.parse(normalized || value, { async: false, gfm: true, breaks: true }) as string
   return DOMPurify.sanitize(html)
 }
 
