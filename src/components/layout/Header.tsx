@@ -35,6 +35,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
       case '/create': return 'Create Content'
       case '/summaries': return 'My Summaries'
       case '/quizzes': return 'My Quizzes'
+      case '/flashcards': return 'My Flashcards'
       default:
         if (pathname.includes('/summary/')) return 'Summary View'
         if (pathname.includes('/quiz/')) return 'Quiz'
