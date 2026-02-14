@@ -348,6 +348,13 @@ export function DashboardPage() {
   const maxVisualBarHeight = 96
   const minVisualBarHeight = 8
 
+  const formatActivityHours = (value: number) => {
+    const safe = Number.isFinite(value) ? Math.max(0, value) : 0
+    if (safe === 0) return '0h'
+    if (safe < 1) return `${safe.toFixed(2)}h`
+    return `${safe.toFixed(1)}h`
+  }
+
   const activityData = dayLabels.map((day, i) => {
     const value = normalizedActivity[i]
     const height = maxActivity > 0
@@ -357,7 +364,7 @@ export function DashboardPage() {
     return {
       day,
       height,
-      hours: `${value.toFixed(1)}h`,
+      hours: formatActivityHours(value),
     }
   })
   return (
@@ -682,11 +689,11 @@ export function DashboardPage() {
                       <div className="h-full flex flex-col justify-between text-[10px] text-muted-foreground/80">
                         <div className="relative">
                           <div className="absolute inset-x-0 top-1/2 border-t border-border/70" />
-                          <span className="absolute -left-8 -top-1.5">{maxScale.toFixed(1)}h</span>
+                          <span className="absolute -left-8 -top-1.5">{formatActivityHours(maxScale)}</span>
                         </div>
                         <div className="relative">
                           <div className="absolute inset-x-0 top-1/2 border-t border-border/50" />
-                          <span className="absolute -left-8 -top-1.5">{(maxScale / 2).toFixed(1)}h</span>
+                          <span className="absolute -left-8 -top-1.5">{formatActivityHours(maxScale / 2)}</span>
                         </div>
                         <div className="relative">
                           <div className="absolute inset-x-0 top-1/2 border-t border-border/40" />
