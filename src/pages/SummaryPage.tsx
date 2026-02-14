@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useStudySession } from '../lib/useStudySession'
 import { AppLayout } from '../components/layout/AppLayout'
@@ -16,7 +16,7 @@ import {
   Clock,
   ExternalLink,
   Edit2,
-  MoreHorizontal,
+  Trash2,
   Loader2,
 } from 'lucide-react'
 
@@ -170,6 +170,7 @@ export function SummaryPage() {
   const [summary, setSummary] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRegenerating, setIsRegenerating] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -213,6 +214,20 @@ export function SummaryPage() {
       }
     } catch { } finally {
       setIsRegenerating(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!id) return
+    const confirmed = window.confirm('Delete this summary? This action cannot be undone.')
+    if (!confirmed) return
+
+    setIsDeleting(true)
+    try {
+      await api.summaries.delete(id)
+      navigate('/summaries')
+    } catch { } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -366,15 +381,6 @@ export function SummaryPage() {
                 <Edit2 className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
               </h1>
             )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleExportPdf}>
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
           </div>
         </div>
 
@@ -556,6 +562,10 @@ export function SummaryPage() {
                   <Copy className="h-4 w-4 mr-2" />
                   Copy Text
                 </Button>
+                <Button variant="outline" className="w-full justify-start" size="sm" onClick={handleExportPdf}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
                 <Button
                   variant="ghost"
                   className="w-full justify-start text-muted-foreground hover:text-foreground"
@@ -569,6 +579,20 @@ export function SummaryPage() {
                     <RotateCcw className="h-4 w-4 mr-2" />
                   )}
                   Regenerate
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="w-full justify-start"
+                  size="sm"
+                  disabled={isDeleting}
+                  onClick={handleDelete}
+                >
+                  {isDeleting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  Delete
                 </Button>
               </div>
             </div>
