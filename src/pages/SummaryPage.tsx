@@ -7,6 +7,7 @@ import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Card, CardContent } from '../components/ui/Card'
+import { useToast } from '../components/ui/Toast'
 import {
   BrainCircuit,
   Layers,
@@ -166,6 +167,7 @@ function normalizeCornellText(value: string): string {
 export function SummaryPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const toast = useToast()
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [title, setTitle] = useState('')
   const [summary, setSummary] = useState<any>(null)
@@ -230,13 +232,16 @@ export function SummaryPage() {
     try {
       await api.summaries.delete(id)
       setDeleteModalOpen(false)
+      toast.success('Summary deleted')
       navigate('/summaries')
-    } catch { } finally {
+    } catch {
+      toast.error('Failed to delete summary')
+    } finally {
       setIsDeleting(false)
     }
   }
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     const contentRaw = summary?.content_raw || summary?.content || summary?.body || ''
     const cornellCues = summary?.cornell_cues || ''
     const cornellNotes = summary?.cornell_notes || ''
@@ -247,7 +252,12 @@ export function SummaryPage() {
         ? `[CUES]\n${cornellCues}\n\n[NOTES]\n${cornellNotes}\n\n[SUMMARY]\n${cornellSummary}`.trim()
         : contentRaw
 
-    navigator.clipboard.writeText(text).catch(() => { })
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('Summary copied to clipboard')
+    } catch {
+      toast.error('Failed to copy text')
+    }
   }
 
   const sanitizeFileName = (value: string) => {
@@ -261,50 +271,55 @@ export function SummaryPage() {
   const handleExportPdf = async () => {
     if (!summary) return
 
-    const { jsPDF } = await import('jspdf')
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+    try {
+      const { jsPDF } = await import('jspdf')
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' })
 
-    const fileTitle = sanitizeFileName(title || summary?.title || 'summary')
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    const margin = 48
-    const contentWidth = pageWidth - margin * 2
+      const fileTitle = sanitizeFileName(title || summary?.title || 'summary')
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      const margin = 48
+      const contentWidth = pageWidth - margin * 2
 
-    const rawMain = normalizeGeneralSummaryText(summary?.content_raw || summary?.content || summary?.body || '')
-    const cues = normalizeCornellText(summary?.cornell_cues || '')
-    const notes = normalizeCornellText(summary?.cornell_notes || '')
-    const cornellSummaryText = normalizeCornellText(summary?.cornell_summary || '')
+      const rawMain = normalizeGeneralSummaryText(summary?.content_raw || summary?.content || summary?.body || '')
+      const cues = normalizeCornellText(summary?.cornell_cues || '')
+      const notes = normalizeCornellText(summary?.cornell_notes || '')
+      const cornellSummaryText = normalizeCornellText(summary?.cornell_summary || '')
 
-    const text = summary?.format === 'cornell'
-      ? `CUES\n${cues || 'No cues available.'}\n\nNOTES\n${notes || 'No notes available.'}\n\nSUMMARY\n${cornellSummaryText || 'No summary available.'}`
-      : rawMain || 'No content available.'
+      const text = summary?.format === 'cornell'
+        ? `CUES\n${cues || 'No cues available.'}\n\nNOTES\n${notes || 'No notes available.'}\n\nSUMMARY\n${cornellSummaryText || 'No summary available.'}`
+        : rawMain || 'No content available.'
 
-    let y = margin
+      let y = margin
 
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(18)
-    doc.text(fileTitle, margin, y)
-    y += 22
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(18)
+      doc.text(fileTitle, margin, y)
+      y += 22
 
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(11)
-    const dateLabel = summary?.created_at ? new Date(summary.created_at).toLocaleDateString() : 'Unknown date'
-    doc.text(`Generated: ${dateLabel}`, margin, y)
-    y += 24
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(11)
+      const dateLabel = summary?.created_at ? new Date(summary.created_at).toLocaleDateString() : 'Unknown date'
+      doc.text(`Generated: ${dateLabel}`, margin, y)
+      y += 24
 
-    doc.setFontSize(12)
-    const lines = doc.splitTextToSize(text, contentWidth)
+      doc.setFontSize(12)
+      const lines = doc.splitTextToSize(text, contentWidth)
 
-    for (const line of lines) {
-      if (y > pageHeight - margin) {
-        doc.addPage()
-        y = margin
+      for (const line of lines) {
+        if (y > pageHeight - margin) {
+          doc.addPage()
+          y = margin
+        }
+        doc.text(line, margin, y)
+        y += 18
       }
-      doc.text(line, margin, y)
-      y += 18
-    }
 
-    doc.save(`${fileTitle}.pdf`)
+      doc.save(`${fileTitle}.pdf`)
+      toast.success('PDF exported')
+    } catch {
+      toast.error('Failed to export PDF')
+    }
   }
 
   if (isLoading) {
@@ -352,14 +367,14 @@ export function SummaryPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-[1380px] mx-auto pb-8">
         {/* Top Header / Toolbar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 md:mb-10">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <Badge
                 variant="secondary"
-                className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200"
+                className="bg-blue-100/90 text-blue-700 hover:bg-blue-100 border-blue-200/80"
               >
                 Summary
               </Badge>
@@ -379,7 +394,7 @@ export function SummaryPage() {
               />
             ) : (
               <h1
-                className="text-3xl font-bold tracking-tight truncate cursor-pointer hover:text-primary/80 flex items-center gap-2 group"
+                className="text-3xl md:text-[2.2rem] font-bold tracking-tight truncate cursor-pointer hover:text-primary/80 flex items-center gap-2 group"
                 onClick={() => setIsEditingTitle(true)}
               >
                 {title}
@@ -389,11 +404,11 @@ export function SummaryPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8">
           {/* Left Sidebar - Metadata (20%) */}
           <div className="lg:col-span-3 space-y-6">
-            <Card>
-              <CardContent className="p-4 space-y-4">
+            <Card className="border-border/70 shadow-sm">
+              <CardContent className="p-5 space-y-5">
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                     Source
@@ -412,7 +427,7 @@ export function SummaryPage() {
                     <span className="text-base font-semibold text-foreground">{sourceLabel}</span>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   {duration && (
                     <div>
                       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
@@ -439,9 +454,9 @@ export function SummaryPage() {
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                       Tags
                     </h3>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1.5">
                       {tags.map((tag: string) => (
-                        <Badge key={tag} variant="outline">{tag}</Badge>
+                        <Badge key={tag} variant="outline" className="text-[11px] px-2.5 py-1 bg-background/70">{tag}</Badge>
                       ))}
                     </div>
                   </div>
@@ -449,7 +464,7 @@ export function SummaryPage() {
               </CardContent>
             </Card>
 
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-5">
+            <div className="bg-gradient-to-b from-blue-50 to-indigo-50/40 border border-blue-100/90 rounded-xl p-5 shadow-sm">
               <h3 className="font-bold text-blue-900 mb-3 text-lg">Study Tools</h3>
               <p className="text-sm text-blue-700 mb-5 leading-relaxed">
                 Ready to test your knowledge? Create a quiz or flashcards from this summary.
@@ -476,13 +491,13 @@ export function SummaryPage() {
 
           {/* Center - Content (60%) */}
           <div className="lg:col-span-7">
-            <Card className="min-h-[600px] shadow-sm">
-              <CardContent className="p-8 md:p-12">
+            <Card className="min-h-[620px] shadow-sm border-border/70">
+              <CardContent className="p-6 md:p-10 lg:p-12">
                 {hasSections ? (
-                  <div className="space-y-8">
+                  <div className="space-y-10">
                     {sections.map((section: any, idx: number) => (
-                      <div key={idx} className="border-b pb-6 last:border-b-0">
-                        <h2 className="text-2xl font-bold text-slate-900 mb-4">
+                      <div key={idx} className="border-b border-border/60 pb-8 last:border-b-0">
+                        <h2 className="text-2xl md:text-[1.7rem] font-bold text-slate-900 mb-4">
                           {idx + 1}. {section.title}
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -502,7 +517,7 @@ export function SummaryPage() {
                             </div>
                           )}
                           <div className={section.key_concepts ? 'md:col-span-2' : 'md:col-span-3'}>
-                            <div className="text-slate-800 leading-relaxed space-y-4 prose prose-slate max-w-none"
+                            <div className="text-slate-800 leading-8 space-y-4 prose prose-slate max-w-[72ch]"
                               dangerouslySetInnerHTML={{ __html: section.content || section.body || '' }}
                             />
                           </div>
@@ -519,33 +534,33 @@ export function SummaryPage() {
                   </div>
                 ) : hasCornellSections ? (
                   <div className="space-y-6">
-                    <div className="border rounded-lg p-5 bg-slate-50">
+                    <div className="border border-border/70 rounded-xl p-5 bg-slate-50/60">
                       <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">Cues</h3>
-                      <div className="whitespace-pre-wrap leading-relaxed text-slate-800">
+                      <div className="whitespace-pre-wrap leading-8 text-slate-800 max-w-[75ch]">
                         {renderedCornellCues || 'No cues available.'}
                       </div>
                     </div>
-                    <div className="border rounded-lg p-5 bg-white">
+                    <div className="border border-border/70 rounded-xl p-5 bg-white">
                       <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">Notes</h3>
-                      <div className="whitespace-pre-wrap leading-relaxed text-slate-800">
+                      <div className="whitespace-pre-wrap leading-8 text-slate-800 max-w-[75ch]">
                         {renderedCornellNotes || 'No notes available.'}
                       </div>
                     </div>
-                    <div className="border rounded-lg p-5 bg-blue-50 border-blue-100">
+                    <div className="border rounded-xl p-5 bg-blue-50/70 border-blue-100">
                       <h3 className="text-sm font-semibold uppercase tracking-wide text-blue-700 mb-3">Summary</h3>
-                      <div className="whitespace-pre-wrap leading-relaxed text-slate-800">
+                      <div className="whitespace-pre-wrap leading-8 text-slate-800 max-w-[75ch]">
                         {renderedCornellSummary || 'No summary available.'}
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-5">
+                  <div className="space-y-6">
                     {(renderedSections.length > 0 ? renderedSections : [{ title: 'Summary', body: renderedContentRaw || 'No content available yet.' }]).map((section, idx) => (
-                      <div key={idx} className="border rounded-lg p-5 bg-white/80">
+                      <div key={idx} className="border border-border/70 rounded-xl p-6 bg-muted/20">
                         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
                           {section.title}
                         </h3>
-                        <div className="whitespace-pre-wrap leading-relaxed text-slate-800 text-[15px]">
+                        <div className="whitespace-pre-wrap leading-8 text-slate-800 text-[15px] max-w-[75ch]">
                           {section.body}
                         </div>
                       </div>
@@ -558,48 +573,50 @@ export function SummaryPage() {
 
           {/* Right Sidebar - Actions (20%) */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="sticky top-24 space-y-6">
-              <div className="space-y-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Actions
-                </h3>
-                <Button variant="outline" className="w-full justify-start" size="sm" onClick={handleCopy}>
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy Text
-                </Button>
-                <Button variant="outline" className="w-full justify-start" size="sm" onClick={handleExportPdf}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
-                <Button
-                  variant="destructive"
-                  className="w-full justify-start"
-                  size="sm"
-                  disabled={isDeleting}
-                  onClick={handleDelete}
-                >
-                  {isDeleting ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4 mr-2" />
-                  )}
-                  Delete
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start text-muted-foreground hover:text-foreground"
-                  size="sm"
-                  disabled={isRegenerating}
-                  onClick={handleRegenerate}
-                >
-                  {isRegenerating ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                  )}
-                  Regenerate
-                </Button>
-              </div>
+            <div className="sticky top-24">
+              <Card className="border-border/70 shadow-sm">
+                <CardContent className="p-4 space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Actions
+                  </h3>
+                  <Button variant="outline" className="w-full justify-start" size="sm" onClick={handleCopy}>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy Text
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start" size="sm" onClick={handleExportPdf}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="w-full justify-start"
+                    size="sm"
+                    disabled={isDeleting}
+                    onClick={handleDelete}
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4 mr-2" />
+                    )}
+                    Delete
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-muted-foreground hover:text-foreground border border-transparent hover:border-border/60"
+                    size="sm"
+                    disabled={isRegenerating}
+                    onClick={handleRegenerate}
+                  >
+                    {isRegenerating ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                    )}
+                    Regenerate
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
