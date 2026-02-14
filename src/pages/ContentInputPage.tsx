@@ -104,11 +104,11 @@ export function ContentInputPage() {
     setIsGenerating(true)
     try {
       const lengthSetting =
-        summaryLength[0] < 25
+        summaryLength[0] <= 25
           ? 'concise'
-          : summaryLength[0] < 50
+          : summaryLength[0] <= 50
             ? 'standard'
-            : summaryLength[0] < 75
+            : summaryLength[0] <= 75
               ? 'detailed'
               : 'comprehensive'
 
@@ -326,6 +326,7 @@ export function ContentInputPage() {
                       step={25}
                       value={summaryLength}
                       onValueChange={setSummaryLength}
+                      rangeClassName={summaryLength[0] === 25 ? 'min-w-[8px]' : undefined}
                       className="py-4"
                     />
                     <div className="flex justify-between text-xs text-muted-foreground px-1">
