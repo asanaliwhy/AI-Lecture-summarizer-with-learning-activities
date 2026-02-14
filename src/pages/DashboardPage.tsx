@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
-import { api } from '../lib/api'
+import {
+  api,
+  type DashboardActivityResponse,
+  type DashboardGoalType,
+  type DashboardRecentItemResponse,
+  type DashboardRecentResponse,
+  type DashboardStatsResponse,
+  type DashboardStreakResponse,
+} from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Card, CardContent, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -28,7 +36,18 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
-type GoalType = 'summary' | 'quiz' | 'flashcard'
+type GoalType = DashboardGoalType
+type RecentContentType = 'Summary' | 'Quiz' | 'Flashcards'
+
+interface RecentContentCard {
+  id: string
+  title: string
+  type: RecentContentType
+  date: string
+  tags: string[]
+  progress: number
+  link: string
+}
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -38,15 +57,15 @@ export function DashboardPage() {
   const greeting =
     hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
   const [hoveredBar, setHoveredBar] = useState<number | null>(null)
-  const [dashStats, setDashStats] = useState<any>(null)
-  const [recentItems, setRecentItems] = useState<any[]>([])
-  const [streakData, setStreakData] = useState<any>(null)
-  const [activityItems, setActivityItems] = useState<any[]>([])
+  const [dashStats, setDashStats] = useState<DashboardStatsResponse | null>(null)
+  const [recentItems, setRecentItems] = useState<DashboardRecentItemResponse[]>([])
+  const [streakData, setStreakData] = useState<DashboardStreakResponse | null>(null)
+  const [activityItems, setActivityItems] = useState<number[]>([])
   const [isSavingGoal, setIsSavingGoal] = useState(false)
   const [goalModalOpen, setGoalModalOpen] = useState(false)
   const [summaryGoalInput, setSummaryGoalInput] = useState('5')
   const [quizGoalInput, setQuizGoalInput] = useState('3')
-  const [studyHoursGoalInput, setStudyHoursGoalInput] = useState('10')
+  const [flashcardGoalInput, setFlashcardGoalInput] = useState('10')
   const [selectedGoalType, setSelectedGoalType] = useState<GoalType>('summary')
   const [goalError, setGoalError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -56,14 +75,14 @@ export function DashboardPage() {
       try {
         const [stats, recent, streak, activity] = await Promise.all([
           api.dashboard.stats().catch(() => null),
-          api.dashboard.recent().catch(() => ({ recent: [] })),
+          api.dashboard.recent().catch((): DashboardRecentResponse => ({ recent: [], items: [] })),
           api.dashboard.streak().catch(() => null),
-          api.dashboard.activity().catch(() => ({ activity: [] })),
+          api.dashboard.activity().catch((): DashboardActivityResponse => ({ activity: [], days: [] })),
         ])
         setDashStats(stats)
-        setRecentItems(recent?.recent || recent?.items || [])
+        setRecentItems(recent?.recent ?? recent?.items ?? [])
         setStreakData(streak)
-        setActivityItems(activity?.activity || activity?.days || [])
+        setActivityItems(activity?.activity ?? activity?.days ?? [])
       } finally {
         setIsLoading(false)
       }
@@ -105,6 +124,7 @@ export function DashboardPage() {
       icon: FileText,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
+      hoverGradientTo: 'group-hover:to-blue-500',
       link: '/summaries',
       clickable: true,
     },
@@ -116,6 +136,7 @@ export function DashboardPage() {
       icon: BrainCircuit,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100',
+      hoverGradientTo: 'group-hover:to-purple-500',
       link: '/quizzes',
       clickable: true,
     },
@@ -127,6 +148,7 @@ export function DashboardPage() {
       icon: Play,
       color: 'text-orange-600',
       bgColor: 'bg-orange-100',
+      hoverGradientTo: 'group-hover:to-orange-500',
       link: '/flashcards',
       clickable: true,
     },
@@ -138,6 +160,7 @@ export function DashboardPage() {
       icon: Clock,
       color: 'text-green-600',
       bgColor: 'bg-green-100',
+      hoverGradientTo: 'group-hover:to-green-500',
       link: null,
       clickable: false,
     },
@@ -186,7 +209,7 @@ export function DashboardPage() {
     setSelectedGoalType(weeklyGoalType)
     setSummaryGoalInput(String(weeklyGoalType === 'summary' ? weeklyGoalTarget : 5))
     setQuizGoalInput(String(weeklyGoalType === 'quiz' ? weeklyGoalTarget : 3))
-    setStudyHoursGoalInput(String(weeklyGoalType === 'flashcard' ? weeklyGoalTarget : 10))
+    setFlashcardGoalInput(String(weeklyGoalType === 'flashcard' ? weeklyGoalTarget : 10))
     setGoalError('')
     setGoalModalOpen(true)
   }
@@ -196,7 +219,7 @@ export function DashboardPage() {
       selectedGoalType === 'quiz'
         ? quizGoalInput
         : selectedGoalType === 'flashcard'
-          ? studyHoursGoalInput
+          ? flashcardGoalInput
           : summaryGoalInput
 
     const parsed = Number(inputValue)
@@ -209,7 +232,7 @@ export function DashboardPage() {
     setIsSavingGoal(true)
     try {
       const data = await api.dashboard.setWeeklyGoal(target, selectedGoalType)
-      setDashStats((prev: any) => ({
+      setDashStats((prev) => ({
         ...(prev || {}),
         weekly_goal_target: data?.weekly_goal_target ?? target,
         weekly_goal_type: data?.weekly_goal_type ?? selectedGoalType,
@@ -224,9 +247,9 @@ export function DashboardPage() {
   }
 
   const formatRelativeTime = (value?: string) => {
-    if (!value) return 'Recently'
+    if (!value) return 'Recently active'
     const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return 'Recently'
+    if (Number.isNaN(date.getTime())) return 'Recently active'
 
     const diffMs = Date.now() - date.getTime()
     const minutes = Math.floor(diffMs / (1000 * 60))
@@ -242,11 +265,14 @@ export function DashboardPage() {
     return date.toLocaleDateString()
   }
 
-  const recentContent = (recentItems || []).slice(0, 4).map((item: any) => {
-    const rawType = String(item?.type || 'summary').toLowerCase()
-    const id = String(item?.id || '')
+  const recentContent: RecentContentCard[] = (recentItems || []).flatMap((item) => {
+    const rawId = item?.id
+    const id = typeof rawId === 'string' ? rawId.trim() : String(rawId ?? '').trim()
+    if (!id) return []
 
-    const type =
+    const rawType = String(item?.type || 'summary').toLowerCase()
+
+    const type: RecentContentType =
       rawType === 'quiz'
         ? 'Quiz'
         : rawType === 'flashcard' || rawType === 'flashcards'
@@ -265,30 +291,48 @@ export function DashboardPage() {
       ? Math.max(0, Math.min(100, progressRaw))
       : 0
 
-    return {
+    return [{
       id,
-      title: item?.title || 'Untitled',
+      title: item?.title || 'Untitled learning item',
       type,
       date: formatRelativeTime(item?.created_at || item?.createdAt),
       tags: [type],
       progress,
       link,
-    }
-  })
+    }]
+  }).slice(0, 4)
 
   const continueStudyItem = recentContent[0] || null
 
-  const getContinueIcon = (type: string) => {
+  const getContinueIcon = (type: RecentContentType) => {
     if (type === 'Quiz') return BrainCircuit
     if (type === 'Flashcards') return Play
     return BookOpen
   }
 
-  const getContinueDescription = (type: string) => {
+  const getContinueDescription = (type: RecentContentType) => {
     if (type === 'Quiz') return 'Continue practicing your quiz to improve retention.'
     if (type === 'Flashcards') return 'Resume your flashcard session and reinforce memory.'
     return 'Continue reading and reviewing your generated summary.'
   }
+
+  const selectedGoalInputValue =
+    selectedGoalType === 'quiz'
+      ? quizGoalInput
+      : selectedGoalType === 'flashcard'
+        ? flashcardGoalInput
+        : summaryGoalInput
+
+  const previewGoalTargetRaw = Number(selectedGoalInputValue)
+  const previewGoalTarget =
+    previewGoalTargetRaw > 0
+      ? Math.max(1, Math.round(previewGoalTargetRaw))
+      : weeklyGoalTarget
+
+  const previewGoalProgress = Math.max(
+    0,
+    Math.min(100, Math.round((weeklyCurrentValue / previewGoalTarget) * 100)),
+  )
 
   // Backend returns activity as 7 numbers with Sunday=0 ... Saturday=6.
   // UI displays Monday-first: M T W T F S S.
@@ -362,7 +406,7 @@ export function DashboardPage() {
                   <div
                     className={cn(
                       'absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-gradient-to-br from-transparent',
-                      `to-${stat.color.split('-')[1]}-500`,
+                      stat.hoverGradientTo,
                     )}
                   />
                   <CardContent className="p-6 relative z-10">
@@ -859,8 +903,8 @@ export function DashboardPage() {
                         type="number"
                         min={1}
                         max={50}
-                        value={studyHoursGoalInput}
-                        onChange={(e) => setStudyHoursGoalInput(e.target.value)}
+                        value={flashcardGoalInput}
+                        onChange={(e) => setFlashcardGoalInput(e.target.value)}
                         onClick={(e) => e.stopPropagation()}
                         className="w-20 text-center font-mono"
                       />
@@ -874,58 +918,11 @@ export function DashboardPage() {
                     <span className="text-muted-foreground">Current goal progress preview</span>
                     <span className="font-medium">
                       {weeklyCurrentValue}/
-                      {Number(
-                        selectedGoalType === 'quiz'
-                          ? quizGoalInput
-                          : selectedGoalType === 'flashcard'
-                            ? studyHoursGoalInput
-                            : summaryGoalInput,
-                      ) > 0
-                        ? Math.max(
-                          1,
-                          Math.round(
-                            Number(
-                              selectedGoalType === 'quiz'
-                                ? quizGoalInput
-                                : selectedGoalType === 'flashcard'
-                                  ? studyHoursGoalInput
-                                  : summaryGoalInput,
-                            ),
-                          ),
-                        )
-                        : weeklyGoalTarget}
+                      {previewGoalTarget}
                     </span>
                   </div>
                   <Progress
-                    value={Math.max(
-                      0,
-                      Math.min(
-                        100,
-                        Math.round(
-                          (weeklyCurrentValue /
-                            (Number(
-                              selectedGoalType === 'quiz'
-                                ? quizGoalInput
-                                : selectedGoalType === 'flashcard'
-                                  ? studyHoursGoalInput
-                                  : summaryGoalInput,
-                            ) > 0
-                              ? Math.max(
-                                1,
-                                Math.round(
-                                  Number(
-                                    selectedGoalType === 'quiz'
-                                      ? quizGoalInput
-                                      : selectedGoalType === 'flashcard'
-                                        ? studyHoursGoalInput
-                                        : summaryGoalInput,
-                                  ),
-                                ),
-                              )
-                              : weeklyGoalTarget)) * 100,
-                        ),
-                      ),
-                    )}
+                    value={previewGoalProgress}
                     className="h-2"
                   />
                 </div>

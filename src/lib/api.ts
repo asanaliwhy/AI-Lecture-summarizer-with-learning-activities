@@ -110,6 +110,50 @@ export class ApiError extends Error {
     }
 }
 
+export type DashboardGoalType = 'summary' | 'quiz' | 'flashcard'
+
+export interface DashboardStatsResponse {
+    summaries?: number
+    quizzes_taken?: number
+    flashcard_decks?: number
+    study_hours?: number
+    summaries_trend?: number
+    quizzes_trend?: number
+    flashcards_trend?: number
+    study_hours_trend?: number
+    weekly_goal_target?: number
+    weekly_goal_type?: DashboardGoalType
+    weekly_summaries?: number
+    weekly_quizzes?: number
+    weekly_flashcards?: number
+}
+
+export interface DashboardRecentItemResponse {
+    id?: string | number
+    type?: string
+    title?: string
+    created_at?: string
+    createdAt?: string
+    progress?: number
+    completion?: number
+}
+
+export interface DashboardRecentResponse {
+    recent?: DashboardRecentItemResponse[]
+    items?: DashboardRecentItemResponse[]
+}
+
+export interface DashboardStreakResponse {
+    current_streak?: number
+    longest_streak?: number
+    last_activity_date?: string
+}
+
+export interface DashboardActivityResponse {
+    activity?: number[]
+    days?: number[]
+}
+
 // ─── API Methods ───
 export const api = {
     // Auth
@@ -248,15 +292,15 @@ export const api = {
 
     // Dashboard
     dashboard: {
-        stats: () => apiFetch<any>('/dashboard/stats'),
-        setWeeklyGoal: (target: number, goalType: 'summary' | 'quiz' | 'flashcard') =>
-            apiFetch<{ weekly_goal_target: number; weekly_goal_type: 'summary' | 'quiz' | 'flashcard' }>('/dashboard/weekly-goal', {
+        stats: () => apiFetch<DashboardStatsResponse>('/dashboard/stats'),
+        setWeeklyGoal: (target: number, goalType: DashboardGoalType) =>
+            apiFetch<{ weekly_goal_target: number; weekly_goal_type: DashboardGoalType }>('/dashboard/weekly-goal', {
                 method: 'PUT',
                 body: JSON.stringify({ target, goal_type: goalType }),
             }),
-        recent: () => apiFetch<any>('/dashboard/recent'),
-        streak: () => apiFetch<any>('/dashboard/streak'),
-        activity: () => apiFetch<any>('/dashboard/activity'),
+        recent: () => apiFetch<DashboardRecentResponse>('/dashboard/recent'),
+        streak: () => apiFetch<DashboardStreakResponse>('/dashboard/streak'),
+        activity: () => apiFetch<DashboardActivityResponse>('/dashboard/activity'),
     },
 
     // Study Sessions
