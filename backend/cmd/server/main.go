@@ -57,6 +57,7 @@ func main() {
 	quizRepo := repository.NewQuizRepo(pool)
 	flashcardRepo := repository.NewFlashcardRepo(pool)
 	jobRepo := repository.NewJobRepo(pool)
+	studySessionRepo := repository.NewStudySessionRepo(pool)
 
 	// ──── Step 4: Initialize Gemini Client ────
 	geminiService, err := services.NewGeminiService(
@@ -87,6 +88,7 @@ func main() {
 	summaryHandler := handlers.NewSummaryHandler(summaryRepo, contentRepo, jobRepo, redisClients.Queue)
 	quizHandler := handlers.NewQuizHandler(quizRepo, summaryRepo, jobRepo, redisClients.Queue)
 	flashcardHandler := handlers.NewFlashcardHandler(flashcardRepo, summaryRepo, jobRepo, redisClients.Queue)
+	studySessionHandler := handlers.NewStudySessionHandler(studySessionRepo)
 	dashboardHandler := handlers.NewDashboardHandler(pool, userRepo)
 	libraryHandler := handlers.NewLibraryHandler(pool)
 	userHandler := handlers.NewUserHandler(userRepo)
@@ -121,6 +123,7 @@ func main() {
 		summaryHandler,
 		quizHandler,
 		flashcardHandler,
+		studySessionHandler,
 		dashboardHandler,
 		libraryHandler,
 		userHandler,

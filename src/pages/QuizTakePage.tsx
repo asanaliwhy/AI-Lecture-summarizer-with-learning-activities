@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import { useStudySession } from '../lib/useStudySession'
 import { Button } from '../components/ui/Button'
 import { Progress } from '../components/ui/Progress'
 import { Card } from '../components/ui/Card'
@@ -78,6 +79,13 @@ export function QuizTakePage() {
     const interval = setInterval(() => setTimer(t => t + 1), 1000)
     return () => clearInterval(interval)
   }, [isLoading, quiz])
+
+  useStudySession({
+    activityType: 'quiz',
+    resourceId: quizId,
+    enabled: !!quizId && !isLoading && !!quiz,
+    clientMeta: { page: 'quiz_take' },
+  })
 
   const questions = quiz?.questions || []
   const totalQuestions = questions.length || 1

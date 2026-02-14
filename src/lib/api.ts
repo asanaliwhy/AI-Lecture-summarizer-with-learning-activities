@@ -259,6 +259,27 @@ export const api = {
         activity: () => apiFetch<any>('/dashboard/activity'),
     },
 
+    // Study Sessions
+    studySessions: {
+        start: (activityType: 'summary' | 'quiz' | 'flashcard', resourceId: string, clientMeta?: Record<string, any>) =>
+            apiFetch<{ session: { id: string } }>('/study-sessions/start', {
+                method: 'POST',
+                body: JSON.stringify({
+                    activity_type: activityType,
+                    resource_id: resourceId,
+                    client_meta: clientMeta || {},
+                }),
+            }),
+        heartbeat: (sessionId: string) =>
+            apiFetch<{ message: string }>(`/study-sessions/${sessionId}/heartbeat`, {
+                method: 'POST',
+            }),
+        stop: (sessionId: string) =>
+            apiFetch<{ message: string }>(`/study-sessions/${sessionId}/stop`, {
+                method: 'POST',
+            }),
+    },
+
     // Library
     library: {
         list: (params?: Record<string, string>) => {

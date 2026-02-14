@@ -19,6 +19,7 @@ func New(
 	summaryHandler *handlers.SummaryHandler,
 	quizHandler *handlers.QuizHandler,
 	flashcardHandler *handlers.FlashcardHandler,
+	studySessionHandler *handlers.StudySessionHandler,
 	dashboardHandler *handlers.DashboardHandler,
 	libraryHandler *handlers.LibraryHandler,
 	userHandler *handlers.UserHandler,
@@ -116,6 +117,14 @@ func New(
 			r.Route("/cards", func(r chi.Router) {
 				r.Post("/{id}/rating", flashcardHandler.RateCard)
 			})
+		})
+
+		// ──── Study Session Routes ────
+		r.Route("/study-sessions", func(r chi.Router) {
+			r.Use(jwtAuth.Middleware)
+			r.Post("/start", studySessionHandler.Start)
+			r.Post("/{id}/heartbeat", studySessionHandler.Heartbeat)
+			r.Post("/{id}/stop", studySessionHandler.Stop)
 		})
 
 		// ──── Dashboard Routes ────

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import { useStudySession } from '../lib/useStudySession'
 import { Button } from '../components/ui/Button'
 import { Progress } from '../components/ui/Progress'
 import {
@@ -37,6 +38,13 @@ export function FlashcardStudyPage() {
     }
     load()
   }, [deckId])
+
+  useStudySession({
+    activityType: 'flashcard',
+    resourceId: deckId,
+    enabled: !!deckId && !isLoading && !!deck,
+    clientMeta: { page: 'flashcard_study' },
+  })
 
   const totalCards = cards.length || 1
   const progress = (currentCardIndex / totalCards) * 100

@@ -103,10 +103,25 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		weeklyGoalType = "summary"
 	}
 
-	// Estimate study hours based on content count
-	studyHours := float64(summaryCount+quizCount+flashcardCount) * 0.5
-	weeklyStudyHours := float64(weeklySummaryCount+weeklyQuizCount+weeklyFlashcardCount) * 0.5
-	prevWeeklyStudyHours := float64(prevWeeklySummaryCount+prevWeeklyQuizCount+prevWeeklyFlashcardCount) * 0.5
+	var studyHours, weeklyStudyHours, prevWeeklyStudyHours float64
+	h.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
+		FROM study_sessions
+		WHERE user_id = $1
+	`, userID).Scan(&studyHours)
+	h.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
+		FROM study_sessions
+		WHERE user_id = $1
+		  AND started_at >= NOW() - INTERVAL '7 days'
+	`, userID).Scan(&weeklyStudyHours)
+	h.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
+		FROM study_sessions
+		WHERE user_id = $1
+		  AND started_at >= NOW() - INTERVAL '14 days'
+		  AND started_at < NOW() - INTERVAL '7 days'
+	`, userID).Scan(&prevWeeklyStudyHours)
 
 	calcTrend := func(current, previous float64) float64 {
 		if previous <= 0 {
@@ -122,6 +137,16 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	quizzesTrend := calcTrend(float64(weeklyQuizCount), float64(prevWeeklyQuizCount))
 	flashcardsTrend := calcTrend(float64(weeklyFlashcardCount), float64(prevWeeklyFlashcardCount))
 	studyHoursTrend := calcTrend(weeklyStudyHours, prevWeeklyStudyHours)
+
+	if studyHours < 0 {
+		studyHours = 0
+	}
+	if weeklyStudyHours < 0 {
+		weeklyStudyHours = 0
+	}
+	if prevWeeklyStudyHours < 0 {
+		prevWeeklyStudyHours = 0
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"summaries":          summaryCount,
