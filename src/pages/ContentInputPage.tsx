@@ -221,14 +221,14 @@ export function ContentInputPage() {
                     </div>
 
                     {isValid && (
-                      <div className="mt-4 rounded-lg border bg-muted/30 p-4 flex gap-4 animate-in fade-in slide-in-from-top-2">
+                      <div className="mt-4 rounded-lg border bg-muted/30 p-4 animate-in fade-in slide-in-from-top-2">
                         <div
-                          className="h-28 w-48 bg-slate-200 rounded-md flex-shrink-0 bg-cover bg-center"
+                          className="w-full aspect-video bg-slate-200 rounded-md bg-cover bg-center"
                           style={{
                             backgroundImage: `url(${videoMeta?.thumbnail_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&q=80'})`,
                           }}
                         ></div>
-                        <div className="flex-1 min-w-0">
+                        <div className="mt-3 min-w-0">
                           <h4 className="font-semibold truncate">
                             {videoMeta?.title || 'Unknown Video'}
                           </h4>
