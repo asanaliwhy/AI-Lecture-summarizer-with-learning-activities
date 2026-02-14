@@ -208,6 +208,7 @@ func (h *DashboardHandler) Recent(w http.ResponseWriter, r *http.Request) {
 		Type      string    `json:"type"`
 		Title     string    `json:"title"`
 		CreatedAt time.Time `json:"created_at"`
+		Progress  float64   `json:"progress,omitempty"`
 	}
 
 	var items []RecentItem
@@ -219,16 +220,30 @@ func (h *DashboardHandler) Recent(w http.ResponseWriter, r *http.Request) {
 		var item RecentItem
 		rows.Scan(&item.ID, &item.Title, &item.CreatedAt)
 		item.Type = "summary"
+		item.Progress = 0
 		items = append(items, item)
 	}
 	rows.Close()
 
 	// Recent quizzes
 	rows, _ = h.pool.Query(ctx,
-		"SELECT id, title, created_at FROM quizzes WHERE user_id = $1 ORDER BY created_at DESC LIMIT 3", userID)
+		`SELECT q.id, q.title, q.created_at, COALESCE(qa.score_percent::float8, 0)
+		 FROM quizzes q
+		 LEFT JOIN LATERAL (
+		 	SELECT score_percent
+		 	FROM quiz_attempts
+		 	WHERE quiz_id = q.id
+		 	  AND user_id = $1
+		 	  AND completed_at IS NOT NULL
+		 	ORDER BY completed_at DESC, started_at DESC
+		 	LIMIT 1
+		 ) qa ON true
+		 WHERE q.user_id = $1
+		 ORDER BY q.created_at DESC
+		 LIMIT 3`, userID)
 	for rows.Next() {
 		var item RecentItem
-		rows.Scan(&item.ID, &item.Title, &item.CreatedAt)
+		rows.Scan(&item.ID, &item.Title, &item.CreatedAt, &item.Progress)
 		item.Type = "quiz"
 		items = append(items, item)
 	}
@@ -241,6 +256,7 @@ func (h *DashboardHandler) Recent(w http.ResponseWriter, r *http.Request) {
 		var item RecentItem
 		rows.Scan(&item.ID, &item.Title, &item.CreatedAt)
 		item.Type = "flashcard"
+		item.Progress = 0
 		items = append(items, item)
 	}
 	rows.Close()
