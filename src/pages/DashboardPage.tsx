@@ -7,7 +7,9 @@ import { Card, CardContent, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Progress } from '../components/ui/Progress'
+import { Input } from '../components/ui/Input'
 import { DashboardSkeleton } from '../components/ui/Skeleton'
+import { useToast } from '../components/ui/Toast'
 import {
   FileText,
   BrainCircuit,
@@ -27,6 +29,7 @@ import { cn } from '../lib/utils'
 export function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const toast = useToast()
   const hour = new Date().getHours()
   const greeting =
     hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
@@ -36,6 +39,9 @@ export function DashboardPage() {
   const [streakData, setStreakData] = useState<any>(null)
   const [activityItems, setActivityItems] = useState<any[]>([])
   const [isSavingGoal, setIsSavingGoal] = useState(false)
+  const [goalModalOpen, setGoalModalOpen] = useState(false)
+  const [goalInput, setGoalInput] = useState('5')
+  const [goalError, setGoalError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -121,14 +127,17 @@ export function DashboardPage() {
   )
   const weeklyGoalRemaining = Math.max(0, weeklyGoalTarget - weeklySummaryCount)
 
-  const handleSetGoal = async () => {
+  const openGoalModal = () => {
     const current = weeklyGoalTarget > 0 ? weeklyGoalTarget : 5
-    const input = window.prompt('Set weekly summary goal (1-50)', String(current))
-    if (input === null) return
+    setGoalInput(String(current))
+    setGoalError('')
+    setGoalModalOpen(true)
+  }
 
-    const parsed = Number(input)
+  const handleSaveGoal = async () => {
+    const parsed = Number(goalInput)
     if (!Number.isFinite(parsed) || parsed < 1 || parsed > 50) {
-      window.alert('Please enter a valid number between 1 and 50.')
+      setGoalError('Please enter a valid number between 1 and 50.')
       return
     }
 
@@ -140,8 +149,10 @@ export function DashboardPage() {
         ...(prev || {}),
         weekly_goal_target: data?.weekly_goal_target ?? target,
       }))
+      setGoalModalOpen(false)
+      toast.success('Weekly goal updated')
     } catch (err: any) {
-      window.alert(err?.message || 'Failed to update weekly goal')
+      toast.error(err?.message || 'Failed to update weekly goal')
     } finally {
       setIsSavingGoal(false)
     }
@@ -613,7 +624,7 @@ export function DashboardPage() {
                   variant="ghost"
                   size="sm"
                   className="h-8 text-xs text-muted-foreground hover:text-primary"
-                  onClick={handleSetGoal}
+                  onClick={openGoalModal}
                   disabled={isSavingGoal}
                 >
                   <Settings2 className="h-3 w-3 mr-1" /> {isSavingGoal ? 'Saving...' : 'Set Goal'}
@@ -645,6 +656,61 @@ export function DashboardPage() {
             </section>
           </div>
         </div>
+
+        {goalModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <button
+              className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+              onClick={() => setGoalModalOpen(false)}
+              aria-label="Close modal"
+            />
+            <Card className="relative w-full max-w-md shadow-2xl border-primary/20">
+              <CardHeader>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-semibold tracking-tight">Set Weekly Goal</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Choose how many summaries you want to complete this week.
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="bg-primary/10 text-primary">
+                    1-50
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Target summaries</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={goalInput}
+                    onChange={(e) => {
+                      setGoalInput(e.target.value)
+                      if (goalError) setGoalError('')
+                    }}
+                    className={goalError ? 'border-destructive focus-visible:ring-destructive/40' : ''}
+                  />
+                  {goalError && <p className="text-xs text-destructive">{goalError}</p>}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    onClick={() => setGoalModalOpen(false)}
+                    disabled={isSavingGoal}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveGoal} disabled={isSavingGoal}>
+                    {isSavingGoal ? 'Saving...' : 'Save Goal'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </AppLayout >
   )
