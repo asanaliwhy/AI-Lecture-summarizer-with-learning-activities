@@ -8,6 +8,7 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Progress } from '../components/ui/Progress'
 import { Input } from '../components/ui/Input'
+import { Switch } from '../components/ui/Switch'
 import { DashboardSkeleton } from '../components/ui/Skeleton'
 import { useToast } from '../components/ui/Toast'
 import {
@@ -24,9 +25,7 @@ import {
   Target,
   BookOpen,
   Settings2,
-  Sparkles,
   X,
-  TrendingUp,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 export function DashboardPage() {
@@ -43,7 +42,10 @@ export function DashboardPage() {
   const [activityItems, setActivityItems] = useState<any[]>([])
   const [isSavingGoal, setIsSavingGoal] = useState(false)
   const [goalModalOpen, setGoalModalOpen] = useState(false)
-  const [goalInput, setGoalInput] = useState('5')
+  const [summaryGoalInput, setSummaryGoalInput] = useState('5')
+  const [quizGoalInput, setQuizGoalInput] = useState('3')
+  const [studyHoursGoalInput, setStudyHoursGoalInput] = useState('10')
+  const [streakGoalEnabled, setStreakGoalEnabled] = useState(true)
   const [goalError, setGoalError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
 
@@ -132,13 +134,13 @@ export function DashboardPage() {
 
   const openGoalModal = () => {
     const current = weeklyGoalTarget > 0 ? weeklyGoalTarget : 5
-    setGoalInput(String(current))
+    setSummaryGoalInput(String(current))
     setGoalError('')
     setGoalModalOpen(true)
   }
 
   const handleSaveGoal = async () => {
-    const parsed = Number(goalInput)
+    const parsed = Number(summaryGoalInput)
     if (!Number.isFinite(parsed) || parsed < 1 || parsed > 50) {
       setGoalError('Please enter a valid number between 1 and 50.')
       return
@@ -667,21 +669,19 @@ export function DashboardPage() {
               onClick={() => setGoalModalOpen(false)}
               aria-label="Close modal"
             />
-            <Card className="relative w-full max-w-lg shadow-2xl border-primary/20 overflow-hidden">
+            <Card className="relative w-full max-w-lg shadow-2xl border-primary/20 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
               <div className="absolute inset-x-0 top-0 h-1.5 bg-primary/80" />
 
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shadow-sm">
-                      <Sparkles className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold tracking-tight">Set Weekly Goal</h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Choose how many summaries you want to complete this week.
-                      </p>
-                    </div>
+                  <div>
+                    <h3 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                      <Target className="h-6 w-6 text-primary" />
+                      Set Your Weekly Goals
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Set targets to stay motivated and track your progress.
+                    </p>
                   </div>
 
                   <button
@@ -692,58 +692,98 @@ export function DashboardPage() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-
-                <div className="mt-4 flex items-center gap-2">
-                  <Badge variant="secondary" className="bg-primary/10 text-primary">
-                    1-50
-                  </Badge>
-                  <Badge variant="outline" className="gap-1">
-                    <TrendingUp className="h-3 w-3" />
-                    Current: {weeklyGoalTarget}
-                  </Badge>
-                </div>
               </CardHeader>
 
-              <CardContent className="space-y-5">
-                <div className="rounded-lg border bg-secondary/20 p-3">
-                  <p className="text-xs text-muted-foreground">
-                    Tip: set a realistic target based on your current pace. You can update this anytime.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Target summaries</label>
-                  <div className="relative">
-                    <Input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={goalInput}
-                      onChange={(e) => {
-                        setGoalInput(e.target.value)
-                        if (goalError) setGoalError('')
-                      }}
-                      className={cn(
-                        'pr-12 h-11 text-base font-semibold',
-                        goalError ? 'border-destructive focus-visible:ring-destructive/40' : 'focus-visible:ring-primary/40',
-                      )}
-                    />
-                    <span className="absolute right-3 top-2.5 text-xs text-muted-foreground font-medium">/ week</span>
+              <CardContent className="space-y-6 py-1">
+                <div className="space-y-4">
+                  <div className="p-4 border rounded-lg hover:bg-secondary/20 transition-colors">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">Summaries Created</p>
+                          <p className="text-xs text-muted-foreground">Per week</p>
+                        </div>
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={summaryGoalInput}
+                        onChange={(e) => {
+                          setSummaryGoalInput(e.target.value)
+                          if (goalError) setGoalError('')
+                        }}
+                        className={cn('w-20 text-center font-mono', goalError ? 'border-destructive focus-visible:ring-destructive/40' : '')}
+                      />
+                    </div>
+                    {goalError && <p className="text-xs text-destructive mt-2">{goalError}</p>}
                   </div>
-                  {goalError ? (
-                    <p className="text-xs text-destructive">{goalError}</p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Recommended range for steady progress: 3-10
-                    </p>
-                  )}
+
+                  <div className="p-4 border rounded-lg hover:bg-secondary/20 transition-colors">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                          <BrainCircuit className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">Quizzes Completed</p>
+                          <p className="text-xs text-muted-foreground">Per week</p>
+                        </div>
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={quizGoalInput}
+                        onChange={(e) => setQuizGoalInput(e.target.value)}
+                        className="w-20 text-center font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-4 border rounded-lg hover:bg-secondary/20 transition-colors">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
+                          <Clock className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">Study Hours</p>
+                          <p className="text-xs text-muted-foreground">Per week</p>
+                        </div>
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={50}
+                        step="0.5"
+                        value={studyHoursGoalInput}
+                        onChange={(e) => setStudyHoursGoalInput(e.target.value)}
+                        className="w-20 text-center font-mono"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="pt-1">
-                  <div className="flex items-center justify-between text-xs mb-2">
-                    <span className="text-muted-foreground">Preview progress</span>
+                <div className="flex items-center justify-between p-4 bg-orange-50 border border-orange-100 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Flame className="h-5 w-5 text-orange-600" />
+                    <div>
+                      <p className="font-semibold text-orange-900 text-sm">Daily Streak Goal</p>
+                      <p className="text-xs text-orange-700">Maintain consecutive days</p>
+                    </div>
+                  </div>
+                  <Switch checked={streakGoalEnabled} onCheckedChange={setStreakGoalEnabled} />
+                </div>
+
+                <div className="pt-1 border-t">
+                  <div className="flex items-center justify-between text-xs mb-2 mt-3">
+                    <span className="text-muted-foreground">Current summary progress preview</span>
                     <span className="font-medium">
-                      {weeklySummaryCount}/{Number(goalInput) > 0 ? Math.max(1, Math.round(Number(goalInput))) : weeklyGoalTarget}
+                      {weeklySummaryCount}/{Number(summaryGoalInput) > 0 ? Math.max(1, Math.round(Number(summaryGoalInput))) : weeklyGoalTarget}
                     </span>
                   </div>
                   <Progress
@@ -753,7 +793,7 @@ export function DashboardPage() {
                         100,
                         Math.round(
                           (weeklySummaryCount /
-                            (Number(goalInput) > 0 ? Math.max(1, Math.round(Number(goalInput))) : weeklyGoalTarget)) * 100,
+                            (Number(summaryGoalInput) > 0 ? Math.max(1, Math.round(Number(summaryGoalInput))) : weeklyGoalTarget)) * 100,
                         ),
                       ),
                     )}
