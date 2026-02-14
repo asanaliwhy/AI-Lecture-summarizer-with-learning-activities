@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useStudySession } from '../lib/useStudySession'
@@ -171,6 +172,7 @@ export function SummaryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -217,14 +219,17 @@ export function SummaryPage() {
     }
   }
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
+    setDeleteModalOpen(true)
+  }
+
+  const confirmDelete = async () => {
     if (!id) return
-    const confirmed = window.confirm('Delete this summary? This action cannot be undone.')
-    if (!confirmed) return
 
     setIsDeleting(true)
     try {
       await api.summaries.delete(id)
+      setDeleteModalOpen(false)
       navigate('/summaries')
     } catch { } finally {
       setIsDeleting(false)
@@ -599,6 +604,58 @@ export function SummaryPage() {
           </div>
         </div>
       </div>
+      {deleteModalOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button
+            className="absolute inset-0 bg-black/55 backdrop-blur-md"
+            onClick={() => !isDeleting && setDeleteModalOpen(false)}
+            aria-label="Close delete confirmation modal"
+          />
+          <div className="relative w-full max-w-md rounded-2xl border bg-background shadow-2xl">
+            <div className="p-6 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-destructive/10 text-destructive flex items-center justify-center">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Delete summary?</h3>
+                  <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground pt-1">
+                You are about to permanently remove <span className="font-medium text-foreground">{title || 'this summary'}</span>.
+              </p>
+              <div className="pt-3 flex items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteModalOpen(false)}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={confirmDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </AppLayout>
   )
 }
