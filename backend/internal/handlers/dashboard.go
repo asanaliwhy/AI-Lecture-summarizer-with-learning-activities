@@ -32,6 +32,7 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 	var summaryCount, quizCount, flashcardCount, weeklySummaryCount int
 	var weeklyQuizCount, weeklyFlashcardCount int
+	var prevWeeklySummaryCount, prevWeeklyQuizCount, prevWeeklyFlashcardCount int
 	var weeklyGoalTarget int
 	var weeklyGoalType string
 	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM summaries WHERE user_id = $1", userID).Scan(&summaryCount)
@@ -60,6 +61,31 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	`, userID).Scan(&weeklyFlashcardCount)
 
 	h.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM summaries
+		WHERE user_id = $1
+		  AND is_archived = FALSE
+		  AND created_at >= NOW() - INTERVAL '14 days'
+		  AND created_at < NOW() - INTERVAL '7 days'
+	`, userID).Scan(&prevWeeklySummaryCount)
+
+	h.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM quizzes
+		WHERE user_id = $1
+		  AND created_at >= NOW() - INTERVAL '14 days'
+		  AND created_at < NOW() - INTERVAL '7 days'
+	`, userID).Scan(&prevWeeklyQuizCount)
+
+	h.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM flashcard_decks
+		WHERE user_id = $1
+		  AND created_at >= NOW() - INTERVAL '14 days'
+		  AND created_at < NOW() - INTERVAL '7 days'
+	`, userID).Scan(&prevWeeklyFlashcardCount)
+
+	h.pool.QueryRow(ctx, `
 		SELECT COALESCE((notifications_json->>'weekly_goal_target')::int, 5)
 		FROM user_settings
 		WHERE user_id = $1
@@ -79,12 +105,33 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 	// Estimate study hours based on content count
 	studyHours := float64(summaryCount+quizCount+flashcardCount) * 0.5
+	weeklyStudyHours := float64(weeklySummaryCount+weeklyQuizCount+weeklyFlashcardCount) * 0.5
+	prevWeeklyStudyHours := float64(prevWeeklySummaryCount+prevWeeklyQuizCount+prevWeeklyFlashcardCount) * 0.5
+
+	calcTrend := func(current, previous float64) float64 {
+		if previous <= 0 {
+			if current > 0 {
+				return 100
+			}
+			return 0
+		}
+		return ((current - previous) / previous) * 100
+	}
+
+	summariesTrend := calcTrend(float64(weeklySummaryCount), float64(prevWeeklySummaryCount))
+	quizzesTrend := calcTrend(float64(weeklyQuizCount), float64(prevWeeklyQuizCount))
+	flashcardsTrend := calcTrend(float64(weeklyFlashcardCount), float64(prevWeeklyFlashcardCount))
+	studyHoursTrend := calcTrend(weeklyStudyHours, prevWeeklyStudyHours)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"summaries":          summaryCount,
 		"quizzes_taken":      quizCount,
 		"flashcard_decks":    flashcardCount,
 		"study_hours":        studyHours,
+		"summaries_trend":    summariesTrend,
+		"quizzes_trend":      quizzesTrend,
+		"flashcards_trend":   flashcardsTrend,
+		"study_hours_trend":  studyHoursTrend,
 		"weekly_summaries":   weeklySummaryCount,
 		"weekly_quizzes":     weeklyQuizCount,
 		"weekly_flashcards":  weeklyFlashcardCount,

@@ -73,12 +73,29 @@ export function DashboardPage() {
   if (isLoading) {
     return <AppLayout><DashboardSkeleton /></AppLayout>
   }
+
+  const formatTrend = (value: number) => {
+    const safe = Number.isFinite(value) ? value : 0
+    const rounded = Math.round(Math.abs(safe))
+    return `${safe >= 0 ? '+' : '-'}${rounded}%`
+  }
+
+  const getTrend = (value: number) => {
+    const safe = Number.isFinite(value) ? value : 0
+    return safe >= 0 ? 'up' : 'down'
+  }
+
+  const summariesTrend = Number(dashStats?.summaries_trend ?? 0)
+  const quizzesTrend = Number(dashStats?.quizzes_trend ?? 0)
+  const flashcardsTrend = Number(dashStats?.flashcards_trend ?? 0)
+  const studyHoursTrend = Number(dashStats?.study_hours_trend ?? 0)
+
   const stats = [
     {
       label: 'Total Summaries',
       value: String(dashStats?.summaries ?? 0),
-      change: '+12%',
-      trend: 'up',
+      change: formatTrend(summariesTrend),
+      trend: getTrend(summariesTrend),
       icon: FileText,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
@@ -88,8 +105,8 @@ export function DashboardPage() {
     {
       label: 'Quizzes Taken',
       value: String(dashStats?.quizzes_taken ?? 0),
-      change: '+4%',
-      trend: 'up',
+      change: formatTrend(quizzesTrend),
+      trend: getTrend(quizzesTrend),
       icon: BrainCircuit,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100',
@@ -99,8 +116,8 @@ export function DashboardPage() {
     {
       label: 'Flashcard Decks',
       value: String(dashStats?.flashcard_decks ?? 0),
-      change: '+24%',
-      trend: 'up',
+      change: formatTrend(flashcardsTrend),
+      trend: getTrend(flashcardsTrend),
       icon: Play,
       color: 'text-orange-600',
       bgColor: 'bg-orange-100',
@@ -110,8 +127,8 @@ export function DashboardPage() {
     {
       label: 'Study Hours',
       value: String(dashStats?.study_hours ?? 0),
-      change: '',
-      trend: 'up',
+      change: formatTrend(studyHoursTrend),
+      trend: getTrend(studyHoursTrend),
       icon: Clock,
       color: 'text-green-600',
       bgColor: 'bg-green-100',
