@@ -547,9 +547,9 @@ export function SummaryPage() {
   const smartSummaryHtml = summary.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
   const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
   const isSmartSummary = summary.format === 'smart'
-  const leftColumnClass = isSmartSummary ? 'lg:col-span-3 space-y-6' : 'lg:col-span-3 space-y-6'
+  const leftColumnClass = isSmartSummary ? 'lg:col-span-2 space-y-6' : 'lg:col-span-3 space-y-6'
   const centerColumnClass = isSmartSummary ? 'lg:col-span-8' : 'lg:col-span-7'
-  const rightColumnClass = isSmartSummary ? 'lg:col-span-1 space-y-6' : 'lg:col-span-2 space-y-6'
+  const rightColumnClass = isSmartSummary ? 'lg:col-span-2 space-y-6' : 'lg:col-span-2 space-y-6'
 
   // Parse content sections
   const sections: SummarySectionResponse[] = summary.sections || []
@@ -688,11 +688,9 @@ export function SummaryPage() {
             <Card className="min-h-[620px] shadow-sm border-border/70">
               <CardContent className="p-6 md:p-10 lg:p-12">
                 {isSmartSummary ? (
-                  <div className="smart-summary-scroll overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <article className="smart-summary-content prose max-w-none prose-slate prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:mt-10 prose-h2:mb-3 prose-h3:mt-7 prose-h3:mb-2 prose-p:my-3 prose-p:leading-7 prose-strong:text-slate-900 prose-li:leading-7 prose-ul:my-3 prose-ol:my-3 prose-hr:my-8 prose-a:text-blue-700 hover:prose-a:text-blue-800">
-                      <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
-                    </article>
-                  </div>
+                  <article className="smart-summary-content smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:mt-10 prose-h2:mb-3 prose-h3:mt-7 prose-h3:mb-2 prose-p:my-3 prose-p:leading-7 prose-strong:text-slate-900 prose-li:leading-7 prose-ul:my-3 prose-ol:my-3 prose-hr:my-8 prose-a:text-blue-700 hover:prose-a:text-blue-800">
+                    <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
+                  </article>
                 ) : hasSections ? (
                   <div className="space-y-10">
                     {sections.map((section, idx: number) => (

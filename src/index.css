@@ -106,6 +106,10 @@
     @apply p-4 md:p-6;
   }
 
+  .smart-summary-content.smart-summary-scroll {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+  }
+
   .smart-summary-content table {
     @apply w-full border-separate border-spacing-0 overflow-hidden rounded-lg border border-slate-300 bg-white text-[14px];
     min-width: 640px;
