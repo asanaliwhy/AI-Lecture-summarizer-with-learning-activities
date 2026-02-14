@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
@@ -27,6 +27,7 @@ import { cn } from '../lib/utils'
 
 export function LibraryPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [items, setItems] = useState<any[]>([])
@@ -35,8 +36,12 @@ export function LibraryPage() {
   const [typeFilter, setTypeFilter] = useState('all')
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
+    const params = new URLSearchParams(location.search)
     const type = params.get('type')
+    const search = params.get('search')
+
+    setSearchQuery(search?.trim() || '')
+
     if (!type) return
 
     if (type === 'flashcards') {
@@ -47,7 +52,7 @@ export function LibraryPage() {
     if (type === 'summary' || type === 'quiz' || type === 'flashcard' || type === 'all') {
       setTypeFilter(type === 'flashcard' ? 'flashcards' : type)
     }
-  }, [])
+  }, [location.search])
 
   useEffect(() => {
     async function load() {

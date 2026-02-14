@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Bell, Search, ChevronRight, Menu } from 'lucide-react'
 import { Input } from '../ui/Input'
 import { Button } from '../ui/Button'
@@ -12,8 +12,20 @@ interface HeaderProps {
 
 export function Header({ onMenuToggle }: HeaderProps) {
   const location = useLocation()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [isSearchFocused, setIsSearchFocused] = useState(false)
+  const [searchValue, setSearchValue] = useState('')
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const q = searchValue.trim()
+    if (!q) {
+      navigate('/library')
+      return
+    }
+    navigate(`/library?search=${encodeURIComponent(q)}`)
+  }
 
   const getPageTitle = (pathname: string) => {
     switch (pathname) {
@@ -44,9 +56,12 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
         {/* Breadcrumb */}
         <div className="hidden md:flex items-center text-sm text-muted-foreground mr-4">
-          <span className="hover:text-foreground transition-colors cursor-pointer hover:underline underline-offset-4">
+          <Link
+            to="/dashboard"
+            className="hover:text-foreground transition-colors cursor-pointer hover:underline underline-offset-4"
+          >
             Lectura
-          </span>
+          </Link>
           <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground/50" />
           <span className="font-medium text-foreground animate-in fade-in slide-in-from-left-2 duration-300">
             {getPageTitle(location.pathname)}
@@ -56,16 +71,21 @@ export function Header({ onMenuToggle }: HeaderProps) {
         {/* Mobile title */}
         <span className="md:hidden font-semibold text-sm">{getPageTitle(location.pathname)}</span>
 
-        <div className={`relative w-full transition-all duration-300 hidden sm:block ${isSearchFocused ? 'max-w-md scale-105' : 'max-w-sm'}`}>
+        <form
+          onSubmit={handleSearchSubmit}
+          className={`relative w-full transition-all duration-300 hidden sm:block ${isSearchFocused ? 'max-w-md scale-105' : 'max-w-sm'}`}
+        >
           <Search className={`absolute left-2.5 top-2.5 h-4 w-4 transition-colors ${isSearchFocused ? 'text-primary' : 'text-muted-foreground'}`} />
           <Input
             type="search"
             placeholder="Search summaries, quizzes..."
             className="w-full bg-secondary/50 pl-9 focus-visible:bg-background border-transparent focus-visible:border-primary/50 transition-all shadow-sm focus-visible:shadow-md"
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
           />
-        </div>
+        </form>
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
