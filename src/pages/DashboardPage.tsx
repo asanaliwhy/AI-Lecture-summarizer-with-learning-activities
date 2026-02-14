@@ -504,11 +504,15 @@ export function DashboardPage() {
                         </p>
                       </div>
                       <div className="w-full md:w-32 space-y-2">
-                        <div className="flex justify-between text-xs font-medium">
-                          <span>Progress</span>
-                          <span>{Math.round(continueStudyItem.progress)}%</span>
-                        </div>
-                        <Progress value={continueStudyItem.progress} className="h-2" />
+                        {continueStudyItem.type === 'Quiz' && (
+                          <>
+                            <div className="flex justify-between text-xs font-medium">
+                              <span>Progress</span>
+                              <span>{Math.round(continueStudyItem.progress)}%</span>
+                            </div>
+                            <Progress value={continueStudyItem.progress} className="h-2" />
+                          </>
+                        )}
                         <Button
                           className="w-full mt-2 shadow-sm group-hover:shadow-md transition-all"
                           size="sm"
