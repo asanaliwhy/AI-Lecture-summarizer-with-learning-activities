@@ -10,7 +10,6 @@ import {
   BrainCircuit,
   Layers,
   RotateCcw,
-  Share2,
   Download,
   Copy,
   Calendar,
@@ -18,7 +17,6 @@ import {
   ExternalLink,
   Edit2,
   MoreHorizontal,
-  Bookmark,
   Loader2,
 } from 'lucide-react'
 
@@ -314,10 +312,6 @@ export function SummaryPage() {
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm">
-              <Share2 className="h-4 w-4 mr-2" />
-              Share
-            </Button>
-            <Button variant="outline" size="sm">
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
@@ -387,24 +381,22 @@ export function SummaryPage() {
               </CardContent>
             </Card>
 
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-              <h3 className="font-semibold text-blue-900 mb-2 text-sm">Study Tools</h3>
-              <p className="text-xs text-blue-700 mb-4">
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-5">
+              <h3 className="font-bold text-blue-900 mb-3 text-lg">Study Tools</h3>
+              <p className="text-sm text-blue-700 mb-5 leading-relaxed">
                 Ready to test your knowledge? Create a quiz or flashcards from this summary.
               </p>
               <div className="space-y-2">
                 <Button
-                  className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white"
-                  size="sm"
+                  className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white h-11 text-base"
                   onClick={() => navigate(`/quiz/create/${id}`)}
                 >
                   <BrainCircuit className="h-4 w-4 mr-2" />
                   Generate Quiz
                 </Button>
                 <Button
-                  className="w-full justify-start bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800"
+                  className="w-full justify-start bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800 h-11 text-base"
                   variant="outline"
-                  size="sm"
                   onClick={() => navigate(`/flashcards/create/${id}`)}
                 >
                   <Layers className="h-4 w-4 mr-2" />
@@ -506,15 +498,6 @@ export function SummaryPage() {
                 <Button variant="outline" className="w-full justify-start" size="sm" onClick={handleCopy}>
                   <Copy className="h-4 w-4 mr-2" />
                   Copy Text
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  size="sm"
-                  onClick={() => id && api.summaries.toggleFavorite(id)}
-                >
-                  <Bookmark className="h-4 w-4 mr-2" />
-                  Save to Library
                 </Button>
                 <Button
                   variant="ghost"
