@@ -31,7 +31,9 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var summaryCount, quizCount, flashcardCount, weeklySummaryCount int
+	var weeklyQuizCount, weeklyFlashcardCount int
 	var weeklyGoalTarget int
+	var weeklyGoalType string
 	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM summaries WHERE user_id = $1", userID).Scan(&summaryCount)
 	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM quizzes WHERE user_id = $1", userID).Scan(&quizCount)
 	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM flashcard_decks WHERE user_id = $1", userID).Scan(&flashcardCount)
@@ -44,12 +46,35 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	`, userID).Scan(&weeklySummaryCount)
 
 	h.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM quizzes
+		WHERE user_id = $1
+		  AND created_at >= NOW() - INTERVAL '7 days'
+	`, userID).Scan(&weeklyQuizCount)
+
+	h.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM flashcard_decks
+		WHERE user_id = $1
+		  AND created_at >= NOW() - INTERVAL '7 days'
+	`, userID).Scan(&weeklyFlashcardCount)
+
+	h.pool.QueryRow(ctx, `
 		SELECT COALESCE((notifications_json->>'weekly_goal_target')::int, 5)
 		FROM user_settings
 		WHERE user_id = $1
 	`, userID).Scan(&weeklyGoalTarget)
+
+	h.pool.QueryRow(ctx, `
+		SELECT COALESCE(notifications_json->>'weekly_goal_type', 'summary')
+		FROM user_settings
+		WHERE user_id = $1
+	`, userID).Scan(&weeklyGoalType)
 	if weeklyGoalTarget <= 0 {
 		weeklyGoalTarget = 5
+	}
+	if weeklyGoalType == "" {
+		weeklyGoalType = "summary"
 	}
 
 	// Estimate study hours based on content count
@@ -61,7 +86,10 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		"flashcard_decks":    flashcardCount,
 		"study_hours":        studyHours,
 		"weekly_summaries":   weeklySummaryCount,
+		"weekly_quizzes":     weeklyQuizCount,
+		"weekly_flashcards":  weeklyFlashcardCount,
 		"weekly_goal_target": weeklyGoalTarget,
+		"weekly_goal_type":   weeklyGoalType,
 	})
 }
 
@@ -69,7 +97,8 @@ func (h *DashboardHandler) SetWeeklyGoal(w http.ResponseWriter, r *http.Request)
 	userID := middleware.GetUserID(r.Context())
 
 	var req struct {
-		Target int `json:"target"`
+		Target   int    `json:"target"`
+		GoalType string `json:"goal_type"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -82,13 +111,19 @@ func (h *DashboardHandler) SetWeeklyGoal(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := h.userRepo.SetWeeklyGoalTarget(r.Context(), userID, req.Target); err != nil {
+	if req.GoalType != "summary" && req.GoalType != "quiz" && req.GoalType != "flashcard" {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Goal type must be summary, quiz, or flashcard", r))
+		return
+	}
+
+	if err := h.userRepo.SetWeeklyGoalTarget(r.Context(), userID, req.Target, req.GoalType); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to save weekly goal", r))
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"weekly_goal_target": req.Target,
+		"weekly_goal_type":   req.GoalType,
 	})
 }
 

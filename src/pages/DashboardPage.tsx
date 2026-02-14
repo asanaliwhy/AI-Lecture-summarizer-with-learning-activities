@@ -28,6 +28,9 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
+
+type GoalType = 'summary' | 'quiz' | 'flashcard'
+
 export function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -45,6 +48,7 @@ export function DashboardPage() {
   const [summaryGoalInput, setSummaryGoalInput] = useState('5')
   const [quizGoalInput, setQuizGoalInput] = useState('3')
   const [studyHoursGoalInput, setStudyHoursGoalInput] = useState('10')
+  const [selectedGoalType, setSelectedGoalType] = useState<GoalType>('summary')
   const [streakGoalEnabled, setStreakGoalEnabled] = useState(true)
   const [goalError, setGoalError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -122,25 +126,59 @@ export function DashboardPage() {
   const weeklyGoalTarget = Number.isFinite(weeklyGoalTargetRaw) && weeklyGoalTargetRaw > 0
     ? weeklyGoalTargetRaw
     : 5
+  const weeklyGoalTypeRaw = String(dashStats?.weekly_goal_type || 'summary').toLowerCase()
+  const weeklyGoalType: GoalType =
+    weeklyGoalTypeRaw === 'quiz'
+      ? 'quiz'
+      : weeklyGoalTypeRaw === 'flashcard' || weeklyGoalTypeRaw === 'flashcards'
+        ? 'flashcard'
+        : 'summary'
+
   const weeklySummaryCountRaw = Number(dashStats?.weekly_summaries ?? 0)
-  const weeklySummaryCount = Number.isFinite(weeklySummaryCountRaw) && weeklySummaryCountRaw > 0
-    ? weeklySummaryCountRaw
-    : 0
+  const weeklySummaryCount = Number.isFinite(weeklySummaryCountRaw) && weeklySummaryCountRaw > 0 ? weeklySummaryCountRaw : 0
+  const weeklyQuizCountRaw = Number(dashStats?.weekly_quizzes ?? 0)
+  const weeklyQuizCount = Number.isFinite(weeklyQuizCountRaw) && weeklyQuizCountRaw > 0 ? weeklyQuizCountRaw : 0
+  const weeklyFlashcardCountRaw = Number(dashStats?.weekly_flashcards ?? 0)
+  const weeklyFlashcardCount = Number.isFinite(weeklyFlashcardCountRaw) && weeklyFlashcardCountRaw > 0 ? weeklyFlashcardCountRaw : 0
+
+  const weeklyCurrentValue =
+    weeklyGoalType === 'quiz'
+      ? weeklyQuizCount
+      : weeklyGoalType === 'flashcard'
+        ? weeklyFlashcardCount
+        : weeklySummaryCount
+
+  const weeklyGoalLabel =
+    weeklyGoalType === 'quiz'
+      ? 'Quizzes Completed'
+      : weeklyGoalType === 'flashcard'
+        ? 'Flashcards Created'
+        : 'Summaries Created'
+
   const weeklyGoalProgress = Math.max(
     0,
-    Math.min(100, Math.round((weeklySummaryCount / weeklyGoalTarget) * 100)),
+    Math.min(100, Math.round((weeklyCurrentValue / weeklyGoalTarget) * 100)),
   )
-  const weeklyGoalRemaining = Math.max(0, weeklyGoalTarget - weeklySummaryCount)
+  const weeklyGoalRemaining = Math.max(0, weeklyGoalTarget - weeklyCurrentValue)
 
   const openGoalModal = () => {
-    const current = weeklyGoalTarget > 0 ? weeklyGoalTarget : 5
-    setSummaryGoalInput(String(current))
+    setSelectedGoalType(weeklyGoalType)
+    setSummaryGoalInput(String(weeklyGoalType === 'summary' ? weeklyGoalTarget : 5))
+    setQuizGoalInput(String(weeklyGoalType === 'quiz' ? weeklyGoalTarget : 3))
+    setStudyHoursGoalInput(String(weeklyGoalType === 'flashcard' ? weeklyGoalTarget : 10))
     setGoalError('')
     setGoalModalOpen(true)
   }
 
   const handleSaveGoal = async () => {
-    const parsed = Number(summaryGoalInput)
+    const inputValue =
+      selectedGoalType === 'quiz'
+        ? quizGoalInput
+        : selectedGoalType === 'flashcard'
+          ? studyHoursGoalInput
+          : summaryGoalInput
+
+    const parsed = Number(inputValue)
     if (!Number.isFinite(parsed) || parsed < 1 || parsed > 50) {
       setGoalError('Please enter a valid number between 1 and 50.')
       return
@@ -149,10 +187,11 @@ export function DashboardPage() {
     const target = Math.round(parsed)
     setIsSavingGoal(true)
     try {
-      const data = await api.dashboard.setWeeklyGoal(target)
+      const data = await api.dashboard.setWeeklyGoal(target, selectedGoalType)
       setDashStats((prev: any) => ({
         ...(prev || {}),
         weekly_goal_target: data?.weekly_goal_target ?? target,
+        weekly_goal_type: data?.weekly_goal_type ?? selectedGoalType,
       }))
       setGoalModalOpen(false)
       toast.success('Weekly goal updated')
@@ -641,15 +680,19 @@ export function DashboardPage() {
                     <div className="flex items-center gap-2">
                       <Target className="h-5 w-5 text-primary" />
                       <span className="font-medium text-sm">
-                        Summaries Created
+                        {weeklyGoalLabel}
                       </span>
                     </div>
-                    <span className="text-sm font-bold">{weeklySummaryCount}/{weeklyGoalTarget}</span>
+                    <span className="text-sm font-bold">{weeklyCurrentValue}/{weeklyGoalTarget}</span>
                   </div>
                   <Progress value={weeklyGoalProgress} className="h-2" />
                   {weeklyGoalRemaining > 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      Create {weeklyGoalRemaining} more {weeklyGoalRemaining === 1 ? 'summary' : 'summaries'} to reach your weekly goal!
+                      {weeklyGoalType === 'quiz'
+                        ? `Complete ${weeklyGoalRemaining} more ${weeklyGoalRemaining === 1 ? 'quiz' : 'quizzes'} to reach your weekly goal!`
+                        : weeklyGoalType === 'flashcard'
+                          ? `Create ${weeklyGoalRemaining} more ${weeklyGoalRemaining === 1 ? 'flashcard' : 'flashcards'} to reach your weekly goal!`
+                          : `Create ${weeklyGoalRemaining} more ${weeklyGoalRemaining === 1 ? 'summary' : 'summaries'} to reach your weekly goal!`}
                     </p>
                   ) : (
                     <p className="text-xs text-green-600">
@@ -696,7 +739,17 @@ export function DashboardPage() {
 
               <CardContent className="space-y-6 py-1">
                 <div className="space-y-4">
-                  <div className="p-4 border rounded-lg hover:bg-secondary/20 transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGoalType('summary')
+                      if (goalError) setGoalError('')
+                    }}
+                    className={cn(
+                      'w-full text-left p-4 border rounded-lg hover:bg-secondary/20 transition-colors',
+                      selectedGoalType === 'summary' && 'ring-2 ring-primary border-primary/40 bg-secondary/20',
+                    )}
+                  >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
@@ -716,13 +769,27 @@ export function DashboardPage() {
                           setSummaryGoalInput(e.target.value)
                           if (goalError) setGoalError('')
                         }}
-                        className={cn('w-20 text-center font-mono', goalError ? 'border-destructive focus-visible:ring-destructive/40' : '')}
+                        onClick={(e) => e.stopPropagation()}
+                        className={cn(
+                          'w-20 text-center font-mono',
+                          selectedGoalType === 'summary' && goalError ? 'border-destructive focus-visible:ring-destructive/40' : '',
+                        )}
                       />
                     </div>
-                    {goalError && <p className="text-xs text-destructive mt-2">{goalError}</p>}
-                  </div>
+                    {selectedGoalType === 'summary' && goalError && <p className="text-xs text-destructive mt-2">{goalError}</p>}
+                  </button>
 
-                  <div className="p-4 border rounded-lg hover:bg-secondary/20 transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGoalType('quiz')
+                      if (goalError) setGoalError('')
+                    }}
+                    className={cn(
+                      'w-full text-left p-4 border rounded-lg hover:bg-secondary/20 transition-colors',
+                      selectedGoalType === 'quiz' && 'ring-2 ring-primary border-primary/40 bg-secondary/20',
+                    )}
+                  >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
@@ -739,19 +806,31 @@ export function DashboardPage() {
                         max={50}
                         value={quizGoalInput}
                         onChange={(e) => setQuizGoalInput(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
                         className="w-20 text-center font-mono"
                       />
                     </div>
-                  </div>
+                    {selectedGoalType === 'quiz' && goalError && <p className="text-xs text-destructive mt-2">{goalError}</p>}
+                  </button>
 
-                  <div className="p-4 border rounded-lg hover:bg-secondary/20 transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGoalType('flashcard')
+                      if (goalError) setGoalError('')
+                    }}
+                    className={cn(
+                      'w-full text-left p-4 border rounded-lg hover:bg-secondary/20 transition-colors',
+                      selectedGoalType === 'flashcard' && 'ring-2 ring-primary border-primary/40 bg-secondary/20',
+                    )}
+                  >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
                           <Clock className="h-5 w-5" />
                         </div>
                         <div>
-                          <p className="font-semibold text-sm">Study Hours</p>
+                          <p className="font-semibold text-sm">Flashcards Created</p>
                           <p className="text-xs text-muted-foreground">Per week</p>
                         </div>
                       </div>
@@ -759,13 +838,14 @@ export function DashboardPage() {
                         type="number"
                         min={1}
                         max={50}
-                        step="0.5"
                         value={studyHoursGoalInput}
                         onChange={(e) => setStudyHoursGoalInput(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
                         className="w-20 text-center font-mono"
                       />
                     </div>
-                  </div>
+                    {selectedGoalType === 'flashcard' && goalError && <p className="text-xs text-destructive mt-2">{goalError}</p>}
+                  </button>
                 </div>
 
                 <div className="flex items-center justify-between p-4 bg-orange-50 border border-orange-100 rounded-lg">
@@ -781,9 +861,29 @@ export function DashboardPage() {
 
                 <div className="pt-1 border-t">
                   <div className="flex items-center justify-between text-xs mb-2 mt-3">
-                    <span className="text-muted-foreground">Current summary progress preview</span>
+                    <span className="text-muted-foreground">Current goal progress preview</span>
                     <span className="font-medium">
-                      {weeklySummaryCount}/{Number(summaryGoalInput) > 0 ? Math.max(1, Math.round(Number(summaryGoalInput))) : weeklyGoalTarget}
+                      {weeklyCurrentValue}/
+                      {Number(
+                        selectedGoalType === 'quiz'
+                          ? quizGoalInput
+                          : selectedGoalType === 'flashcard'
+                            ? studyHoursGoalInput
+                            : summaryGoalInput,
+                      ) > 0
+                        ? Math.max(
+                          1,
+                          Math.round(
+                            Number(
+                              selectedGoalType === 'quiz'
+                                ? quizGoalInput
+                                : selectedGoalType === 'flashcard'
+                                  ? studyHoursGoalInput
+                                  : summaryGoalInput,
+                            ),
+                          ),
+                        )
+                        : weeklyGoalTarget}
                     </span>
                   </div>
                   <Progress
@@ -792,8 +892,27 @@ export function DashboardPage() {
                       Math.min(
                         100,
                         Math.round(
-                          (weeklySummaryCount /
-                            (Number(summaryGoalInput) > 0 ? Math.max(1, Math.round(Number(summaryGoalInput))) : weeklyGoalTarget)) * 100,
+                          (weeklyCurrentValue /
+                            (Number(
+                              selectedGoalType === 'quiz'
+                                ? quizGoalInput
+                                : selectedGoalType === 'flashcard'
+                                  ? studyHoursGoalInput
+                                  : summaryGoalInput,
+                            ) > 0
+                              ? Math.max(
+                                1,
+                                Math.round(
+                                  Number(
+                                    selectedGoalType === 'quiz'
+                                      ? quizGoalInput
+                                      : selectedGoalType === 'flashcard'
+                                        ? studyHoursGoalInput
+                                        : summaryGoalInput,
+                                  ),
+                                ),
+                              )
+                              : weeklyGoalTarget)) * 100,
                         ),
                       ),
                     )}

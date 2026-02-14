@@ -249,10 +249,10 @@ export const api = {
     // Dashboard
     dashboard: {
         stats: () => apiFetch<any>('/dashboard/stats'),
-        setWeeklyGoal: (target: number) =>
-            apiFetch<{ weekly_goal_target: number }>('/dashboard/weekly-goal', {
+        setWeeklyGoal: (target: number, goalType: 'summary' | 'quiz' | 'flashcard') =>
+            apiFetch<{ weekly_goal_target: number; weekly_goal_type: 'summary' | 'quiz' | 'flashcard' }>('/dashboard/weekly-goal', {
                 method: 'PUT',
-                body: JSON.stringify({ target }),
+                body: JSON.stringify({ target, goal_type: goalType }),
             }),
         recent: () => apiFetch<any>('/dashboard/recent'),
         streak: () => apiFetch<any>('/dashboard/streak'),
