@@ -230,6 +230,63 @@ export function SummaryPage() {
     navigator.clipboard.writeText(text).catch(() => { })
   }
 
+  const sanitizeFileName = (value: string) => {
+    return value
+      .replace(/[\\/:*?"<>|]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120) || 'summary'
+  }
+
+  const handleExportPdf = async () => {
+    if (!summary) return
+
+    const { jsPDF } = await import('jspdf')
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+
+    const fileTitle = sanitizeFileName(title || summary?.title || 'summary')
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const margin = 48
+    const contentWidth = pageWidth - margin * 2
+
+    const rawMain = normalizeGeneralSummaryText(summary?.content_raw || summary?.content || summary?.body || '')
+    const cues = normalizeCornellText(summary?.cornell_cues || '')
+    const notes = normalizeCornellText(summary?.cornell_notes || '')
+    const cornellSummaryText = normalizeCornellText(summary?.cornell_summary || '')
+
+    const text = summary?.format === 'cornell'
+      ? `CUES\n${cues || 'No cues available.'}\n\nNOTES\n${notes || 'No notes available.'}\n\nSUMMARY\n${cornellSummaryText || 'No summary available.'}`
+      : rawMain || 'No content available.'
+
+    let y = margin
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(18)
+    doc.text(fileTitle, margin, y)
+    y += 22
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(11)
+    const dateLabel = summary?.created_at ? new Date(summary.created_at).toLocaleDateString() : 'Unknown date'
+    doc.text(`Generated: ${dateLabel}`, margin, y)
+    y += 24
+
+    doc.setFontSize(12)
+    const lines = doc.splitTextToSize(text, contentWidth)
+
+    for (const line of lines) {
+      if (y > pageHeight - margin) {
+        doc.addPage()
+        y = margin
+      }
+      doc.text(line, margin, y)
+      y += 18
+    }
+
+    doc.save(`${fileTitle}.pdf`)
+  }
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -311,7 +368,7 @@ export function SummaryPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExportPdf}>
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
