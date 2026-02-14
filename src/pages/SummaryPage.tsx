@@ -18,6 +18,8 @@ import {
   Clock,
   ExternalLink,
   Edit2,
+  Youtube,
+  FileText,
   Trash2,
   Loader2,
 } from 'lucide-react'
@@ -348,7 +350,8 @@ export function SummaryPage() {
   const duration = summary.source_duration || summary.duration || ''
   const sourceUrl = summary.source_url || ''
   const sourceRaw = String(summary.source || summary.source_type || '').toLowerCase()
-  const sourceLabel = sourceRaw.includes('youtube') || sourceRaw.includes('youtu') ? 'YouTube' : 'Document'
+  const isYouTubeSource = sourceRaw.includes('youtube') || sourceRaw.includes('youtu')
+  const sourceLabel = isYouTubeSource ? 'YouTube' : 'Document'
   const tags: string[] = summary.tags || []
   const contentRaw: string = summary.content_raw || summary.content || summary.body || ''
   const cornellCues: string = summary.cornell_cues || ''
@@ -420,11 +423,15 @@ export function SummaryPage() {
                       rel="noreferrer"
                       className="flex items-center gap-2 text-base font-semibold text-primary hover:underline truncate"
                     >
-                      <ExternalLink className="h-4 w-4" />
+                      {isYouTubeSource ? <Youtube className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
                       {sourceLabel}
                     </a>
                   ) : (
-                    <span className="text-base font-semibold text-foreground">{sourceLabel}</span>
+                    <span className="text-base font-semibold text-foreground inline-flex items-center gap-2">
+                      {isYouTubeSource ? <Youtube className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                      {sourceLabel}
+                    </span>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
