@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -28,19 +29,29 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	ctx := r.Context()
 
-	var summaryCount, quizCount, flashcardCount int
+	var summaryCount, quizCount, flashcardCount, weeklySummaryCount int
 	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM summaries WHERE user_id = $1", userID).Scan(&summaryCount)
 	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM quizzes WHERE user_id = $1", userID).Scan(&quizCount)
 	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM flashcard_decks WHERE user_id = $1", userID).Scan(&flashcardCount)
+	h.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM summaries
+		WHERE user_id = $1
+		  AND created_at >= date_trunc('week', now())
+	`, userID).Scan(&weeklySummaryCount)
+
+	weeklyGoalTarget := 5
 
 	// Estimate study hours based on content count
 	studyHours := float64(summaryCount+quizCount+flashcardCount) * 0.5
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"summaries":       summaryCount,
-		"quizzes_taken":   quizCount,
-		"flashcard_decks": flashcardCount,
-		"study_hours":     studyHours,
+		"summaries":          summaryCount,
+		"quizzes_taken":      quizCount,
+		"flashcard_decks":    flashcardCount,
+		"study_hours":        studyHours,
+		"weekly_summaries":   weeklySummaryCount,
+		"weekly_goal_target": weeklyGoalTarget,
 	})
 }
 
@@ -78,6 +89,26 @@ func (h *DashboardHandler) Recent(w http.ResponseWriter, r *http.Request) {
 		items = append(items, item)
 	}
 	rows.Close()
+
+	// Recent flashcard decks
+	rows, _ = h.pool.Query(ctx,
+		"SELECT id, title, created_at FROM flashcard_decks WHERE user_id = $1 ORDER BY created_at DESC LIMIT 3", userID)
+	for rows.Next() {
+		var item RecentItem
+		rows.Scan(&item.ID, &item.Title, &item.CreatedAt)
+		item.Type = "flashcard"
+		items = append(items, item)
+	}
+	rows.Close()
+
+	// Global sort across all item types so the truly latest activity is first
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].CreatedAt.After(items[j].CreatedAt)
+	})
+
+	if len(items) > 12 {
+		items = items[:12]
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"recent": items})
 }

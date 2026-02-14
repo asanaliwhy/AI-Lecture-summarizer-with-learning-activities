@@ -42,14 +42,14 @@ export function DashboardPage() {
       try {
         const [stats, recent, streak, activity] = await Promise.all([
           api.dashboard.stats().catch(() => null),
-          api.dashboard.recent().catch(() => ({ items: [] })),
+          api.dashboard.recent().catch(() => ({ recent: [] })),
           api.dashboard.streak().catch(() => null),
-          api.dashboard.activity().catch(() => ({ days: [] })),
+          api.dashboard.activity().catch(() => ({ activity: [] })),
         ])
         setDashStats(stats)
-        setRecentItems(recent?.items || [])
+        setRecentItems(recent?.recent || recent?.items || [])
         setStreakData(streak)
-        setActivityItems(activity?.days || [])
+        setActivityItems(activity?.activity || activity?.days || [])
       } finally {
         setIsLoading(false)
       }
@@ -105,72 +105,114 @@ export function DashboardPage() {
       clickable: false,
     },
   ]
-  const recentContent = [
-    {
-      id: 1,
-      title: 'Introduction to Neural Networks',
-      type: 'Summary',
-      date: '2 hours ago',
-      tags: ['AI', 'CS'],
-      progress: 100,
-      link: '/summary/1',
-    },
-    {
-      id: 2,
-      title: 'History of the Roman Empire',
-      type: 'Quiz',
-      date: 'Yesterday',
-      tags: ['History'],
-      progress: 80,
-      link: '/quiz/take/2',
-    },
-    {
-      id: 3,
-      title: 'Organic Chemistry: Alkanes',
-      type: 'Flashcards',
-      date: '2 days ago',
-      tags: ['Chemistry'],
-      progress: 45,
-      link: '/flashcards/study/3',
-    },
-  ]
-  const activityData = [
-    {
-      day: 'M',
-      height: '40%',
-      hours: '2.5h',
-    },
-    {
-      day: 'T',
-      height: '70%',
-      hours: '4.2h',
-    },
-    {
-      day: 'W',
-      height: '30%',
-      hours: '1.8h',
-    },
-    {
-      day: 'T',
-      height: '85%',
-      hours: '5.1h',
-    },
-    {
-      day: 'F',
-      height: '50%',
-      hours: '3.0h',
-    },
-    {
-      day: 'S',
-      height: '20%',
-      hours: '1.2h',
-    },
-    {
-      day: 'S',
-      height: '10%',
-      hours: '0.5h',
-    },
-  ]
+
+  const weeklyGoalTargetRaw = Number(dashStats?.weekly_goal_target ?? 5)
+  const weeklyGoalTarget = Number.isFinite(weeklyGoalTargetRaw) && weeklyGoalTargetRaw > 0
+    ? weeklyGoalTargetRaw
+    : 5
+  const weeklySummaryCountRaw = Number(dashStats?.weekly_summaries ?? 0)
+  const weeklySummaryCount = Number.isFinite(weeklySummaryCountRaw) && weeklySummaryCountRaw > 0
+    ? weeklySummaryCountRaw
+    : 0
+  const weeklyGoalProgress = Math.max(
+    0,
+    Math.min(100, Math.round((weeklySummaryCount / weeklyGoalTarget) * 100)),
+  )
+  const weeklyGoalRemaining = Math.max(0, weeklyGoalTarget - weeklySummaryCount)
+
+  const formatRelativeTime = (value?: string) => {
+    if (!value) return 'Recently'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return 'Recently'
+
+    const diffMs = Date.now() - date.getTime()
+    const minutes = Math.floor(diffMs / (1000 * 60))
+    if (minutes < 1) return 'Just now'
+    if (minutes < 60) return `${minutes}m ago`
+
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+
+    const days = Math.floor(hours / 24)
+    if (days < 7) return `${days}d ago`
+
+    return date.toLocaleDateString()
+  }
+
+  const recentContent = (recentItems || []).slice(0, 4).map((item: any) => {
+    const rawType = String(item?.type || 'summary').toLowerCase()
+    const id = String(item?.id || '')
+
+    const type =
+      rawType === 'quiz'
+        ? 'Quiz'
+        : rawType === 'flashcard' || rawType === 'flashcards'
+          ? 'Flashcards'
+          : 'Summary'
+
+    const link =
+      rawType === 'quiz'
+        ? `/quiz/take/${id}`
+        : rawType === 'flashcard' || rawType === 'flashcards'
+          ? `/flashcards/study/${id}`
+          : `/summary/${id}`
+
+    const progressRaw = Number(item?.progress ?? item?.completion ?? 0)
+    const progress = Number.isFinite(progressRaw)
+      ? Math.max(0, Math.min(100, progressRaw))
+      : 0
+
+    return {
+      id,
+      title: item?.title || 'Untitled',
+      type,
+      date: formatRelativeTime(item?.created_at || item?.createdAt),
+      tags: [type],
+      progress,
+      link,
+    }
+  })
+
+  const continueStudyItem = recentContent[0] || null
+
+  const getContinueIcon = (type: string) => {
+    if (type === 'Quiz') return BrainCircuit
+    if (type === 'Flashcards') return Play
+    return BookOpen
+  }
+
+  const getContinueDescription = (type: string) => {
+    if (type === 'Quiz') return 'Continue practicing your quiz to improve retention.'
+    if (type === 'Flashcards') return 'Resume your flashcard session and reinforce memory.'
+    return 'Continue reading and reviewing your generated summary.'
+  }
+
+  // Backend returns activity as 7 numbers with Sunday=0 ... Saturday=6.
+  // UI displays Monday-first: M T W T F S S.
+  const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+  const normalizedActivity = dayLabels.map((_, uiIndex) => {
+    const backendIndex = (uiIndex + 1) % 7
+    const value = Number((activityItems || [])[backendIndex] ?? 0)
+    return Number.isFinite(value) && value > 0 ? value : 0
+  })
+
+  const maxActivity = Math.max(...normalizedActivity, 0)
+  const maxScale = maxActivity > 0 ? maxActivity : 1
+  const maxVisualBarHeight = 96
+  const minVisualBarHeight = 8
+
+  const activityData = dayLabels.map((day, i) => {
+    const value = normalizedActivity[i]
+    const height = maxActivity > 0
+      ? `${Math.max(minVisualBarHeight, Math.round((value / maxActivity) * maxVisualBarHeight))}px`
+      : `${minVisualBarHeight}px`
+
+    return {
+      day,
+      height,
+      hours: `${value.toFixed(1)}h`,
+    }
+  })
   return (
     <AppLayout>
       <div className="space-y-8 pb-8 animate-in fade-in duration-500">
@@ -274,56 +316,73 @@ export function DashboardPage() {
                   Continue Studying
                 </h2>
               </div>
-              <Card
-                className="border-l-4 border-l-primary shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer group relative overflow-hidden"
-                onClick={() => navigate('/summary/4')}
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <CardContent className="p-6 relative z-10">
-                  <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
-                    <div className="h-16 w-16 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 group-hover:scale-110 transition-all duration-300">
-                      <BookOpen className="h-8 w-8 text-primary" />
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge
-                          variant="secondary"
-                          className="text-xs font-normal bg-primary/10 text-primary border-primary/20"
-                        >
-                          Summary
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          Last active 25m ago
-                        </span>
+              {continueStudyItem ? (
+                <Card
+                  className="border-l-4 border-l-primary shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer group relative overflow-hidden"
+                  onClick={() => navigate(continueStudyItem.link)}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <CardContent className="p-6 relative z-10">
+                    <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
+                      <div className="h-16 w-16 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 group-hover:scale-110 transition-all duration-300">
+                        {React.createElement(getContinueIcon(continueStudyItem.type), {
+                          className: 'h-8 w-8 text-primary',
+                        })}
                       </div>
-                      <h3 className="font-bold text-xl group-hover:text-primary transition-colors">
-                        Macroeconomics 101: Supply & Demand
-                      </h3>
-                      <p className="text-muted-foreground text-sm line-clamp-1">
-                        Understanding the fundamental relationship between price
-                        and quantity in a market economy.
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge
+                            variant="secondary"
+                            className="text-xs font-normal bg-primary/10 text-primary border-primary/20"
+                          >
+                            {continueStudyItem.type}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            Last active {continueStudyItem.date}
+                          </span>
+                        </div>
+                        <h3 className="font-bold text-xl group-hover:text-primary transition-colors">
+                          {continueStudyItem.title}
+                        </h3>
+                        <p className="text-muted-foreground text-sm line-clamp-1">
+                          {getContinueDescription(continueStudyItem.type)}
+                        </p>
+                      </div>
+                      <div className="w-full md:w-32 space-y-2">
+                        <div className="flex justify-between text-xs font-medium">
+                          <span>Progress</span>
+                          <span>{Math.round(continueStudyItem.progress)}%</span>
+                        </div>
+                        <Progress value={continueStudyItem.progress} className="h-2" />
+                        <Button
+                          className="w-full mt-2 shadow-sm group-hover:shadow-md transition-all"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(continueStudyItem.link)
+                          }}
+                        >
+                          Continue
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-dashed">
+                  <CardContent className="p-6 flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-semibold">No recent study items</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Create content to start your next learning session.
                       </p>
                     </div>
-                    <div className="w-full md:w-32 space-y-2">
-                      <div className="flex justify-between text-xs font-medium">
-                        <span>Progress</span>
-                        <span>65%</span>
-                      </div>
-                      <Progress value={65} className="h-2" />
-                      <Button
-                        className="w-full mt-2 shadow-sm group-hover:shadow-md transition-all"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          navigate('/summary/4')
-                        }}
-                      >
-                        Continue
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                    <Button onClick={() => navigate('/create')}>
+                      <Plus className="mr-2 h-4 w-4" /> New Summary
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
             </section>
 
             {/* Recent Content */}
@@ -470,28 +529,48 @@ export function DashboardPage() {
               </h2>
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
-                  <div className="flex items-end justify-between h-32 gap-2">
-                    {activityData.map((item, i) => (
-                      <div
-                        key={i}
-                        className="flex flex-col items-center gap-2 flex-1 group relative"
-                      >
-                        {/* Tooltip */}
-                        <div className="absolute bottom-full mb-2 bg-popover text-popover-foreground text-xs font-medium px-2 py-1 rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 border">
-                          {item.hours}
+                  <div className="relative h-32">
+                    {/* Scale + grid */}
+                    <div className="absolute inset-0 pl-8 pointer-events-none">
+                      <div className="h-full flex flex-col justify-between text-[10px] text-muted-foreground/80">
+                        <div className="relative">
+                          <div className="absolute inset-x-0 top-1/2 border-t border-border/70" />
+                          <span className="absolute -left-8 -top-1.5">{maxScale.toFixed(1)}h</span>
                         </div>
-
-                        <div
-                          className="w-full bg-primary/20 rounded-t-sm group-hover:bg-primary/60 transition-all duration-300 relative"
-                          style={{
-                            height: item.height,
-                          }}
-                        ></div>
-                        <span className="text-xs text-muted-foreground font-medium group-hover:text-foreground transition-colors">
-                          {item.day}
-                        </span>
+                        <div className="relative">
+                          <div className="absolute inset-x-0 top-1/2 border-t border-border/50" />
+                          <span className="absolute -left-8 -top-1.5">{(maxScale / 2).toFixed(1)}h</span>
+                        </div>
+                        <div className="relative">
+                          <div className="absolute inset-x-0 top-1/2 border-t border-border/40" />
+                          <span className="absolute -left-8 -top-1.5">0h</span>
+                        </div>
                       </div>
-                    ))}
+                    </div>
+
+                    <div className="relative flex items-end justify-between h-32 gap-2 pl-8">
+                      {activityData.map((item, i) => (
+                        <div
+                          key={i}
+                          className="flex flex-col items-center gap-2 flex-1 group relative"
+                        >
+                          {/* Tooltip */}
+                          <div className="absolute bottom-full mb-2 bg-popover text-popover-foreground text-xs font-medium px-2 py-1 rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 border">
+                            {item.hours}
+                          </div>
+
+                          <div
+                            className="w-full rounded-t-md bg-primary/55 group-hover:bg-primary transition-all duration-300 shadow-sm"
+                            style={{
+                              height: item.height,
+                            }}
+                          />
+                          <span className="text-xs text-muted-foreground font-medium group-hover:text-foreground transition-colors">
+                            {item.day}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -520,12 +599,18 @@ export function DashboardPage() {
                         Summaries Created
                       </span>
                     </div>
-                    <span className="text-sm font-bold">4/5</span>
+                    <span className="text-sm font-bold">{weeklySummaryCount}/{weeklyGoalTarget}</span>
                   </div>
-                  <Progress value={80} className="h-2" />
-                  <p className="text-xs text-muted-foreground">
-                    Create 1 more summary to reach your weekly goal!
-                  </p>
+                  <Progress value={weeklyGoalProgress} className="h-2" />
+                  {weeklyGoalRemaining > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Create {weeklyGoalRemaining} more {weeklyGoalRemaining === 1 ? 'summary' : 'summaries'} to reach your weekly goal!
+                    </p>
+                  ) : (
+                    <p className="text-xs text-green-600">
+                      Weekly goal reached. Great work!
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </section>
