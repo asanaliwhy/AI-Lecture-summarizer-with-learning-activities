@@ -174,12 +174,61 @@ function normalizeSmartSummaryMarkdown(value: string): string {
   const lines = value.replace(/\r\n/g, '\n').split('\n')
   const out: string[] = []
 
-  const splitColumns = (line: string): string[] =>
+  const addImplicitSpaces = (line: string): string =>
     line
+      .replace(/([a-z\)])([A-Z])/g, '$1 $2')
+      .replace(/([0-9%])([A-Z])/g, '$1 $2')
+
+  const splitColumns = (line: string): string[] =>
+    addImplicitSpaces(line)
       .trim()
       .split(/\s{2,}/)
       .map((cell) => cleanInlineMarkdown(cell))
       .filter(Boolean)
+
+  const parseHeaderColumns = (line: string): string[] => {
+    const bySpacing = splitColumns(line)
+    if (bySpacing.length >= 2) return bySpacing
+
+    const keywordMatches = line.match(
+      /(Brain Part|Part|Topic|Section|Size\/Location|Primary Function\(s\)|Primary Function|Function|Description|Role|Key Figure\/Detail|Key Figure|Detail|Details)/gi,
+    )
+
+    if (keywordMatches && keywordMatches.length >= 2) {
+      return keywordMatches.map((k) => cleanInlineMarkdown(k))
+    }
+
+    return []
+  }
+
+  const parseSmartTableRow = (line: string, colCount: number): string[] | null => {
+    const normalized = addImplicitSpaces(line).trim()
+    if (!normalized) return null
+
+    const bySpacing = splitColumns(normalized)
+    if (bySpacing.length >= 2) {
+      return bySpacing
+    }
+
+    // Fallback for single-space collapsed rows: "Brain Stem ... Connected to spinal cord"
+    const firstColMatch = normalized.match(/^([A-Z][A-Za-z-]*(?:\s+[A-Z][A-Za-z-]*)?)\s+(.+)$/)
+    if (!firstColMatch) return null
+
+    const first = cleanInlineMarkdown(firstColMatch[1])
+    const remainder = cleanInlineMarkdown(firstColMatch[2])
+
+    if (colCount >= 3) {
+      const tailMatch = remainder.match(/^(.*)\s+(\d+%.*|[A-Z][A-Za-z-]*(?:\s+[A-Za-z-]+){0,5})$/)
+      if (tailMatch) {
+        const middle = cleanInlineMarkdown(tailMatch[1])
+        const tail = cleanInlineMarkdown(tailMatch[2])
+        if (middle && tail) return [first, middle, tail]
+      }
+      return [first, remainder, '—']
+    }
+
+    return [first, remainder]
+  }
 
   const normalizeRow = (row: string[], size: number): string[] => {
     if (row.length === size) return row
@@ -217,22 +266,26 @@ function normalizeSmartSummaryMarkdown(value: string): string {
       continue
     }
 
-    const headerCols = splitColumns(raw)
+    const headerCols = parseHeaderColumns(raw)
     const nextRaw = (lines[i + 1] || '').trim()
-    const nextCols = nextRaw ? splitColumns(nextRaw) : []
+    const nextCols = nextRaw ? parseSmartTableRow(nextRaw, Math.max(headerCols.length, 2)) || [] : []
+    const headerLikeByKeywords =
+      /(part|component|topic|section)/i.test(raw) &&
+      /(function|description|role|detail|size|location|figure)/i.test(raw)
     const isTableBlock =
-      headerCols.length >= 2 &&
+      (headerCols.length >= 2 || headerLikeByKeywords) &&
       nextCols.length >= 2 &&
       !/^\d+[.)]\s+/.test(nextRaw)
 
     if (isTableBlock) {
-      const rows: string[][] = [headerCols, nextCols]
+      const header = headerCols.length >= 2 ? headerCols : ['Item', 'Description', 'Details']
+      const rows: string[][] = [header, nextCols]
       let j = i + 2
 
       while (j < lines.length) {
         const rowRaw = lines[j].trim()
         if (!rowRaw || /^\d+[.)]\s+/.test(rowRaw)) break
-        const cols = splitColumns(rowRaw)
+        const cols = parseSmartTableRow(rowRaw, Math.max(header.length, 2)) || []
         if (cols.length < 2) break
         rows.push(cols)
         j += 1
