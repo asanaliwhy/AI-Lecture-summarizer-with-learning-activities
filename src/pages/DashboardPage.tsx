@@ -90,6 +90,12 @@ export function DashboardPage() {
   const flashcardsTrend = Number(dashStats?.flashcards_trend ?? 0)
   const studyHoursTrend = Number(dashStats?.study_hours_trend ?? 0)
 
+  const formatStudyHours = (value: number) => {
+    const safe = Number.isFinite(value) ? Math.max(0, value) : 0
+    const truncated = Math.floor(safe * 100) / 100
+    return truncated.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
+  }
+
   const stats = [
     {
       label: 'Total Summaries',
@@ -126,7 +132,7 @@ export function DashboardPage() {
     },
     {
       label: 'Study Hours',
-      value: String(dashStats?.study_hours ?? 0),
+      value: formatStudyHours(Number(dashStats?.study_hours ?? 0)),
       change: formatTrend(studyHoursTrend),
       trend: getTrend(studyHoursTrend),
       icon: Clock,
