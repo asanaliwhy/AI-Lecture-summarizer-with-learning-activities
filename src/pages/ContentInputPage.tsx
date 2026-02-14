@@ -310,17 +310,18 @@ export function ContentInputPage() {
                     <div className="flex justify-between items-center">
                       <Label>Length & Detail</Label>
                       <span className="text-xs font-medium text-muted-foreground">
-                        {summaryLength[0] < 25
+                        {summaryLength[0] <= 25
                           ? 'Concise'
-                          : summaryLength[0] < 50
+                          : summaryLength[0] <= 50
                             ? 'Standard'
-                            : summaryLength[0] < 75
+                            : summaryLength[0] <= 75
                               ? 'Detailed'
                               : 'Comprehensive'}
                       </span>
                     </div>
                     <Slider
                       defaultValue={[50]}
+                      min={25}
                       max={100}
                       step={25}
                       value={summaryLength}
