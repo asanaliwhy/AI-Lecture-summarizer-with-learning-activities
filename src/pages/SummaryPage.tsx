@@ -412,11 +412,11 @@ export function SummaryPage() {
               />
             ) : (
               <h1
-                className="text-3xl md:text-[2.2rem] font-bold tracking-tight truncate cursor-pointer hover:text-primary/80 flex items-center gap-2 group"
+                className="text-3xl md:text-[2.2rem] font-bold tracking-tight cursor-pointer hover:text-primary/80 flex items-start gap-2 group break-words"
                 onClick={() => setIsEditingTitle(true)}
               >
                 {title}
-                <Edit2 className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Edit2 className="h-4 w-4 mt-2 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
               </h1>
             )}
           </div>
