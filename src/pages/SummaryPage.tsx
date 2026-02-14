@@ -547,8 +547,9 @@ export function SummaryPage() {
   const smartSummaryHtml = summary.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
   const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
   const isSmartSummary = summary.format === 'smart'
-  const leftColumnClass = isSmartSummary ? 'lg:col-span-2 space-y-6' : 'lg:col-span-3 space-y-6'
+  const leftColumnClass = isSmartSummary ? 'lg:col-span-3 space-y-6' : 'lg:col-span-3 space-y-6'
   const centerColumnClass = isSmartSummary ? 'lg:col-span-8' : 'lg:col-span-7'
+  const rightColumnClass = isSmartSummary ? 'lg:col-span-1 space-y-6' : 'lg:col-span-2 space-y-6'
 
   // Parse content sections
   const sections: SummarySectionResponse[] = summary.sections || []
@@ -771,7 +772,7 @@ export function SummaryPage() {
           </div>
 
           {/* Right Sidebar - Actions (20%) */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className={rightColumnClass}>
             <div className="sticky top-24">
               <Card className="border-border/70 shadow-sm">
                 <CardContent className="p-4 space-y-3">
