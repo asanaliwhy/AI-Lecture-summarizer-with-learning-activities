@@ -20,6 +20,11 @@ export function useStudySession({
 }: UseStudySessionOptions) {
     const sessionIdRef = useRef<string | null>(null)
     const stoppedRef = useRef(false)
+    const clientMetaRef = useRef<Record<string, any> | undefined>(clientMeta)
+
+    useEffect(() => {
+        clientMetaRef.current = clientMeta
+    }, [clientMeta])
 
     useEffect(() => {
         if (!enabled || !resourceId) return
@@ -43,7 +48,7 @@ export function useStudySession({
         }
 
         const startSession = async () => {
-            const data = await api.studySessions.start(activityType, resourceId, clientMeta)
+            const data = await api.studySessions.start(activityType, resourceId, clientMetaRef.current)
             if (!isMounted) return
 
             const sessionId = data?.session?.id || null
@@ -72,5 +77,5 @@ export function useStudySession({
             }
             stopSession()
         }
-    }, [activityType, resourceId, enabled, heartbeatIntervalMs, clientMeta])
+    }, [activityType, resourceId, enabled, heartbeatIntervalMs])
 }
