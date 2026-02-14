@@ -223,7 +223,7 @@ export function ContentInputPage() {
                     {isValid && (
                       <div className="mt-4 rounded-lg border bg-muted/30 p-4 flex gap-4 animate-in fade-in slide-in-from-top-2">
                         <div
-                          className="h-20 w-32 bg-slate-200 rounded-md flex-shrink-0 bg-cover bg-center"
+                          className="h-28 w-48 bg-slate-200 rounded-md flex-shrink-0 bg-cover bg-center"
                           style={{
                             backgroundImage: `url(${videoMeta?.thumbnail_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&q=80'})`,
                           }}
