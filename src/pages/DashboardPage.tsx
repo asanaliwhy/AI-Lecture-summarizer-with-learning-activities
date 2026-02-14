@@ -667,8 +667,8 @@ export function DashboardPage() {
               onClick={() => setGoalModalOpen(false)}
               aria-label="Close modal"
             />
-            <Card className="relative w-full max-w-md shadow-2xl border-primary/20 overflow-hidden">
-              <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-blue-500 via-violet-500 to-emerald-500" />
+            <Card className="relative w-full max-w-lg shadow-2xl border-primary/20 overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-1.5 bg-primary/80" />
 
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
