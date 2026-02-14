@@ -39,8 +39,8 @@ func (r *SummaryRepo) Create(ctx context.Context, s *models.Summary) error {
 func (r *SummaryRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Summary, error) {
 	s := &models.Summary{}
 	query := `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
-		content_raw, cornell_cues, cornell_notes, cornell_summary,
-		tags, description, word_count, is_favorite, is_archived, created_at, last_accessed_at
+		s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
+		s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.created_at, s.last_accessed_at
 		FROM summaries s
 		LEFT JOIN content c ON c.id = s.content_id
 		WHERE s.id = $1`
@@ -94,8 +94,8 @@ func (r *SummaryRepo) ListByUser(ctx context.Context, userID uuid.UUID, search, 
 	}
 
 	query := fmt.Sprintf(`SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
-		content_raw, cornell_cues, cornell_notes, cornell_summary,
-		tags, description, word_count, is_favorite, is_archived, created_at, last_accessed_at
+		s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
+		s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.created_at, s.last_accessed_at
 		FROM summaries s
 		LEFT JOIN content c ON c.id = s.content_id
 		%s ORDER BY %s LIMIT $%d OFFSET $%d`,
