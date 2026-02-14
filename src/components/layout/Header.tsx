@@ -55,15 +55,16 @@ export function Header({ onMenuToggle }: HeaderProps) {
         </button>
 
         {/* Breadcrumb */}
-        <div className="hidden md:flex items-center text-sm text-muted-foreground mr-4">
-          <Link
-            to="/dashboard"
-            className="hover:text-foreground transition-colors cursor-pointer hover:underline underline-offset-4"
+        <div className="hidden md:flex items-center text-sm text-muted-foreground mr-4 shrink-0">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="hover:text-foreground transition-colors cursor-pointer hover:underline underline-offset-4 whitespace-nowrap"
           >
             Lectura
-          </Link>
+          </button>
           <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground/50" />
-          <span className="font-medium text-foreground animate-in fade-in slide-in-from-left-2 duration-300">
+          <span className="font-medium text-foreground animate-in fade-in slide-in-from-left-2 duration-300 whitespace-nowrap">
             {getPageTitle(location.pathname)}
           </span>
         </div>
