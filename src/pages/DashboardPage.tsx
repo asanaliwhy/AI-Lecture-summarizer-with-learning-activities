@@ -24,6 +24,9 @@ import {
   Target,
   BookOpen,
   Settings2,
+  Sparkles,
+  X,
+  TrendingUp,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 export function DashboardPage() {
@@ -660,50 +663,114 @@ export function DashboardPage() {
         {goalModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <button
-              className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
               onClick={() => setGoalModalOpen(false)}
               aria-label="Close modal"
             />
-            <Card className="relative w-full max-w-md shadow-2xl border-primary/20">
+            <Card className="relative w-full max-w-md shadow-2xl border-primary/20 overflow-hidden">
+              <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-blue-500 via-violet-500 to-emerald-500" />
+
               <CardHeader>
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-xl font-semibold tracking-tight">Set Weekly Goal</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Choose how many summaries you want to complete this week.
-                    </p>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shadow-sm">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold tracking-tight">Set Weekly Goal</h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Choose how many summaries you want to complete this week.
+                      </p>
+                    </div>
                   </div>
+
+                  <button
+                    className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors flex items-center justify-center"
+                    onClick={() => setGoalModalOpen(false)}
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-4 flex items-center gap-2">
                   <Badge variant="secondary" className="bg-primary/10 text-primary">
                     1-50
                   </Badge>
+                  <Badge variant="outline" className="gap-1">
+                    <TrendingUp className="h-3 w-3" />
+                    Current: {weeklyGoalTarget}
+                  </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Target summaries</label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={goalInput}
-                    onChange={(e) => {
-                      setGoalInput(e.target.value)
-                      if (goalError) setGoalError('')
-                    }}
-                    className={goalError ? 'border-destructive focus-visible:ring-destructive/40' : ''}
-                  />
-                  {goalError && <p className="text-xs text-destructive">{goalError}</p>}
+
+              <CardContent className="space-y-5">
+                <div className="rounded-lg border bg-secondary/20 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Tip: set a realistic target based on your current pace. You can update this anytime.
+                  </p>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-1">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Target summaries</label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={goalInput}
+                      onChange={(e) => {
+                        setGoalInput(e.target.value)
+                        if (goalError) setGoalError('')
+                      }}
+                      className={cn(
+                        'pr-12 h-11 text-base font-semibold',
+                        goalError ? 'border-destructive focus-visible:ring-destructive/40' : 'focus-visible:ring-primary/40',
+                      )}
+                    />
+                    <span className="absolute right-3 top-2.5 text-xs text-muted-foreground font-medium">/ week</span>
+                  </div>
+                  {goalError ? (
+                    <p className="text-xs text-destructive">{goalError}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Recommended range for steady progress: 3-10
+                    </p>
+                  )}
+                </div>
+
+                <div className="pt-1">
+                  <div className="flex items-center justify-between text-xs mb-2">
+                    <span className="text-muted-foreground">Preview progress</span>
+                    <span className="font-medium">
+                      {weeklySummaryCount}/{Number(goalInput) > 0 ? Math.max(1, Math.round(Number(goalInput))) : weeklyGoalTarget}
+                    </span>
+                  </div>
+                  <Progress
+                    value={Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        Math.round(
+                          (weeklySummaryCount /
+                            (Number(goalInput) > 0 ? Math.max(1, Math.round(Number(goalInput))) : weeklyGoalTarget)) * 100,
+                        ),
+                      ),
+                    )}
+                    className="h-2"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
                   <Button
                     variant="outline"
                     onClick={() => setGoalModalOpen(false)}
                     disabled={isSavingGoal}
+                    className="min-w-[90px]"
                   >
                     Cancel
                   </Button>
-                  <Button onClick={handleSaveGoal} disabled={isSavingGoal}>
+                  <Button onClick={handleSaveGoal} disabled={isSavingGoal} className="min-w-[110px] shadow-sm">
                     {isSavingGoal ? 'Saving...' : 'Save Goal'}
                   </Button>
                 </div>
