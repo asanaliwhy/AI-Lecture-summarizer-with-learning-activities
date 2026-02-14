@@ -246,20 +246,39 @@ export function ContentInputPage() {
 
                   <TabsContent value="file" className="space-y-4">
                     <div
-                      className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 text-center hover:bg-muted/30 transition-colors cursor-pointer"
+                      className={cn(
+                        'border-2 border-dashed rounded-xl p-8 md:p-10 text-center transition-all cursor-pointer',
+                        uploadedFile
+                          ? 'border-emerald-300 bg-emerald-50/30 dark:bg-emerald-500/5'
+                          : 'border-muted-foreground/25 hover:border-primary/40 hover:bg-muted/30',
+                      )}
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      <div className="mx-auto h-12 w-12 rounded-full bg-secondary flex items-center justify-center mb-4">
-                        <UploadCloud className="h-6 w-6 text-muted-foreground" />
+                      <div
+                        className={cn(
+                          'mx-auto h-14 w-14 rounded-full flex items-center justify-center mb-4',
+                          uploadedFile
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                            : 'bg-secondary text-muted-foreground',
+                        )}
+                      >
+                        <UploadCloud
+                          className={cn(
+                            'h-6 w-6',
+                            uploadedFile ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground',
+                          )}
+                        />
                       </div>
                       <h3 className="text-lg font-medium mb-1">
-                        Click to upload or drag and drop
+                        {uploadedFile
+                          ? 'File ready to generate'
+                          : 'Click to upload or drag and drop'}
                       </h3>
                       <p className="text-sm text-muted-foreground mb-4">
                         MP3, MP4, PDF, or DOCX (max 500MB)
                       </p>
                       <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                        Select File
+                        {uploadedFile ? 'Replace File' : 'Select File'}
                       </Button>
                       <input
                         ref={fileInputRef}
@@ -269,9 +288,20 @@ export function ContentInputPage() {
                         onChange={handleFileChange}
                       />
                       {uploadedFile && (
-                        <p className="text-xs text-muted-foreground mt-3">
-                          Selected: {uploadedFile.name}
-                        </p>
+                        <div className="mt-4 mx-auto max-w-md rounded-lg border bg-background/70 px-4 py-3 text-left">
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center">
+                              <FileText className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium truncate">{uploadedFile.name}</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB • Ready
+                              </p>
+                            </div>
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-1" />
+                          </div>
+                        </div>
                       )}
                     </div>
                   </TabsContent>
