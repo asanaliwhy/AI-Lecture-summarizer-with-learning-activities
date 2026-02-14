@@ -87,7 +87,7 @@ func main() {
 	summaryHandler := handlers.NewSummaryHandler(summaryRepo, contentRepo, jobRepo, redisClients.Queue)
 	quizHandler := handlers.NewQuizHandler(quizRepo, summaryRepo, jobRepo, redisClients.Queue)
 	flashcardHandler := handlers.NewFlashcardHandler(flashcardRepo, summaryRepo, jobRepo, redisClients.Queue)
-	dashboardHandler := handlers.NewDashboardHandler(pool)
+	dashboardHandler := handlers.NewDashboardHandler(pool, userRepo)
 	libraryHandler := handlers.NewLibraryHandler(pool)
 	userHandler := handlers.NewUserHandler(userRepo)
 	jobHandler := handlers.NewJobHandler(jobRepo)

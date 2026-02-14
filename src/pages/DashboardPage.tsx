@@ -35,6 +35,7 @@ export function DashboardPage() {
   const [recentItems, setRecentItems] = useState<any[]>([])
   const [streakData, setStreakData] = useState<any>(null)
   const [activityItems, setActivityItems] = useState<any[]>([])
+  const [isSavingGoal, setIsSavingGoal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -119,6 +120,32 @@ export function DashboardPage() {
     Math.min(100, Math.round((weeklySummaryCount / weeklyGoalTarget) * 100)),
   )
   const weeklyGoalRemaining = Math.max(0, weeklyGoalTarget - weeklySummaryCount)
+
+  const handleSetGoal = async () => {
+    const current = weeklyGoalTarget > 0 ? weeklyGoalTarget : 5
+    const input = window.prompt('Set weekly summary goal (1-50)', String(current))
+    if (input === null) return
+
+    const parsed = Number(input)
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 50) {
+      window.alert('Please enter a valid number between 1 and 50.')
+      return
+    }
+
+    const target = Math.round(parsed)
+    setIsSavingGoal(true)
+    try {
+      const data = await api.dashboard.setWeeklyGoal(target)
+      setDashStats((prev: any) => ({
+        ...(prev || {}),
+        weekly_goal_target: data?.weekly_goal_target ?? target,
+      }))
+    } catch (err: any) {
+      window.alert(err?.message || 'Failed to update weekly goal')
+    } finally {
+      setIsSavingGoal(false)
+    }
+  }
 
   const formatRelativeTime = (value?: string) => {
     if (!value) return 'Recently'
@@ -586,8 +613,10 @@ export function DashboardPage() {
                   variant="ghost"
                   size="sm"
                   className="h-8 text-xs text-muted-foreground hover:text-primary"
+                  onClick={handleSetGoal}
+                  disabled={isSavingGoal}
                 >
-                  <Settings2 className="h-3 w-3 mr-1" /> Set Goal
+                  <Settings2 className="h-3 w-3 mr-1" /> {isSavingGoal ? 'Saving...' : 'Set Goal'}
                 </Button>
               </div>
               <Card className="hover:shadow-md transition-shadow">

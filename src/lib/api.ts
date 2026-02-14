@@ -249,6 +249,11 @@ export const api = {
     // Dashboard
     dashboard: {
         stats: () => apiFetch<any>('/dashboard/stats'),
+        setWeeklyGoal: (target: number) =>
+            apiFetch<{ weekly_goal_target: number }>('/dashboard/weekly-goal', {
+                method: 'PUT',
+                body: JSON.stringify({ target }),
+            }),
         recent: () => apiFetch<any>('/dashboard/recent'),
         streak: () => apiFetch<any>('/dashboard/streak'),
         activity: () => apiFetch<any>('/dashboard/activity'),

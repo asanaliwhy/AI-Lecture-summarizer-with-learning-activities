@@ -18,11 +18,12 @@ import (
 )
 
 type DashboardHandler struct {
-	pool *pgxpool.Pool
+	pool     *pgxpool.Pool
+	userRepo *repository.UserRepo
 }
 
-func NewDashboardHandler(pool *pgxpool.Pool) *DashboardHandler {
-	return &DashboardHandler{pool: pool}
+func NewDashboardHandler(pool *pgxpool.Pool, userRepo *repository.UserRepo) *DashboardHandler {
+	return &DashboardHandler{pool: pool, userRepo: userRepo}
 }
 
 func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +31,7 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var summaryCount, quizCount, flashcardCount, weeklySummaryCount int
+	var weeklyGoalTarget int
 	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM summaries WHERE user_id = $1", userID).Scan(&summaryCount)
 	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM quizzes WHERE user_id = $1", userID).Scan(&quizCount)
 	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM flashcard_decks WHERE user_id = $1", userID).Scan(&flashcardCount)
@@ -41,7 +43,14 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		  AND created_at >= NOW() - INTERVAL '7 days'
 	`, userID).Scan(&weeklySummaryCount)
 
-	weeklyGoalTarget := 5
+	h.pool.QueryRow(ctx, `
+		SELECT COALESCE((notifications_json->>'weekly_goal_target')::int, 5)
+		FROM user_settings
+		WHERE user_id = $1
+	`, userID).Scan(&weeklyGoalTarget)
+	if weeklyGoalTarget <= 0 {
+		weeklyGoalTarget = 5
+	}
 
 	// Estimate study hours based on content count
 	studyHours := float64(summaryCount+quizCount+flashcardCount) * 0.5
@@ -53,6 +62,33 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		"study_hours":        studyHours,
 		"weekly_summaries":   weeklySummaryCount,
 		"weekly_goal_target": weeklyGoalTarget,
+	})
+}
+
+func (h *DashboardHandler) SetWeeklyGoal(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var req struct {
+		Target int `json:"target"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
+
+	if req.Target < 1 || req.Target > 50 {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Target must be between 1 and 50", r))
+		return
+	}
+
+	if err := h.userRepo.SetWeeklyGoalTarget(r.Context(), userID, req.Target); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to save weekly goal", r))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"weekly_goal_target": req.Target,
 	})
 }
 

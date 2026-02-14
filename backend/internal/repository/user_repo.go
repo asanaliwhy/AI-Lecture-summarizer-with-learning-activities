@@ -118,3 +118,19 @@ func (r *UserRepo) UpdateSettings(ctx context.Context, s *models.UserSettings) e
 	)
 	return err
 }
+
+func (r *UserRepo) SetWeeklyGoalTarget(ctx context.Context, userID uuid.UUID, target int) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO user_settings (user_id, notifications_json)
+		VALUES ($1, jsonb_build_object('weekly_goal_target', $2))
+		ON CONFLICT (user_id) DO UPDATE
+		SET notifications_json = jsonb_set(
+			COALESCE(user_settings.notifications_json, '{}'::jsonb),
+			'{weekly_goal_target}',
+			to_jsonb($2::int),
+			true
+		),
+		updated_at = NOW()
+	`, userID, target)
+	return err
+}

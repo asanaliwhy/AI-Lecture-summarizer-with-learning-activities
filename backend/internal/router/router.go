@@ -122,6 +122,7 @@ func New(
 		r.Route("/dashboard", func(r chi.Router) {
 			r.Use(jwtAuth.Middleware)
 			r.Get("/stats", dashboardHandler.Stats)
+			r.Put("/weekly-goal", dashboardHandler.SetWeeklyGoal)
 			r.Get("/recent", dashboardHandler.Recent)
 			r.Get("/streak", dashboardHandler.Streak)
 			r.Get("/activity", dashboardHandler.Activity)
