@@ -171,7 +171,12 @@ function normalizeCornellText(value: string): string {
 function renderSmartSummaryHtml(value: string): string {
   if (!value) return ''
 
-  const html = marked.parse(value, { async: false }) as string
+  const normalized = value
+    .replace(/\r\n/g, '\n')
+    .replace(/^\s*(\d+)[.)]\s+(.+)$/gm, '## $2')
+    .replace(/^\s*([A-Za-z][A-Za-z\s&/-]{2,40}):\s+(.+)$/gm, '- **$1:** $2')
+
+  const html = marked.parse(normalized, { async: false }) as string
   return DOMPurify.sanitize(html)
 }
 
@@ -516,8 +521,10 @@ export function SummaryPage() {
             <Card className="min-h-[620px] shadow-sm border-border/70">
               <CardContent className="p-6 md:p-10 lg:p-12">
                 {isSmartSummary ? (
-                  <div className="prose prose-slate max-w-none prose-headings:font-bold prose-headings:tracking-tight prose-table:w-full prose-table:border prose-th:border prose-td:border prose-th:bg-muted/40 prose-th:px-3 prose-th:py-2 prose-td:px-3 prose-td:py-2">
-                    <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
+                  <div className="rounded-2xl border border-[#1f335f] bg-[#0b1736] p-6 md:p-8 text-slate-200 shadow-sm">
+                    <div className="prose max-w-none prose-invert prose-headings:text-slate-100 prose-headings:font-bold prose-headings:tracking-tight prose-p:text-slate-200 prose-strong:text-slate-100 prose-li:text-slate-200 prose-ul:my-2 prose-table:w-full prose-table:rounded-lg prose-table:overflow-hidden prose-table:border prose-table:border-[#2b416f] prose-th:border prose-th:border-[#2b416f] prose-th:bg-[#253455] prose-th:text-slate-100 prose-th:px-3 prose-th:py-2 prose-td:border prose-td:border-[#2b416f] prose-td:px-3 prose-td:py-2">
+                      <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
+                    </div>
                   </div>
                 ) : hasSections ? (
                   <div className="space-y-10">
