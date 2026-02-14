@@ -11,6 +11,7 @@ type Summary struct {
 	ID             uuid.UUID       `json:"id"`
 	UserID         uuid.UUID       `json:"user_id"`
 	ContentID      *uuid.UUID      `json:"content_id"`
+	Source         string          `json:"source"`
 	Title          string          `json:"title"`
 	Format         string          `json:"format"` // "cornell" | "bullets" | "paragraph"
 	LengthSetting  string          `json:"length_setting"`

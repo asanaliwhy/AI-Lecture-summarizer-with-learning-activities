@@ -38,13 +38,15 @@ func (r *SummaryRepo) Create(ctx context.Context, s *models.Summary) error {
 
 func (r *SummaryRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Summary, error) {
 	s := &models.Summary{}
-	query := `SELECT id, user_id, content_id, title, format, length_setting, config_json,
+	query := `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
 		content_raw, cornell_cues, cornell_notes, cornell_summary,
 		tags, description, word_count, is_favorite, is_archived, created_at, last_accessed_at
-		FROM summaries WHERE id = $1`
+		FROM summaries s
+		LEFT JOIN content c ON c.id = s.content_id
+		WHERE s.id = $1`
 
 	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&s.ID, &s.UserID, &s.ContentID, &s.Title, &s.Format, &s.LengthSetting, &s.ConfigJSON,
+		&s.ID, &s.UserID, &s.ContentID, &s.Source, &s.Title, &s.Format, &s.LengthSetting, &s.ConfigJSON,
 		&s.ContentRaw, &s.CornellCues, &s.CornellNotes, &s.CornellSummary,
 		&s.Tags, &s.Description, &s.WordCount, &s.IsFavorite, &s.IsArchived,
 		&s.CreatedAt, &s.LastAccessedAt,
@@ -62,39 +64,41 @@ func (r *SummaryRepo) ListByUser(ctx context.Context, userID uuid.UUID, search, 
 	var args []interface{}
 	argIdx := 1
 
-	where := fmt.Sprintf("WHERE user_id = $%d AND is_archived = FALSE", argIdx)
+	where := fmt.Sprintf("WHERE s.user_id = $%d AND s.is_archived = FALSE", argIdx)
 	args = append(args, userID)
 	argIdx++
 
 	if search != "" {
-		where += fmt.Sprintf(" AND (title ILIKE $%d OR description ILIKE $%d)", argIdx, argIdx)
+		where += fmt.Sprintf(" AND (s.title ILIKE $%d OR s.description ILIKE $%d)", argIdx, argIdx)
 		args = append(args, "%"+search+"%")
 		argIdx++
 	}
 
 	// Count total
 	var total int
-	countQuery := "SELECT COUNT(*) FROM summaries " + where
+	countQuery := "SELECT COUNT(*) FROM summaries s " + where
 	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	// Order
-	orderBy := "created_at DESC"
+	orderBy := "s.created_at DESC"
 	switch sortBy {
 	case "title":
-		orderBy = "title ASC"
+		orderBy = "s.title ASC"
 	case "oldest":
-		orderBy = "created_at ASC"
+		orderBy = "s.created_at ASC"
 	case "recent":
-		orderBy = "last_accessed_at DESC NULLS LAST"
+		orderBy = "s.last_accessed_at DESC NULLS LAST"
 	}
 
-	query := fmt.Sprintf(`SELECT id, user_id, content_id, title, format, length_setting, config_json,
+	query := fmt.Sprintf(`SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
 		content_raw, cornell_cues, cornell_notes, cornell_summary,
 		tags, description, word_count, is_favorite, is_archived, created_at, last_accessed_at
-		FROM summaries %s ORDER BY %s LIMIT $%d OFFSET $%d`,
+		FROM summaries s
+		LEFT JOIN content c ON c.id = s.content_id
+		%s ORDER BY %s LIMIT $%d OFFSET $%d`,
 		where, orderBy, argIdx, argIdx+1)
 
 	args = append(args, limit, offset)
@@ -109,7 +113,7 @@ func (r *SummaryRepo) ListByUser(ctx context.Context, userID uuid.UUID, search, 
 	for rows.Next() {
 		s := &models.Summary{}
 		err := rows.Scan(
-			&s.ID, &s.UserID, &s.ContentID, &s.Title, &s.Format, &s.LengthSetting, &s.ConfigJSON,
+			&s.ID, &s.UserID, &s.ContentID, &s.Source, &s.Title, &s.Format, &s.LengthSetting, &s.ConfigJSON,
 			&s.ContentRaw, &s.CornellCues, &s.CornellNotes, &s.CornellSummary,
 			&s.Tags, &s.Description, &s.WordCount, &s.IsFavorite, &s.IsArchived,
 			&s.CreatedAt, &s.LastAccessedAt,
