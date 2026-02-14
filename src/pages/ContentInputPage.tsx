@@ -29,19 +29,6 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useToast } from '../components/ui/Toast'
-
-interface YouTubeMeta {
-  title?: string
-  channel_name?: string
-  thumbnail_url?: string
-}
-
-type SummaryPreset = 'quick' | 'exam' | 'deep'
-
-const YOUTUBE_URL_REGEX = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/
-const MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024
-const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'txt', 'mp3', 'wav', 'mp4']
-
 export function ContentInputPage() {
   const navigate = useNavigate()
   const toast = useToast()
@@ -49,7 +36,7 @@ export function ContentInputPage() {
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [isValidating, setIsValidating] = useState(false)
   const [isValid, setIsValid] = useState(false)
-  const [videoMeta, setVideoMeta] = useState<YouTubeMeta | null>(null)
+  const [videoMeta, setVideoMeta] = useState<any>(null)
   const [contentId, setContentId] = useState<string | null>(null)
   const [summaryLength, setSummaryLength] = useState([50])
   const [outputFormat, setOutputFormat] = useState('cornell')
@@ -64,73 +51,8 @@ export function ContentInputPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [validationError, setValidationError] = useState('')
-  const [fileError, setFileError] = useState('')
-  const [isDragActive, setIsDragActive] = useState(false)
-  const [selectedPreset, setSelectedPreset] = useState<SummaryPreset>('exam')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-
-  const sourceReady = sourceType === 'youtube' ? isValid : !!uploadedFile
-  const canGenerate = !isGenerating && sourceReady
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
-  const getFileExtension = (filename: string) => {
-    const parts = filename.toLowerCase().split('.')
-    return parts.length > 1 ? parts[parts.length - 1] : ''
-  }
-
-  const validateSelectedFile = (file: File) => {
-    const ext = getFileExtension(file.name)
-
-    if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      return `Unsupported file type (.${ext || 'unknown'}). Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`
-    }
-
-    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-      return `File is too large. Maximum size is ${Math.round(MAX_UPLOAD_SIZE_BYTES / (1024 * 1024))}MB.`
-    }
-
-    return ''
-  }
-
-  const handlePresetSelect = (preset: SummaryPreset) => {
-    setSelectedPreset(preset)
-
-    if (preset === 'quick') {
-      setSummaryLength([25])
-      setOutputFormat('bullets')
-      setFocusAreas(['key concepts', 'definitions & terms'])
-      setTargetAudience('simplified')
-      return
-    }
-
-    if (preset === 'deep') {
-      setSummaryLength([100])
-      setOutputFormat('cornell')
-      setFocusAreas([
-        'key concepts',
-        'definitions & terms',
-        'examples & case studies',
-        'dates & figures',
-      ])
-      setTargetAudience('academic')
-      return
-    }
-
-    setSummaryLength([50])
-    setOutputFormat('cornell')
-    setFocusAreas([
-      'key concepts',
-      'definitions & terms',
-      'examples & case studies',
-      'dates & figures',
-    ])
-    setTargetAudience('academic')
-  }
 
   const toggleFocusArea = (area: string) => {
     setFocusAreas((prev) =>
@@ -150,7 +72,7 @@ export function ContentInputPage() {
       setValidationError('Please enter a YouTube URL')
       return
     }
-    if (!YOUTUBE_URL_REGEX.test(url)) {
+    if (!/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+$/.test(url)) {
       setValidationError('Please enter a valid YouTube URL')
       return
     }
@@ -159,55 +81,23 @@ export function ContentInputPage() {
     try {
       const data = await api.content.validateYouTube(url)
       setIsValid(true)
+      setIsValid(true)
       setVideoMeta(data.metadata)
       setContentId(data.content_id)
       toast.success('Video validated successfully!')
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Could not validate video'
-      setValidationError(message)
-      toast.error(message)
+    } catch (err: any) {
+      setValidationError(err.message || 'Invalid URL')
+      toast.error(err.message || 'Could not validate video')
       setIsValid(false)
     } finally {
       setIsValidating(false)
     }
   }
 
-  const handleFileSelect = (file: File | null) => {
-    if (!file) return
-
-    const error = validateSelectedFile(file)
-    if (error) {
-      setUploadedFile(null)
-      setFileError(error)
-      toast.error(error)
-      return
-    }
-
-    setFileError('')
-    setUploadedFile(file)
-  }
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleFileSelect(e.target.files?.[0] || null)
-  }
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragActive(false)
-    handleFileSelect(e.dataTransfer.files?.[0] || null)
-  }
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragActive(true)
-  }
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragActive(false)
+    if (e.target.files?.[0]) {
+      setUploadedFile(e.target.files[0])
+    }
   }
 
   const handleGenerate = async () => {
@@ -249,10 +139,9 @@ export function ContentInputPage() {
         toast.success('Summary generation started!')
         navigate(`/processing/${result.job_id}`)
       }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to start generation'
-      setValidationError(message)
-      toast.error(message)
+    } catch (err: any) {
+      setValidationError(err.message || 'Generation failed')
+      toast.error(err.message || 'Failed to start generation')
     } finally {
       setIsGenerating(false)
     }
@@ -270,26 +159,6 @@ export function ContentInputPage() {
           </p>
         </div>
 
-        <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {[
-            { label: '1. Source', done: sourceReady || !!youtubeUrl || !!uploadedFile },
-            { label: '2. Configure', done: !!outputFormat && focusAreas.length > 0 },
-            { label: '3. Generate', done: false },
-          ].map((step) => (
-            <div
-              key={step.label}
-              className={cn(
-                'rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
-                step.done
-                  ? 'bg-primary/10 border-primary/30 text-primary'
-                  : 'bg-background text-muted-foreground',
-              )}
-            >
-              {step.label}
-            </div>
-          ))}
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left Column - Source Input (55%) */}
           <div className="lg:col-span-7 space-y-6">
@@ -303,11 +172,7 @@ export function ContentInputPage() {
               <CardContent>
                 <Tabs
                   defaultValue="youtube"
-                  onValueChange={(value) => {
-                    setSourceType(value)
-                    setValidationError('')
-                    setFileError('')
-                  }}
+                  onValueChange={setSourceType}
                   className="w-full"
                 >
                   <TabsList className="grid w-full grid-cols-2 mb-6">
@@ -338,7 +203,6 @@ export function ContentInputPage() {
                           onChange={(e) => {
                             setYoutubeUrl(e.target.value)
                             setIsValid(false)
-                            setValidationError('')
                           }}
                           className="flex-1"
                         />
@@ -353,12 +217,6 @@ export function ContentInputPage() {
                         <p className="text-sm text-red-500 mt-2 animate-in fade-in slide-in-from-top-1">
                           {validationError}
                         </p>
-                      )}
-                      {!validationError && youtubeUrl.trim() && !YOUTUBE_URL_REGEX.test(youtubeUrl.trim()) && (
-                        <p className="text-xs text-amber-600 mt-2">URL should be a valid YouTube link.</p>
-                      )}
-                      {!validationError && isValid && (
-                        <p className="text-xs text-green-600 mt-2">Source validated and ready to generate.</p>
                       )}
                     </div>
 
@@ -388,24 +246,8 @@ export function ContentInputPage() {
 
                   <TabsContent value="file" className="space-y-4">
                     <div
-                      className={cn(
-                        'border-2 border-dashed rounded-lg p-12 text-center transition-colors cursor-pointer',
-                        isDragActive
-                          ? 'border-primary bg-primary/5'
-                          : 'border-muted-foreground/25 hover:bg-muted/30',
-                      )}
+                      className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 text-center hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => fileInputRef.current?.click()}
-                      onDrop={handleDrop}
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          fileInputRef.current?.click()
-                        }
-                      }}
                     >
                       <div className="mx-auto h-12 w-12 rounded-full bg-secondary flex items-center justify-center mb-4">
                         <UploadCloud className="h-6 w-6 text-muted-foreground" />
@@ -414,13 +256,8 @@ export function ContentInputPage() {
                         Click to upload or drag and drop
                       </h3>
                       <p className="text-sm text-muted-foreground mb-4">
-                        MP3, WAV, MP4, PDF, DOCX, TXT (max 100MB)
+                        MP3, MP4, PDF, or DOCX (max 500MB)
                       </p>
-                      <div className="flex flex-wrap gap-2 justify-center mb-4">
-                        {ALLOWED_EXTENSIONS.map((ext) => (
-                          <Badge key={ext} variant="secondary" className="text-[11px] uppercase">.{ext}</Badge>
-                        ))}
-                      </div>
                       <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                         Select File
                       </Button>
@@ -431,24 +268,10 @@ export function ContentInputPage() {
                         className="hidden"
                         onChange={handleFileChange}
                       />
-                      {fileError && (
-                        <p className="text-xs text-destructive mt-3">{fileError}</p>
-                      )}
                       {uploadedFile && (
-                        <div className="mt-4 rounded-md border bg-background p-3 flex items-center justify-between gap-3 text-left">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className="h-8 w-8 rounded-md bg-secondary flex items-center justify-center text-muted-foreground">
-                              <FileText className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">{uploadedFile.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {getFileExtension(uploadedFile.name).toUpperCase()} • {formatFileSize(uploadedFile.size)}
-                              </p>
-                            </div>
-                          </div>
-                          <Badge variant="secondary" className="text-green-700 bg-green-50 border-green-200">Ready</Badge>
-                        </div>
+                        <p className="text-xs text-muted-foreground mt-3">
+                          Selected: {uploadedFile.name}
+                        </p>
                       )}
                     </div>
                   </TabsContent>
@@ -462,9 +285,12 @@ export function ContentInputPage() {
                 size="lg"
                 className="w-full"
                 onClick={handleGenerate}
-                disabled={!canGenerate}
+                disabled={
+                  isGenerating ||
+                  (sourceType === 'youtube' ? !isValid : !uploadedFile)
+                }
               >
-                {isGenerating ? 'Generating...' : 'Generate Summary'}
+                Generate Summary
               </Button>
             </div>
           </div>
@@ -472,35 +298,6 @@ export function ContentInputPage() {
           {/* Right Column - Configuration (45%) */}
           <div className="lg:col-span-5 space-y-6">
             <div className="space-y-6">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base uppercase tracking-wider text-muted-foreground font-semibold">
-                    Presets
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {[
-                    { id: 'quick' as SummaryPreset, title: 'Quick Review' },
-                    { id: 'exam' as SummaryPreset, title: 'Exam Prep' },
-                    { id: 'deep' as SummaryPreset, title: 'Deep Study' },
-                  ].map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => handlePresetSelect(preset.id)}
-                      className={cn(
-                        'rounded-lg border px-3 py-2 text-sm font-medium text-left transition-colors',
-                        selectedPreset === preset.id
-                          ? 'border-primary bg-primary/5 text-primary'
-                          : 'hover:bg-secondary/40',
-                      )}
-                    >
-                      {preset.title}
-                    </button>
-                  ))}
-                </CardContent>
-              </Card>
-
               {/* Summary Settings */}
               <Card>
                 <CardHeader className="pb-3">
@@ -716,24 +513,16 @@ export function ContentInputPage() {
                   size="lg"
                   className="w-full text-base h-12 shadow-lg hover:shadow-xl transition-all"
                   onClick={handleGenerate}
-                  disabled={!canGenerate}
+                  disabled={
+                    isGenerating ||
+                    (sourceType === 'youtube' ? !isValid : !uploadedFile)
+                  }
                 >
-                  {isGenerating ? 'Generating...' : 'Generate Summary'}
+                  Generate Summary
                 </Button>
                 <p className="text-xs text-center text-muted-foreground mt-3">
                   Estimated processing time: ~2 minutes
                 </p>
-              </div>
-
-              <div className="hidden lg:block fixed bottom-5 right-6 z-40">
-                <Button
-                  size="lg"
-                  className="h-12 px-6 shadow-xl"
-                  onClick={handleGenerate}
-                  disabled={!canGenerate}
-                >
-                  {isGenerating ? 'Generating...' : 'Generate Summary'}
-                </Button>
               </div>
             </div>
           </div>
