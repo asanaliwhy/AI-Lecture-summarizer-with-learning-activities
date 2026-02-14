@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -222,9 +223,66 @@ func (h *SummaryHandler) Regenerate(w http.ResponseWriter, r *http.Request) {
 
 	userID := middleware.GetUserID(r.Context())
 
+	summary, err := h.summaryRepo.GetByID(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Summary not found", r))
+		return
+	}
+
+	if summary.UserID != userID {
+		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
+		return
+	}
+
 	// Read new config
 	var req models.GenerateSummaryRequest
-	json.NewDecoder(r.Body).Decode(&req)
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+			writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+			return
+		}
+	}
+
+	// Fallback to existing summary config when body is empty or partially missing
+	if len(summary.ConfigJSON) > 0 {
+		var existing models.GenerateSummaryRequest
+		if err := json.Unmarshal(summary.ConfigJSON, &existing); err == nil {
+			if req.ContentID == uuid.Nil {
+				req.ContentID = existing.ContentID
+			}
+			if req.Format == "" {
+				req.Format = existing.Format
+			}
+			if req.Length == "" {
+				req.Length = existing.Length
+			}
+			if len(req.FocusAreas) == 0 {
+				req.FocusAreas = existing.FocusAreas
+			}
+			if req.TargetAudience == "" {
+				req.TargetAudience = existing.TargetAudience
+			}
+			if req.Language == "" {
+				req.Language = existing.Language
+			}
+		}
+	}
+
+	if req.ContentID == uuid.Nil && summary.ContentID != nil {
+		req.ContentID = *summary.ContentID
+	}
+	if req.Format == "" {
+		req.Format = summary.Format
+	}
+	if req.Length == "" {
+		req.Length = summary.LengthSetting
+	}
+	if req.Language == "" {
+		req.Language = "en"
+	}
+	if req.FocusAreas == nil {
+		req.FocusAreas = []string{}
+	}
 
 	configBytes, _ := json.Marshal(req)
 

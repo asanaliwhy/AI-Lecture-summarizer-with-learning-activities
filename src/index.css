@@ -74,8 +74,74 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .smart-summary-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  .smart-summary-scroll::-webkit-scrollbar {
+    height: 10px;
+  }
+
+  .smart-summary-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .smart-summary-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .smart-summary-content {
+    @apply p-4 md:p-6;
+  }
+
+  .smart-summary-content table {
+    @apply w-full border-separate border-spacing-0 overflow-hidden rounded-lg border border-slate-300 bg-white text-[14px];
+    min-width: 640px;
+  }
+
+  .smart-summary-content thead th {
+    @apply sticky top-0 z-10 bg-slate-100 font-semibold text-slate-900 border-b border-slate-300;
+  }
+
+  .smart-summary-content th,
+  .smart-summary-content td {
+    @apply px-3 py-2.5 align-top border-r border-slate-200;
+  }
+
+  .smart-summary-content th:last-child,
+  .smart-summary-content td:last-child {
+    @apply border-r-0;
+  }
+
+  .smart-summary-content tbody tr {
+    @apply border-b border-slate-200;
+  }
+
+  .smart-summary-content tbody tr:nth-child(even) {
+    @apply bg-slate-50/70;
+  }
+
+  .smart-summary-content tbody tr:last-child {
+    @apply border-b-0;
+  }
+
+  .smart-summary-content blockquote {
+    @apply border-l-4 border-blue-200 bg-blue-50/50 px-4 py-3 rounded-r-md text-slate-700;
+  }
+
+  .smart-summary-content code {
+    @apply bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded text-[0.9em];
   }
 }

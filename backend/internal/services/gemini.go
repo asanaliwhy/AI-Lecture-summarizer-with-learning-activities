@@ -143,6 +143,21 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		rawText = "We could not generate a summary for this content. The transcript was likely unavailable or the content was blocked by safety filters."
 	}
 
+	if config.Format == "smart" && !containsMarkdownTable(rawText) {
+		restructurePrompt := "Rewrite this Smart Summary in clean Markdown. Preserve all key information, and include at least one markdown table with 2+ columns and 3+ data rows. If entities are not obvious, create a table with columns: Concept | Explanation. Return markdown only:\n\n" + rawText
+		resp2, err := s.model.GenerateContent(ctx, genai.Text(restructurePrompt))
+		if err == nil {
+			rawText2 := extractText(resp2)
+			if strings.TrimSpace(rawText2) != "" {
+				rawText = rawText2
+			}
+		}
+
+		if !containsMarkdownTable(rawText) {
+			rawText = ensureSmartSummaryTable(rawText)
+		}
+	}
+
 	// Parse Cornell if applicable
 	var cues, notes, summaryText *string
 	if config.Format == "cornell" {
@@ -459,6 +474,63 @@ func parseCornell(text string) (cues, notes, summary string) {
 	return
 }
 
+func containsMarkdownTable(text string) bool {
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	for i := 0; i < len(lines)-1; i++ {
+		head := strings.TrimSpace(lines[i])
+		sep := strings.TrimSpace(lines[i+1])
+		if strings.HasPrefix(head, "|") && strings.HasSuffix(head, "|") {
+			if strings.HasPrefix(sep, "|") && strings.HasSuffix(sep, "|") && strings.Contains(sep, "---") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func ensureSmartSummaryTable(text string) string {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	if containsMarkdownTable(normalized) {
+		return normalized
+	}
+
+	lines := strings.Split(normalized, "\n")
+	rows := make([]string, 0, 3)
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "|") {
+			continue
+		}
+		trimmed = strings.TrimPrefix(trimmed, "- ")
+		trimmed = strings.TrimPrefix(trimmed, "• ")
+		if trimmed == "" {
+			continue
+		}
+		rows = append(rows, trimmed)
+		if len(rows) == 3 {
+			break
+		}
+	}
+
+	for len(rows) < 3 {
+		rows = append(rows, "Key takeaway")
+	}
+
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(normalized))
+	b.WriteString("\n\n## Summary Table\n")
+	b.WriteString("| Concept | Explanation |\n")
+	b.WriteString("| --- | --- |\n")
+	for i, row := range rows {
+		b.WriteString(fmt.Sprintf("| Point %d | %s |\n", i+1, strings.ReplaceAll(row, "|", "/")))
+	}
+
+	return b.String()
+}
+
 func buildSummaryPrompt(format, length string, focusAreas []string, audience, language, transcript string) string {
 	var b strings.Builder
 
@@ -478,7 +550,7 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Format: Create a Smart Summary in Markdown with clear section headings and concise high-value synthesis.\n")
 		b.WriteString("Required sections (in this order):\n")
 		b.WriteString("1) Summary of Video Content\n2) Key Insights and Core Concepts\n3) Brain Structure and Functions (as a markdown table when entities/parts exist)\n4) Additional Interesting Facts\n5) Conclusions\n6) Summary Highlights\n\n")
-		b.WriteString("Output rules for Smart Summary: Use markdown headings and bullets. Include at least one markdown table if the transcript contains categorisable entities (e.g., parts, methods, stages, comparisons). Keep statements factual and avoid unsupported claims.\n\n")
+		b.WriteString("Output rules for Smart Summary: Use markdown headings and bullets. ALWAYS include at least one markdown table with at least 2 columns and 3 data rows. If the transcript has no obvious entities, create a table with columns: Concept | Explanation. Keep statements factual and avoid unsupported claims.\n\n")
 	}
 
 	// Layer 3 — Length (strict bands)

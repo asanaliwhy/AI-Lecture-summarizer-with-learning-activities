@@ -163,12 +163,19 @@ export interface SummarySectionResponse {
 
 export interface SummaryListItemResponse {
     id: string
+    content_id?: string
     title?: string
     source?: string
     source_type?: string
     config?: {
         source?: string
         source_type?: string
+        content_id?: string
+        format?: string
+        length?: string
+        focus_areas?: string[]
+        target_audience?: string
+        language?: string
     }
     tags?: string[]
     is_favorite?: boolean
@@ -182,7 +189,8 @@ export interface SummaryListItemResponse {
 }
 
 export interface SummaryDetailResponse extends SummaryListItemResponse {
-    format?: 'cornell' | 'bullets' | 'paragraph' | string
+    format?: 'cornell' | 'bullets' | 'paragraph' | 'smart' | string
+    length_setting?: string
     content_raw?: string
     content?: string
     body?: string
@@ -286,8 +294,11 @@ export const api = {
         toggleFavorite: (id: string) =>
             apiFetch(`/summaries/${id}/favorite`, { method: 'PUT' }),
 
-        regenerate: (id: string) =>
-            apiFetch<{ job_id: string; summary_id: string }>(`/summaries/${id}/regenerate`, { method: 'POST' }),
+        regenerate: (id: string, data?: Partial<GenerateSummaryPayload>) =>
+            apiFetch<{ job_id: string; summary_id: string }>(`/summaries/${id}/regenerate`, {
+                method: 'POST',
+                body: JSON.stringify(data || {}),
+            }),
     },
 
     // Quizzes

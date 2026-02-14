@@ -377,7 +377,24 @@ export function SummaryPage() {
     if (!id) return
     setIsRegenerating(true)
     try {
-      const { job_id } = await api.summaries.regenerate(id)
+      const config = (summary?.config || {}) as {
+        content_id?: string
+        format?: string
+        length?: string
+        focus_areas?: string[]
+        target_audience?: string
+        language?: string
+      }
+      const payload = {
+        content_id: summary?.content_id || config.content_id,
+        format: summary?.format || config.format,
+        length: summary?.length_setting || config.length,
+        focus_areas: config.focus_areas || [],
+        target_audience: config.target_audience || '',
+        language: config.language || 'en',
+      }
+
+      const { job_id } = await api.summaries.regenerate(id, payload)
       if (job_id) {
         navigate(`/processing/${job_id}`)
       }
@@ -530,6 +547,8 @@ export function SummaryPage() {
   const smartSummaryHtml = summary.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
   const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
   const isSmartSummary = summary.format === 'smart'
+  const leftColumnClass = isSmartSummary ? 'lg:col-span-2 space-y-6' : 'lg:col-span-3 space-y-6'
+  const centerColumnClass = isSmartSummary ? 'lg:col-span-8' : 'lg:col-span-7'
 
   // Parse content sections
   const sections: SummarySectionResponse[] = summary.sections || []
@@ -537,7 +556,7 @@ export function SummaryPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-[1380px] mx-auto pb-8">
+      <div className="max-w-[1680px] mx-auto pb-8">
         {/* Top Header / Toolbar */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 md:mb-10">
           <div className="flex-1 min-w-0">
@@ -576,7 +595,7 @@ export function SummaryPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8">
           {/* Left Sidebar - Metadata (20%) */}
-          <div className="lg:col-span-3 space-y-6">
+          <div className={leftColumnClass}>
             <Card className="border-border/70 shadow-sm">
               <CardContent className="p-5 space-y-5">
                 <div>
@@ -664,16 +683,14 @@ export function SummaryPage() {
           </div>
 
           {/* Center - Content (60%) */}
-          <div className="lg:col-span-7">
+          <div className={centerColumnClass}>
             <Card className="min-h-[620px] shadow-sm border-border/70">
               <CardContent className="p-6 md:p-10 lg:p-12">
                 {isSmartSummary ? (
-                  <div className="rounded-2xl border border-[#2b416f] bg-[#0b1736] px-5 py-6 md:px-7 md:py-7 shadow-sm">
-                    <div className="overflow-x-auto">
-                      <div className="prose max-w-none prose-invert prose-headings:font-bold prose-headings:tracking-tight prose-headings:text-slate-100 prose-p:text-slate-200 prose-strong:text-slate-100 prose-li:text-slate-200 prose-ul:my-2 prose-ol:my-2 prose-table:w-full prose-table:border prose-table:border-[#2b416f] prose-table:rounded-md prose-th:border prose-th:border-[#2b416f] prose-th:bg-[#27365a] prose-th:text-slate-100 prose-th:px-3 prose-th:py-2 prose-td:border prose-td:border-[#2b416f] prose-td:px-3 prose-td:py-2">
-                        <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
-                      </div>
-                    </div>
+                  <div className="smart-summary-scroll overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <article className="smart-summary-content prose max-w-none prose-slate prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:mt-10 prose-h2:mb-3 prose-h3:mt-7 prose-h3:mb-2 prose-p:my-3 prose-p:leading-7 prose-strong:text-slate-900 prose-li:leading-7 prose-ul:my-3 prose-ol:my-3 prose-hr:my-8 prose-a:text-blue-700 hover:prose-a:text-blue-800">
+                      <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
+                    </article>
                   </div>
                 ) : hasSections ? (
                   <div className="space-y-10">
