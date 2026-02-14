@@ -802,7 +802,7 @@ export function DashboardPage() {
                 </div>
               </CardHeader>
 
-              <CardContent className="space-y-6 py-1">
+              <CardContent className="space-y-6 px-6 pb-6 pt-1">
                 <div className="space-y-4">
                   <button
                     type="button"
@@ -892,7 +892,7 @@ export function DashboardPage() {
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
-                          <Clock className="h-5 w-5" />
+                          <BookOpen className="h-5 w-5" />
                         </div>
                         <div>
                           <p className="font-semibold text-sm">Flashcards Created</p>
