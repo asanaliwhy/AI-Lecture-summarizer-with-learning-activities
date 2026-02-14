@@ -567,20 +567,6 @@ export function SummaryPage() {
                   Export
                 </Button>
                 <Button
-                  variant="ghost"
-                  className="w-full justify-start text-muted-foreground hover:text-foreground"
-                  size="sm"
-                  disabled={isRegenerating}
-                  onClick={handleRegenerate}
-                >
-                  {isRegenerating ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                  )}
-                  Regenerate
-                </Button>
-                <Button
                   variant="destructive"
                   className="w-full justify-start"
                   size="sm"
@@ -593,6 +579,20 @@ export function SummaryPage() {
                     <Trash2 className="h-4 w-4 mr-2" />
                   )}
                   Delete
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-muted-foreground hover:text-foreground"
+                  size="sm"
+                  disabled={isRegenerating}
+                  onClick={handleRegenerate}
+                >
+                  {isRegenerating ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                  )}
+                  Regenerate
                 </Button>
               </div>
             </div>
