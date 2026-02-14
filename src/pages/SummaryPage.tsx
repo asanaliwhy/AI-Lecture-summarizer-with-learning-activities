@@ -257,6 +257,8 @@ export function SummaryPage() {
   const createdAt = summary.created_at ? new Date(summary.created_at).toLocaleDateString() : 'Recently'
   const duration = summary.source_duration || summary.duration || ''
   const sourceUrl = summary.source_url || ''
+  const sourceRaw = String(summary.source || summary.source_type || '').toLowerCase()
+  const sourceLabel = sourceRaw.includes('youtube') || sourceRaw.includes('youtu') ? 'YouTube' : 'Document'
   const tags: string[] = summary.tags || []
   const contentRaw: string = summary.content_raw || summary.content || summary.body || ''
   const cornellCues: string = summary.cornell_cues || ''
@@ -342,10 +344,10 @@ export function SummaryPage() {
                       className="flex items-center gap-2 text-sm font-medium text-primary hover:underline truncate"
                     >
                       <ExternalLink className="h-3 w-3" />
-                      {summary.source_type || 'YouTube Video'}
+                      {sourceLabel}
                     </a>
                   ) : (
-                    <span className="text-sm text-muted-foreground">Uploaded content</span>
+                    <span className="text-sm text-muted-foreground">{sourceLabel}</span>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
