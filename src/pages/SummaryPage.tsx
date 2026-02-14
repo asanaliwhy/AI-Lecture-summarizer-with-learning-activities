@@ -668,8 +668,12 @@ export function SummaryPage() {
             <Card className="min-h-[620px] shadow-sm border-border/70">
               <CardContent className="p-6 md:p-10 lg:p-12">
                 {isSmartSummary ? (
-                  <div className="prose prose-slate max-w-none prose-headings:font-bold prose-headings:tracking-tight prose-table:w-full prose-table:border prose-th:border prose-td:border prose-th:bg-muted/40 prose-th:px-3 prose-th:py-2 prose-td:px-3 prose-td:py-2">
-                    <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
+                  <div className="rounded-2xl border border-[#2b416f] bg-[#0b1736] px-5 py-6 md:px-7 md:py-7 shadow-sm">
+                    <div className="overflow-x-auto">
+                      <div className="prose max-w-none prose-invert prose-headings:font-bold prose-headings:tracking-tight prose-headings:text-slate-100 prose-p:text-slate-200 prose-strong:text-slate-100 prose-li:text-slate-200 prose-ul:my-2 prose-ol:my-2 prose-table:w-full prose-table:border prose-table:border-[#2b416f] prose-table:rounded-md prose-th:border prose-th:border-[#2b416f] prose-th:bg-[#27365a] prose-th:text-slate-100 prose-th:px-3 prose-th:py-2 prose-td:border prose-td:border-[#2b416f] prose-td:px-3 prose-td:py-2">
+                        <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
+                      </div>
+                    </div>
                   </div>
                 ) : hasSections ? (
                   <div className="space-y-10">
