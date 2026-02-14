@@ -236,8 +236,9 @@ func (h *DashboardHandler) Streak(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	ctx := r.Context()
 
-	rows, err := h.pool.Query(ctx, `
-		WITH activity_days AS (
+	var streak int
+	err := h.pool.QueryRow(ctx, `
+		WITH RECURSIVE activity_days AS (
 			SELECT DISTINCT DATE(created_at) AS d FROM summaries WHERE user_id = $1
 			UNION
 			SELECT DISTINCT DATE(started_at) FROM quiz_attempts WHERE user_id = $1
@@ -245,62 +246,25 @@ func (h *DashboardHandler) Streak(w http.ResponseWriter, r *http.Request) {
 			SELECT DISTINCT DATE(last_reviewed_at) FROM flashcard_cards fc
 			JOIN flashcard_decks fd ON fc.deck_id = fd.id
 			WHERE fd.user_id = $1 AND fc.last_reviewed_at IS NOT NULL
+		),
+		start_day AS (
+			SELECT CASE
+				WHEN EXISTS (SELECT 1 FROM activity_days WHERE d = CURRENT_DATE) THEN CURRENT_DATE
+				WHEN EXISTS (SELECT 1 FROM activity_days WHERE d = CURRENT_DATE - INTERVAL '1 day') THEN (CURRENT_DATE - INTERVAL '1 day')::date
+				ELSE NULL::date
+			END AS d
+		),
+		streak_days AS (
+			SELECT d FROM start_day WHERE d IS NOT NULL
+			UNION ALL
+			SELECT (sd.d - INTERVAL '1 day')::date
+			FROM streak_days sd
+			JOIN activity_days a ON a.d = (sd.d - INTERVAL '1 day')::date
 		)
-		SELECT d FROM activity_days ORDER BY d DESC
-	`, userID)
+		SELECT COUNT(*) FROM streak_days
+	`, userID).Scan(&streak)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to load streak", r))
-		return
-	}
-	defer rows.Close()
-
-	truncateDay := func(t time.Time) time.Time {
-		y, m, d := t.Date()
-		return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
-	}
-
-	expectedDay := truncateDay(time.Now())
-	streak := 0
-	started := false
-
-	for rows.Next() {
-		var day time.Time
-		if err := rows.Scan(&day); err != nil {
-			writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to parse streak", r))
-			return
-		}
-
-		activityDay := truncateDay(day)
-
-		if !started {
-			if activityDay.Equal(expectedDay) {
-				started = true
-				streak = 1
-				expectedDay = expectedDay.AddDate(0, 0, -1)
-				continue
-			}
-
-			yesterday := expectedDay.AddDate(0, 0, -1)
-			if activityDay.Equal(yesterday) {
-				started = true
-				streak = 1
-				expectedDay = yesterday.AddDate(0, 0, -1)
-			}
-
-			break
-		}
-
-		if activityDay.Equal(expectedDay) {
-			streak++
-			expectedDay = expectedDay.AddDate(0, 0, -1)
-			continue
-		}
-
-		break
-	}
-
-	if err := rows.Err(); err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to finalize streak", r))
 		return
 	}
 
