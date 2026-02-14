@@ -70,11 +70,11 @@ export function ProcessingPage() {
     return [
       {
         title: 'Analyzing Content',
-        description: 'Extracting audio track and identifying content',
+        description: 'Detecting source type and preparing extraction',
       },
       {
-        title: 'Extracting Transcript',
-        description: 'Converting speech to text with high accuracy',
+        title: 'Extracting Source Text',
+        description: 'Extracting text from your document or transcript from media',
       },
       {
         title: 'Generating Summary',
