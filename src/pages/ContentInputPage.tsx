@@ -416,6 +416,29 @@ export function ContentInputPage() {
                         <div className="h-2 w-2 rounded-full bg-primary" />
                       )}
                     </div>
+
+                    <div
+                      className={cn(
+                        'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
+                        outputFormat === 'smart'
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                          : 'hover:bg-secondary/50',
+                      )}
+                      onClick={() => setOutputFormat('smart')}
+                    >
+                      <div className="h-8 w-8 rounded bg-background border flex items-center justify-center text-primary">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">Smart Summary</p>
+                        <p className="text-xs text-muted-foreground">
+                          AI-optimized summary with key insights and comparison tables
+                        </p>
+                      </div>
+                      {outputFormat === 'smart' && (
+                        <div className="h-2 w-2 rounded-full bg-primary" />
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>

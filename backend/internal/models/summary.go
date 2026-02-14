@@ -13,7 +13,7 @@ type Summary struct {
 	ContentID      *uuid.UUID      `json:"content_id"`
 	Source         string          `json:"source"`
 	Title          string          `json:"title"`
-	Format         string          `json:"format"` // "cornell" | "bullets" | "paragraph"
+	Format         string          `json:"format"` // "cornell" | "bullets" | "paragraph" | "smart"
 	LengthSetting  string          `json:"length_setting"`
 	ConfigJSON     json.RawMessage `json:"config"`
 	ContentRaw     *string         `json:"content_raw"`

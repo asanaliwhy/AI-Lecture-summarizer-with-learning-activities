@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 import DOMPurify from 'dompurify'
+import { marked } from 'marked'
 import { api, type SummaryDetailResponse, type SummarySectionResponse } from '../lib/api'
 import { useStudySession } from '../lib/useStudySession'
 import { AppLayout } from '../components/layout/AppLayout'
@@ -165,6 +166,13 @@ function normalizeCornellText(value: string): string {
   }
 
   return normalizeGeneralSummaryText(out.join('\n').replace(/\n{3,}/g, '\n\n').trim())
+}
+
+function renderSmartSummaryHtml(value: string): string {
+  if (!value) return ''
+
+  const html = marked.parse(value, { async: false }) as string
+  return DOMPurify.sanitize(html)
 }
 
 export function SummaryPage() {
@@ -367,7 +375,9 @@ export function SummaryPage() {
   const renderedCornellSummary = normalizeCornellText(cornellSummary)
   const renderedContentRaw = normalizeGeneralSummaryText(contentRaw)
   const renderedSections = splitIntoSections(renderedContentRaw)
+  const smartSummaryHtml = summary.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
   const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
+  const isSmartSummary = summary.format === 'smart'
 
   // Parse content sections
   const sections: SummarySectionResponse[] = summary.sections || []
@@ -505,7 +515,11 @@ export function SummaryPage() {
           <div className="lg:col-span-7">
             <Card className="min-h-[620px] shadow-sm border-border/70">
               <CardContent className="p-6 md:p-10 lg:p-12">
-                {hasSections ? (
+                {isSmartSummary ? (
+                  <div className="prose prose-slate max-w-none prose-headings:font-bold prose-headings:tracking-tight prose-table:w-full prose-table:border prose-th:border prose-td:border prose-th:bg-muted/40 prose-th:px-3 prose-th:py-2 prose-td:px-3 prose-td:py-2">
+                    <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
+                  </div>
+                ) : hasSections ? (
                   <div className="space-y-10">
                     {sections.map((section, idx: number) => (
                       <div key={idx} className="border-b border-border/60 pb-8 last:border-b-0">

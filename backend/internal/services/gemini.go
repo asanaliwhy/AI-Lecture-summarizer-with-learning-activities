@@ -474,6 +474,11 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Format: Use structured bullet points with hierarchical numbering and sub-bullets.\n\n")
 	case "paragraph":
 		b.WriteString("Format: Write in flowing academic prose with clear subheadings.\n\n")
+	case "smart":
+		b.WriteString("Format: Create a Smart Summary in Markdown with clear section headings and concise high-value synthesis.\n")
+		b.WriteString("Required sections (in this order):\n")
+		b.WriteString("1) Summary of Video Content\n2) Key Insights and Core Concepts\n3) Brain Structure and Functions (as a markdown table when entities/parts exist)\n4) Additional Interesting Facts\n5) Conclusions\n6) Summary Highlights\n\n")
+		b.WriteString("Output rules for Smart Summary: Use markdown headings and bullets. Include at least one markdown table if the transcript contains categorisable entities (e.g., parts, methods, stages, comparisons). Keep statements factual and avoid unsupported claims.\n\n")
 	}
 
 	// Layer 3 — Length (strict bands)
