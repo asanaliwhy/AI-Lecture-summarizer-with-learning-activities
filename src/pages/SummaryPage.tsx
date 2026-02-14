@@ -341,13 +341,13 @@ export function SummaryPage() {
                       href={sourceUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-2 text-sm font-medium text-primary hover:underline truncate"
+                      className="flex items-center gap-2 text-base font-semibold text-primary hover:underline truncate"
                     >
-                      <ExternalLink className="h-3 w-3" />
+                      <ExternalLink className="h-4 w-4" />
                       {sourceLabel}
                     </a>
                   ) : (
-                    <span className="text-sm text-muted-foreground">{sourceLabel}</span>
+                    <span className="text-base font-semibold text-foreground">{sourceLabel}</span>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
