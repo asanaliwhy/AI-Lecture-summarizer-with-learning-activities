@@ -303,20 +303,62 @@ func (h *DashboardHandler) Activity(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	ctx := r.Context()
 
-	// Weekly activity (Mon-Sun)
+	// Weekly activity (Sun-Sat in backend response; frontend maps to Mon-first)
 	activity := make([]float64, 7)
-	rows, _ := h.pool.Query(ctx, `
-		SELECT EXTRACT(DOW FROM created_at)::int as dow, COUNT(*) 
-		FROM summaries WHERE user_id = $1 AND created_at >= CURRENT_DATE - INTERVAL '7 days'
-		GROUP BY dow`, userID)
+	rows, err := h.pool.Query(ctx, `
+		SELECT
+			EXTRACT(DOW FROM started_at)::int AS dow,
+			COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0 AS hours
+		FROM study_sessions
+		WHERE user_id = $1
+		  AND started_at >= CURRENT_DATE - INTERVAL '7 days'
+		GROUP BY dow
+	`, userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to load activity", r))
+		return
+	}
+
+	totalHours := 0.0
 	for rows.Next() {
-		var dow, count int
-		rows.Scan(&dow, &count)
+		var dow int
+		var hours float64
+		if err := rows.Scan(&dow, &hours); err != nil {
+			rows.Close()
+			writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to parse activity", r))
+			return
+		}
 		if dow >= 0 && dow < 7 {
-			activity[dow] = float64(count) * 0.5
+			if hours < 0 {
+				hours = 0
+			}
+			activity[dow] = hours
+			totalHours += hours
 		}
 	}
 	rows.Close()
+
+	if totalHours <= 0 {
+		// Backward compatibility fallback for older accounts without tracked study sessions yet.
+		fallbackRows, fallbackErr := h.pool.Query(ctx, `
+			SELECT EXTRACT(DOW FROM created_at)::int AS dow, COUNT(*)
+			FROM summaries
+			WHERE user_id = $1
+			  AND created_at >= CURRENT_DATE - INTERVAL '7 days'
+			GROUP BY dow
+		`, userID)
+		if fallbackErr == nil {
+			for fallbackRows.Next() {
+				var dow, count int
+				if err := fallbackRows.Scan(&dow, &count); err == nil {
+					if dow >= 0 && dow < 7 {
+						activity[dow] = float64(count) * 0.5
+					}
+				}
+			}
+			fallbackRows.Close()
+		}
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"activity": activity})
 }
