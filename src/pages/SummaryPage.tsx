@@ -1006,68 +1006,31 @@ export function SummaryPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </AppLayout>
-    )
-  }
-
-  if (loadError) {
-    return (
-      <AppLayout>
-        <div className="flex flex-col items-center justify-center h-96 text-center">
-          <h2 className="text-2xl font-bold mb-2">Failed to load summary</h2>
-          <p className="text-muted-foreground mb-6">{loadError}</p>
-          <div className="flex items-center gap-3">
-            <Button onClick={loadSummary}>Retry</Button>
-            <Button variant="outline" onClick={() => navigate('/summaries')}>Back to Summaries</Button>
-          </div>
-        </div>
-      </AppLayout>
-    )
-  }
-
-  if (isNotFound || !summary) {
-    return (
-      <AppLayout>
-        <div className="flex flex-col items-center justify-center h-96 text-center">
-          <h2 className="text-2xl font-bold mb-2">Summary Not Found</h2>
-          <p className="text-muted-foreground mb-6">This summary may have been deleted or doesn't exist.</p>
-          <Button onClick={() => navigate('/summaries')}>Back to Summaries</Button>
-        </div>
-      </AppLayout>
-    )
-  }
-
-  const createdAt = summary.created_at ? new Date(summary.created_at).toLocaleDateString() : 'Recently'
-  const duration = summary.source_duration || summary.duration || ''
-  const sourceUrl = summary.source_url || ''
-  const sourceRaw = String(summary.source || summary.source_type || '').toLowerCase()
+  const createdAt = summary?.created_at ? new Date(summary.created_at).toLocaleDateString() : 'Recently'
+  const duration = summary?.source_duration || summary?.duration || ''
+  const sourceUrl = summary?.source_url || ''
+  const sourceRaw = String(summary?.source || summary?.source_type || '').toLowerCase()
   const isYouTubeSource = sourceRaw.includes('youtube') || sourceRaw.includes('youtu')
   const sourceLabel = isYouTubeSource ? 'YouTube' : 'Document'
-  const tags: string[] = summary.tags || []
-  const contentRaw: string = summary.content_raw || summary.content || summary.body || ''
-  const cornellCues: string = summary.cornell_cues || ''
-  const cornellNotes: string = summary.cornell_notes || ''
-  const cornellSummary: string = summary.cornell_summary || ''
+  const tags: string[] = summary?.tags || []
+  const contentRaw: string = summary?.content_raw || summary?.content || summary?.body || ''
+  const cornellCues: string = summary?.cornell_cues || ''
+  const cornellNotes: string = summary?.cornell_notes || ''
+  const cornellSummary: string = summary?.cornell_summary || ''
   const renderedCornellCues = normalizeCornellText(cornellCues)
   const renderedCornellNotes = normalizeCornellText(cornellNotes)
   const renderedCornellSummary = normalizeCornellText(cornellSummary)
   const renderedContentRaw = normalizeGeneralSummaryText(contentRaw)
   const renderedSections = splitIntoSections(renderedContentRaw)
-  const smartSummaryHtml = summary.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
-  const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
-  const isCornellSummary = summary.format === 'cornell'
-  const isParagraphSummary = summary.format === 'paragraph'
-  const isBulletSummary = summary.format === 'bullets'
-  const isSmartSummary = summary.format === 'smart'
+  const smartSummaryHtml = summary?.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
+  const hasCornellSections = summary?.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
+  const isCornellSummary = summary?.format === 'cornell'
+  const isParagraphSummary = summary?.format === 'paragraph'
+  const isBulletSummary = summary?.format === 'bullets'
+  const isSmartSummary = summary?.format === 'smart'
   const isStyledSectionSummary = isBulletSummary || isParagraphSummary
   const isWideSummaryLayout = isSmartSummary || isBulletSummary || isCornellSummary || isParagraphSummary
-  const summaryFormatRaw = String(summary.format || summary.config?.format || '').toLowerCase()
+  const summaryFormatRaw = String(summary?.format || summary?.config?.format || '').toLowerCase()
   const summaryTypeLabel =
     summaryFormatRaw === 'cornell'
       ? 'Cornell'
@@ -1080,7 +1043,7 @@ export function SummaryPage() {
             : 'Summary'
 
   // Parse content sections
-  const sections: SummarySectionResponse[] = summary.sections || []
+  const sections: SummarySectionResponse[] = summary?.sections || []
   const hasSections = sections.length > 0
 
   const smartHeadingLabels = useMemo(() => {
@@ -1188,6 +1151,43 @@ export function SummaryPage() {
     : 'lg:col-span-3 space-y-6 lg:-ml-8 xl:-ml-12'
   const centerColumnClass = isWideSummaryLayout ? 'lg:col-span-8' : 'lg:col-span-7'
   const rightColumnClass = 'lg:col-span-2 space-y-6'
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </AppLayout>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center h-96 text-center">
+          <h2 className="text-2xl font-bold mb-2">Failed to load summary</h2>
+          <p className="text-muted-foreground mb-6">{loadError}</p>
+          <div className="flex items-center gap-3">
+            <Button onClick={loadSummary}>Retry</Button>
+            <Button variant="outline" onClick={() => navigate('/summaries')}>Back to Summaries</Button>
+          </div>
+        </div>
+      </AppLayout>
+    )
+  }
+
+  if (isNotFound || !summary) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center h-96 text-center">
+          <h2 className="text-2xl font-bold mb-2">Summary Not Found</h2>
+          <p className="text-muted-foreground mb-6">This summary may have been deleted or doesn't exist.</p>
+          <Button onClick={() => navigate('/summaries')}>Back to Summaries</Button>
+        </div>
+      </AppLayout>
+    )
+  }
 
   return (
     <AppLayout>
