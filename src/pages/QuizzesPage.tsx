@@ -126,7 +126,14 @@ export function QuizzesPage() {
 
   const stats = [
     {
-      label: 'Avg. Score',
+      label: 'Total',
+      value: String(quizzes.length),
+      icon: BrainCircuit,
+      color: 'text-purple-600',
+      bg: 'bg-purple-100',
+    },
+    {
+      label: 'Avg Score',
       value: `${avgScore}%`,
       icon: Target,
       color: 'text-green-600',
@@ -138,13 +145,6 @@ export function QuizzesPage() {
       icon: Trophy,
       color: 'text-blue-600',
       bg: 'bg-blue-100',
-    },
-    {
-      label: 'Total Quizzes',
-      value: String(quizzes.length),
-      icon: Flame,
-      color: 'text-purple-600',
-      bg: 'bg-purple-100',
     },
   ]
 
@@ -322,12 +322,7 @@ export function QuizzesPage() {
           </div>
 
           <div className="relative mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              { label: 'Total', value: quizzes.length, icon: BrainCircuit },
-              { label: 'Starred', value: starredQuizzesCount, icon: Star },
-              { label: 'New', value: newQuizzesCount, icon: Sparkles },
-              { label: 'Completed', value: completedQuizzesCount, icon: Trophy },
-            ].map((stat) => {
+            {stats.map((stat) => {
               const Icon = stat.icon
               return (
                 <div key={stat.label} className="rounded-xl border bg-card/90 p-3 shadow-sm">
@@ -340,23 +335,6 @@ export function QuizzesPage() {
               )
             })}
           </div>
-        </div>
-
-        {/* Stats Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {stats.map((stat) => (
-            <Card key={stat.label} className="border shadow-sm bg-card hover:shadow-md transition-shadow">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className={cn('h-10 w-10 rounded-xl flex items-center justify-center shadow-sm', stat.bg, stat.color)}>
-                  <stat.icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold leading-none">{stat.value}</p>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mt-1">{stat.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
         </div>
 
         {/* Controls */}
