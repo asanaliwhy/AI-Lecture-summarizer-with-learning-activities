@@ -163,6 +163,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 			rawText = refined
 		}
 		rawText = normalizeSmartLabels(rawText)
+		rawText = pruneSmartRedundantSections(rawText)
 	}
 
 	// Parse Cornell if applicable
@@ -548,6 +549,52 @@ func normalizeSmartLabels(text string) string {
 	return text
 }
 
+func pruneSmartRedundantSections(text string) string {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+
+	isHeader := func(line string) bool {
+		trimmed := strings.TrimSpace(strings.TrimPrefix(line, "#"))
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "-"))
+		lower := strings.ToLower(trimmed)
+		return strings.Contains(lower, "summary of video content") ||
+			strings.Contains(lower, "key insights and core concepts") ||
+			strings.Contains(lower, "brain structure and functions") ||
+			strings.Contains(lower, "additional interesting facts") ||
+			strings.Contains(lower, "conclusions") ||
+			strings.Contains(lower, "summary highlights")
+	}
+
+	isForbiddenHeader := func(line string) bool {
+		trimmed := strings.TrimSpace(strings.TrimPrefix(line, "#"))
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "-"))
+		lower := strings.ToLower(trimmed)
+		return strings.Contains(lower, "conclusions") || strings.Contains(lower, "summary highlights")
+	}
+
+	out := make([]string, 0, len(lines))
+	skip := false
+	for _, line := range lines {
+		if isForbiddenHeader(line) {
+			skip = true
+			continue
+		}
+		if skip && isHeader(line) {
+			skip = false
+		}
+		if skip {
+			continue
+		}
+		out = append(out, line)
+	}
+
+	cleaned := strings.Join(out, "\n")
+	for strings.Contains(cleaned, "\n\n\n") {
+		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+	}
+	return strings.TrimSpace(cleaned)
+}
+
 func (s *GeminiService) rewriteSmartSummaryForFidelity(ctx context.Context, summaryText, transcript string) string {
 	snippet := transcript[:min(len(transcript), 6000)]
 	prompt := fmt.Sprintf(`You are revising a Smart Summary for strict factual fidelity.
@@ -560,8 +607,11 @@ Rules:
    - Key Concept: <term from transcript>
    - Definition: <meaning grounded in transcript>
    - Example: <explicitly stated example, or "Not explicitly stated in transcript">
-5) Keep markdown format and keep at least one markdown table.
-6) Return markdown only.
+5) Ensure each triple is genuinely distinct and non-redundant.
+6) Keep brain-part descriptions ONLY in "Brain Structure and Functions" table; avoid repeating those details in Key Insights.
+7) Remove redundant sections; do NOT include "Conclusions" or "Summary Highlights".
+8) Keep markdown format and keep at least one markdown table.
+9) Return markdown only.
 
 Transcript excerpt:
 %s
@@ -600,9 +650,16 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 	case "smart":
 		b.WriteString("Format: Create a Smart Summary in Markdown with clear section headings and concise high-value synthesis.\n")
 		b.WriteString("Required sections (in this order):\n")
-		b.WriteString("1) Summary of Video Content\n2) Key Insights and Core Concepts\n3) Brain Structure and Functions (as a markdown table when entities/parts exist)\n4) Additional Interesting Facts\n5) Conclusions\n6) Summary Highlights\n\n")
+		b.WriteString("1) Summary of Video Content\n2) Key Insights and Core Concepts\n3) Brain Structure and Functions (markdown table)\n4) Additional Interesting Facts\n\n")
 		b.WriteString("Output rules for Smart Summary: Use markdown headings and bullets. ALWAYS include at least one markdown table with at least 2 columns and 3 data rows. If the transcript has no obvious entities, create a table with columns: Concept | Explanation. Keep statements factual and avoid unsupported claims.\n")
 		b.WriteString("Terminology fidelity rules: reuse exact source terms from the transcript whenever possible (prefer direct phrasing over paraphrased/neologism terms). Do NOT invent renamed concepts.\n")
+		b.WriteString("Anti-redundancy rules: each fact appears once in the most appropriate section. Do NOT repeat the same fact across Summary, Insights, Table, and Facts.\n")
+		b.WriteString("Section-specific rules:\n")
+		b.WriteString("- Summary of Video Content: one concise narrative paragraph only.\n")
+		b.WriteString("- Key Insights and Core Concepts: 3-5 deeper insights (implications/connections), not dictionary-like repetition.\n")
+		b.WriteString("- Brain Structure and Functions: this is the ONLY place for brain-part functional descriptions.\n")
+		b.WriteString("- Additional Interesting Facts: only non-duplicated noteworthy facts, with numbers/evidence when present.\n")
+		b.WriteString("Forbidden sections: DO NOT output 'Conclusions' or 'Summary Highlights'.\n")
 		b.WriteString("For section 'Key Insights and Core Concepts', keep a consistent item schema per point:\n")
 		b.WriteString("- Key Concept: <term from transcript>\n- Definition: <concise meaning grounded in transcript>\n- Example: <example explicitly stated in transcript, or 'Not explicitly stated in transcript'>\n")
 		b.WriteString("If transcript evidence is weak, explicitly mark uncertainty instead of fabricating details.\n\n")
