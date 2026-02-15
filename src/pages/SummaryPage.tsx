@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 import DOMPurify from 'dompurify'
@@ -6,7 +6,6 @@ import { marked } from 'marked'
 import { api, type SummaryDetailResponse, type SummarySectionResponse } from '../lib/api'
 import { ApiError } from '../lib/api'
 import { useStudySession } from '../lib/useStudySession'
-import { cn } from '../lib/utils'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -27,40 +26,6 @@ import {
   Trash2,
   Loader2,
 } from 'lucide-react'
-
-type TocItem = {
-  id: string
-  label: string
-}
-
-function createAnchorSlug(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-}
-
-function buildTocItemsFromLabels(labels: string[], prefix: string): TocItem[] {
-  const used = new Set<string>()
-
-  return labels.map((rawLabel, index) => {
-    const label = cleanInlineMarkdown(rawLabel) || `Section ${index + 1}`
-    const slug = createAnchorSlug(label) || String(index + 1)
-    const baseId = `${prefix}-${slug}`
-    let id = baseId
-    let suffix = 2
-
-    while (used.has(id)) {
-      id = `${baseId}-${suffix}`
-      suffix += 1
-    }
-
-    used.add(id)
-    return { id, label }
-  })
-}
 
 function cleanInlineMarkdown(value: string): string {
   return value
@@ -536,16 +501,6 @@ function enhanceSmartSummaryHtml(html: string): string {
   root.innerHTML = ''
   root.appendChild(body)
 
-  const smartHeadings = Array.from(body.querySelectorAll('h1, h2')).map((heading) => heading.textContent?.trim() || '')
-  const smartHeadingAnchors = buildTocItemsFromLabels(smartHeadings, 'smart')
-  Array.from(body.querySelectorAll('h1, h2')).forEach((heading, index) => {
-    const anchorId = smartHeadingAnchors[index]?.id
-    if (anchorId) {
-      heading.id = anchorId
-      heading.classList.add('scroll-mt-28')
-    }
-  })
-
   // Ensure Additional Interesting Facts renders as bullet points for faster scanning.
   const sectionNodes = body.querySelectorAll('.smart-summary-section')
   sectionNodes.forEach((section) => {
@@ -716,8 +671,6 @@ export function SummaryPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isNotFound, setIsNotFound] = useState(false)
-  const [readingDensity, setReadingDensity] = useState<'comfortable' | 'compact'>('comfortable')
-  const [activeTocId, setActiveTocId] = useState('')
 
   const loadSummary = async () => {
     if (!id) return
@@ -1006,152 +959,6 @@ export function SummaryPage() {
     }
   }
 
-  const createdAt = summary?.created_at ? new Date(summary.created_at).toLocaleDateString() : 'Recently'
-  const duration = summary?.source_duration || summary?.duration || ''
-  const sourceUrl = summary?.source_url || ''
-  const sourceRaw = String(summary?.source || summary?.source_type || '').toLowerCase()
-  const isYouTubeSource = sourceRaw.includes('youtube') || sourceRaw.includes('youtu')
-  const sourceLabel = isYouTubeSource ? 'YouTube' : 'Document'
-  const tags: string[] = summary?.tags || []
-  const contentRaw: string = summary?.content_raw || summary?.content || summary?.body || ''
-  const cornellCues: string = summary?.cornell_cues || ''
-  const cornellNotes: string = summary?.cornell_notes || ''
-  const cornellSummary: string = summary?.cornell_summary || ''
-  const renderedCornellCues = normalizeCornellText(cornellCues)
-  const renderedCornellNotes = normalizeCornellText(cornellNotes)
-  const renderedCornellSummary = normalizeCornellText(cornellSummary)
-  const renderedContentRaw = normalizeGeneralSummaryText(contentRaw)
-  const renderedSections = splitIntoSections(renderedContentRaw)
-  const smartSummaryHtml = summary?.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
-  const hasCornellSections = summary?.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
-  const isCornellSummary = summary?.format === 'cornell'
-  const isParagraphSummary = summary?.format === 'paragraph'
-  const isBulletSummary = summary?.format === 'bullets'
-  const isSmartSummary = summary?.format === 'smart'
-  const isStyledSectionSummary = isBulletSummary || isParagraphSummary
-  const isWideSummaryLayout = isSmartSummary || isBulletSummary || isCornellSummary || isParagraphSummary
-  const summaryFormatRaw = String(summary?.format || summary?.config?.format || '').toLowerCase()
-  const summaryTypeLabel =
-    summaryFormatRaw === 'cornell'
-      ? 'Cornell'
-      : summaryFormatRaw === 'bullets'
-        ? 'Bullet Points'
-        : summaryFormatRaw === 'paragraph'
-          ? 'Paragraph'
-          : summaryFormatRaw === 'smart'
-            ? 'Smart Summary'
-            : 'Summary'
-
-  // Parse content sections
-  const sections: SummarySectionResponse[] = summary?.sections || []
-  const hasSections = sections.length > 0
-
-  const smartHeadingLabels = useMemo(() => {
-    if (!isSmartSummary) return []
-
-    return normalizeSmartSummaryMarkdown(contentRaw)
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => /^##\s+/.test(line))
-      .map((line) => cleanInlineMarkdown(line.replace(/^##\s+/, '')))
-      .filter(Boolean)
-  }, [isSmartSummary, contentRaw])
-
-  const sectionTocItems = useMemo(
-    () => buildTocItemsFromLabels(sections.map((section, index) => section.title || `Section ${index + 1}`), 'section'),
-    [sections],
-  )
-
-  const renderedSectionTocItems = useMemo(
-    () => buildTocItemsFromLabels(renderedSections.map((section, index) => section.title || `Section ${index + 1}`), 'summary'),
-    [renderedSections],
-  )
-
-  const smartTocItems = useMemo(() => {
-    if (!isSmartSummary) return []
-    if (smartHeadingLabels.length === 0) {
-      return [{ id: 'smart-summary-top', label: 'Summary' }]
-    }
-
-    return buildTocItemsFromLabels(smartHeadingLabels, 'smart')
-  }, [isSmartSummary, smartHeadingLabels])
-
-  const tocItems: TocItem[] = useMemo(() => {
-    if (isSmartSummary) return smartTocItems
-    if (hasSections) return sectionTocItems
-    if (hasCornellSections) {
-      return [
-        { id: 'cornell-cues', label: 'Cues' },
-        { id: 'cornell-notes', label: 'Notes' },
-        { id: 'cornell-summary', label: 'Summary' },
-      ]
-    }
-
-    return renderedSectionTocItems.length > 0
-      ? renderedSectionTocItems
-      : [{ id: 'summary-main', label: 'Summary' }]
-  }, [
-    hasCornellSections,
-    hasSections,
-    isSmartSummary,
-    renderedSectionTocItems,
-    sectionTocItems,
-    smartTocItems,
-  ])
-
-  useEffect(() => {
-    setActiveTocId((prev) => {
-      if (prev && tocItems.some((item) => item.id === prev)) return prev
-      return tocItems[0]?.id || ''
-    })
-  }, [tocItems])
-
-  useEffect(() => {
-    if (tocItems.length === 0) return
-    if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') return
-
-    const observed = tocItems
-      .map((item) => document.getElementById(item.id))
-      .filter((node): node is HTMLElement => Boolean(node))
-
-    if (observed.length === 0) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
-
-        if (visible[0]?.target instanceof HTMLElement) {
-          setActiveTocId(visible[0].target.id)
-        }
-      },
-      {
-        rootMargin: '-30% 0px -55% 0px',
-        threshold: [0.1, 0.35, 0.7],
-      },
-    )
-
-    observed.forEach((node) => observer.observe(node))
-    return () => observer.disconnect()
-  }, [tocItems])
-
-  const handleTocJump = (anchorId: string) => {
-    const node = document.getElementById(anchorId)
-    if (!node) return
-    setActiveTocId(anchorId)
-    node.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  const visibleTags = tags.slice(0, 3)
-  const hiddenTagCount = Math.max(0, tags.length - visibleTags.length)
-  const comfortableReading = readingDensity === 'comfortable'
-  const leftColumnClass = isWideSummaryLayout
-    ? 'lg:col-span-2 space-y-6 lg:-ml-8 xl:-ml-12'
-    : 'lg:col-span-3 space-y-6 lg:-ml-8 xl:-ml-12'
-  const centerColumnClass = isWideSummaryLayout ? 'lg:col-span-8' : 'lg:col-span-7'
-  const rightColumnClass = 'lg:col-span-2 space-y-6'
-
   if (isLoading) {
     return (
       <AppLayout>
@@ -1188,6 +995,51 @@ export function SummaryPage() {
       </AppLayout>
     )
   }
+
+  const createdAt = summary.created_at ? new Date(summary.created_at).toLocaleDateString() : 'Recently'
+  const duration = summary.source_duration || summary.duration || ''
+  const sourceUrl = summary.source_url || ''
+  const sourceRaw = String(summary.source || summary.source_type || '').toLowerCase()
+  const isYouTubeSource = sourceRaw.includes('youtube') || sourceRaw.includes('youtu')
+  const sourceLabel = isYouTubeSource ? 'YouTube' : 'Document'
+  const tags: string[] = summary.tags || []
+  const contentRaw: string = summary.content_raw || summary.content || summary.body || ''
+  const cornellCues: string = summary.cornell_cues || ''
+  const cornellNotes: string = summary.cornell_notes || ''
+  const cornellSummary: string = summary.cornell_summary || ''
+  const renderedCornellCues = normalizeCornellText(cornellCues)
+  const renderedCornellNotes = normalizeCornellText(cornellNotes)
+  const renderedCornellSummary = normalizeCornellText(cornellSummary)
+  const renderedContentRaw = normalizeGeneralSummaryText(contentRaw)
+  const renderedSections = splitIntoSections(renderedContentRaw)
+  const smartSummaryHtml = summary.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
+  const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
+  const isCornellSummary = summary.format === 'cornell'
+  const isParagraphSummary = summary.format === 'paragraph'
+  const isBulletSummary = summary.format === 'bullets'
+  const isSmartSummary = summary.format === 'smart'
+  const isStyledSectionSummary = isBulletSummary || isParagraphSummary
+  const isWideSummaryLayout = isSmartSummary || isBulletSummary || isCornellSummary || isParagraphSummary
+  const summaryFormatRaw = String(summary.format || summary.config?.format || '').toLowerCase()
+  const summaryTypeLabel =
+    summaryFormatRaw === 'cornell'
+      ? 'Cornell'
+      : summaryFormatRaw === 'bullets'
+        ? 'Bullet Points'
+        : summaryFormatRaw === 'paragraph'
+          ? 'Paragraph'
+          : summaryFormatRaw === 'smart'
+            ? 'Smart Summary'
+            : 'Summary'
+  const leftColumnClass = isWideSummaryLayout
+    ? 'lg:col-span-2 space-y-6 lg:-ml-8 xl:-ml-12'
+    : 'lg:col-span-3 space-y-6 lg:-ml-8 xl:-ml-12'
+  const centerColumnClass = isWideSummaryLayout ? 'lg:col-span-8' : 'lg:col-span-7'
+  const rightColumnClass = 'lg:col-span-2 space-y-6'
+
+  // Parse content sections
+  const sections: SummarySectionResponse[] = summary.sections || []
+  const hasSections = sections.length > 0
 
   return (
     <AppLayout>
@@ -1256,21 +1108,24 @@ export function SummaryPage() {
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                      Details
+                  {duration && (
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                        Duration
+                      </h3>
+                      <div className="flex items-center gap-1 text-sm">
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                        {duration}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                      Date
                     </h3>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline" className="text-[11px] font-medium bg-background/70 px-2.5 py-1">
-                        <Calendar className="h-3 w-3 mr-1.5" />
-                        {createdAt}
-                      </Badge>
-                      {duration && (
-                        <Badge variant="outline" className="text-[11px] font-medium bg-background/70 px-2.5 py-1">
-                          <Clock className="h-3 w-3 mr-1.5" />
-                          {duration}
-                        </Badge>
-                      )}
+                    <div className="flex items-center gap-1 text-sm">
+                      <Calendar className="h-3 w-3 text-muted-foreground" />
+                      {createdAt}
                     </div>
                   </div>
                 </div>
@@ -1280,14 +1135,9 @@ export function SummaryPage() {
                       Tags
                     </h3>
                     <div className="flex flex-wrap gap-1.5">
-                      {visibleTags.map((tag: string) => (
+                      {tags.map((tag: string) => (
                         <Badge key={tag} variant="outline" className="text-[11px] px-2.5 py-1 bg-background/70">{tag}</Badge>
                       ))}
-                      {hiddenTagCount > 0 && (
-                        <Badge variant="secondary" className="text-[11px] px-2.5 py-1">
-                          +{hiddenTagCount}
-                        </Badge>
-                      )}
                     </div>
                   </div>
                 )}
@@ -1324,25 +1174,13 @@ export function SummaryPage() {
             <Card className="min-h-[620px] shadow-sm border-border/70">
               <CardContent className={isSmartSummary || hasCornellSections || isStyledSectionSummary ? 'p-4 md:p-5 lg:p-6' : 'p-6 md:p-10 lg:p-12'}>
                 {isSmartSummary ? (
-                  <article
-                    id="smart-summary-top"
-                    className={cn(
-                      'smart-summary-content smart-summary-modern smart-summary-scroll overflow-x-auto prose mx-auto prose-slate prose-headings:font-extrabold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:text-[1.62rem] prose-h2:leading-tight prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-[1.2rem] prose-h3:font-bold prose-h3:mt-5 prose-h3:mb-3 prose-strong:text-slate-900 prose-ul:my-3 prose-ol:my-3 prose-hr:my-6 prose-a:text-blue-700 hover:prose-a:text-blue-800 scroll-mt-28',
-                      comfortableReading
-                        ? 'max-w-[92ch] prose-p:my-3 prose-p:leading-[1.82] prose-li:leading-[1.8]'
-                        : 'max-w-[104ch] prose-p:my-2 prose-p:leading-[1.68] prose-li:leading-[1.64]',
-                    )}
-                  >
+                  <article className="smart-summary-content smart-summary-modern smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-extrabold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:text-[1.62rem] prose-h2:leading-tight prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-[1.2rem] prose-h3:font-bold prose-h3:mt-5 prose-h3:mb-3 prose-p:my-2.5 prose-p:leading-[1.78] prose-strong:text-slate-900 prose-li:leading-[1.75] prose-ul:my-3 prose-ol:my-3 prose-hr:my-6 prose-a:text-blue-700 hover:prose-a:text-blue-800">
                     <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
                   </article>
                 ) : hasSections ? (
-                  <div className={cn('space-y-10 mx-auto', comfortableReading ? 'max-w-[90ch]' : 'max-w-[100ch]')}>
+                  <div className="space-y-10">
                     {sections.map((section, idx: number) => (
-                      <section
-                        key={idx}
-                        id={sectionTocItems[idx]?.id}
-                        className="border-b border-border/60 pb-8 last:border-b-0 scroll-mt-28"
-                      >
+                      <div key={idx} className="border-b border-border/60 pb-8 last:border-b-0">
                         <h2 className="text-2xl md:text-[1.7rem] font-bold text-slate-900 mb-4">
                           {idx + 1}. {section.title}
                         </h2>
@@ -1363,16 +1201,12 @@ export function SummaryPage() {
                             </div>
                           )}
                           <div className={section.key_concepts ? 'md:col-span-2' : 'md:col-span-3'}>
-                            <div
-                              className={cn(
-                                'text-slate-800 space-y-4 prose prose-slate',
-                                comfortableReading ? 'leading-8 max-w-[74ch]' : 'leading-7 max-w-[80ch]',
-                              )}
+                            <div className="text-slate-800 leading-8 space-y-4 prose prose-slate max-w-[72ch]"
                               dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(section.content || section.body || '') }}
                             />
                           </div>
                         </div>
-                      </section>
+                      </div>
                     ))}
 
                     {summary.summary_text && (
@@ -1383,53 +1217,37 @@ export function SummaryPage() {
                     )}
                   </div>
                 ) : hasCornellSections ? (
-                  <div className={cn('space-y-3 mx-auto', comfortableReading ? 'max-w-[90ch]' : 'max-w-[100ch]')}>
-                    <section
-                      id="cornell-cues"
-                      className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4 scroll-mt-28"
-                    >
+                  <div className="space-y-3">
+                    <section className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4">
                       <h3 className="flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.02rem] tracking-tight">
                         <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
                         Cues
                       </h3>
-                      <div className={cn('whitespace-pre-wrap text-slate-800 max-w-none', comfortableReading ? 'leading-[1.78] text-[15.5px]' : 'leading-[1.6] text-[14.5px]')}>
+                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-none">
                         {renderedCornellCues || 'No cues available.'}
                       </div>
                     </section>
-                    <section
-                      id="cornell-notes"
-                      className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4 scroll-mt-28"
-                    >
+                    <section className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4">
                       <h3 className="flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.02rem] tracking-tight">
                         <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
                         Notes
                       </h3>
-                      <div className={cn('whitespace-pre-wrap text-slate-800 max-w-none', comfortableReading ? 'leading-[1.78] text-[15.5px]' : 'leading-[1.6] text-[14.5px]')}>
+                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-none">
                         {renderedCornellNotes || 'No notes available.'}
                       </div>
                     </section>
-                    <section
-                      id="cornell-summary"
-                      className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4 scroll-mt-28"
-                    >
+                    <section className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4">
                       <h3 className="flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.02rem] tracking-tight">
                         <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
                         Summary
                       </h3>
-                      <div className={cn('whitespace-pre-wrap text-slate-800 max-w-none', comfortableReading ? 'leading-[1.78] text-[15.5px]' : 'leading-[1.6] text-[14.5px]')}>
+                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-none">
                         {renderedCornellSummary || 'No summary available.'}
                       </div>
                     </section>
                   </div>
                 ) : (
-                  <div
-                    id="summary-main"
-                    className={cn(
-                      isStyledSectionSummary ? 'space-y-3' : 'space-y-6',
-                      'mx-auto scroll-mt-28',
-                      comfortableReading ? 'max-w-[88ch]' : 'max-w-[98ch]',
-                    )}
-                  >
+                  <div className={isStyledSectionSummary ? 'space-y-3' : 'space-y-6'}>
                     {(renderedSections.length > 0 ? renderedSections : [{ title: 'Summary', body: renderedContentRaw || 'No content available yet.' }]).map((section, idx) => {
                       const bulletHierarchy = isBulletSummary ? parseBulletHierarchy(section.body) : []
                       const hasBulletHierarchy = bulletHierarchy.some((item) => item.children.length > 0)
@@ -1437,10 +1255,9 @@ export function SummaryPage() {
                       return (
                         <section
                           key={idx}
-                          id={renderedSectionTocItems[idx]?.id}
                           className={isStyledSectionSummary
-                            ? 'rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4 scroll-mt-28'
-                            : 'border border-border/70 rounded-xl p-6 bg-muted/20 scroll-mt-28'}
+                            ? 'rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4'
+                            : 'border border-border/70 rounded-xl p-6 bg-muted/20'}
                         >
                           <h3 className={isStyledSectionSummary
                             ? 'flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.02rem] tracking-tight'
@@ -1468,16 +1285,10 @@ export function SummaryPage() {
                             </ul>
                           ) : (
                             <div className={isBulletSummary
-                              ? comfortableReading
-                                ? 'whitespace-pre-wrap leading-[1.76] text-slate-800 text-[15.5px] max-w-none'
-                                : 'whitespace-pre-wrap leading-[1.58] text-slate-800 text-[14.5px] max-w-none'
+                              ? 'whitespace-pre-wrap leading-[1.72] text-slate-800 text-[15px] max-w-none'
                               : isParagraphSummary
-                                ? comfortableReading
-                                  ? 'whitespace-pre-wrap leading-[2.02] text-slate-800 text-[15.5px] max-w-none'
-                                  : 'whitespace-pre-wrap leading-[1.72] text-slate-800 text-[14.5px] max-w-none'
-                                : comfortableReading
-                                  ? 'whitespace-pre-wrap leading-[2.02] text-slate-800 text-[15.5px] max-w-[75ch]'
-                                  : 'whitespace-pre-wrap leading-[1.72] text-slate-800 text-[14.5px] max-w-[84ch]'}>
+                                ? 'whitespace-pre-wrap leading-8 text-slate-800 text-[15px] max-w-none'
+                                : 'whitespace-pre-wrap leading-8 text-slate-800 text-[15px] max-w-[75ch]'}>
                               {section.body}
                             </div>
                           )}
@@ -1492,26 +1303,12 @@ export function SummaryPage() {
 
           {/* Right Sidebar - Actions (20%) */}
           <div className={rightColumnClass}>
-            <div className="sticky top-20 space-y-4">
+            <div className="sticky top-24">
               <Card className="border-border/70 shadow-sm">
                 <CardContent className="p-4 space-y-3">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Actions
                   </h3>
-                  <Button
-                    variant="default"
-                    className="w-full justify-start"
-                    size="sm"
-                    disabled={isRegenerating}
-                    onClick={handleRegenerate}
-                  >
-                    {isRegenerating ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <RotateCcw className="h-4 w-4 mr-2" />
-                    )}
-                    Regenerate
-                  </Button>
                   <Button variant="outline" className="w-full justify-start" size="sm" onClick={handleCopy}>
                     <Copy className="h-4 w-4 mr-2" />
                     Copy Text
@@ -1521,8 +1318,8 @@ export function SummaryPage() {
                     Export
                   </Button>
                   <Button
-                    variant="outline"
-                    className="w-full justify-start border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                    variant="destructive"
+                    className="w-full justify-start"
                     size="sm"
                     disabled={isDeleting}
                     onClick={handleDelete}
@@ -1534,59 +1331,22 @@ export function SummaryPage() {
                     )}
                     Delete
                   </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-muted-foreground hover:text-foreground border border-transparent hover:border-border/60"
+                    size="sm"
+                    disabled={isRegenerating}
+                    onClick={handleRegenerate}
+                  >
+                    {isRegenerating ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                    )}
+                    Regenerate
+                  </Button>
                 </CardContent>
               </Card>
-
-              <Card className="border-border/70 shadow-sm">
-                <CardContent className="p-4 space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Reading Mode
-                  </h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      size="sm"
-                      variant={comfortableReading ? 'default' : 'outline'}
-                      onClick={() => setReadingDensity('comfortable')}
-                    >
-                      Comfortable
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={!comfortableReading ? 'default' : 'outline'}
-                      onClick={() => setReadingDensity('compact')}
-                    >
-                      Compact
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {tocItems.length > 0 && (
-                <Card className="border-border/70 shadow-sm">
-                  <CardContent className="p-4 space-y-3">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      On this page
-                    </h3>
-                    <div className="space-y-1.5">
-                      {tocItems.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => handleTocJump(item.id)}
-                          className={cn(
-                            'w-full text-left text-sm rounded-md px-2.5 py-1.5 transition-colors border',
-                            item.id === activeTocId
-                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : 'bg-transparent text-muted-foreground border-transparent hover:bg-muted/60 hover:text-foreground',
-                          )}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </div>
           </div>
         </div>
