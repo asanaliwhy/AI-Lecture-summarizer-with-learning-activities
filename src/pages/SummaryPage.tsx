@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 import DOMPurify from 'dompurify'
@@ -671,17 +671,35 @@ export function SummaryPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isNotFound, setIsNotFound] = useState(false)
+  const loadRequestIdRef = useRef(0)
 
-  const loadSummary = async () => {
-    if (!id) return
+  const loadSummary = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current
+
+    if (!id) {
+      if (requestId === loadRequestIdRef.current) {
+        setIsLoading(false)
+      }
+      return
+    }
+
     setIsLoading(true)
     setLoadError(null)
     setIsNotFound(false)
     try {
       const data = await api.summaries.get(id)
+
+      if (requestId !== loadRequestIdRef.current) {
+        return
+      }
+
       setSummary(data)
       setTitle(data.title || 'Untitled Summary')
     } catch (err: unknown) {
+      if (requestId !== loadRequestIdRef.current) {
+        return
+      }
+
       setSummary(null)
       if (err instanceof ApiError && err.status === 404) {
         setIsNotFound(true)
@@ -690,13 +708,19 @@ export function SummaryPage() {
         setLoadError(message)
       }
     } finally {
-      setIsLoading(false)
+      if (requestId === loadRequestIdRef.current) {
+        setIsLoading(false)
+      }
     }
-  }
+  }, [id])
 
   useEffect(() => {
     loadSummary()
-  }, [id])
+
+    return () => {
+      loadRequestIdRef.current += 1
+    }
+  }, [loadSummary])
 
   useStudySession({
     activityType: 'summary',
