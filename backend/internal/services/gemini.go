@@ -754,6 +754,8 @@ func normalizeBulletsSummary(text string) string {
 	normalized := strings.ReplaceAll(text, "\r\n", "\n")
 	lines := strings.Split(normalized, "\n")
 	out := make([]string, 0, len(lines))
+	currentHeading := ""
+	lastHeading := ""
 
 	for _, line := range lines {
 		t := strings.TrimSpace(line)
@@ -770,19 +772,83 @@ func normalizeBulletsSummary(text string) string {
 			}
 		}
 
-		t = strings.ReplaceAll(t, "Case Study/Observation:", "Fact:")
-		t = strings.ReplaceAll(t, "Case study/observation:", "Fact:")
-		t = strings.ReplaceAll(t, "Case Study:", "Fact:")
-		t = strings.ReplaceAll(t, "Observation:", "Fact:")
-		t = strings.ReplaceAll(t, "Figure:", "Size:")
+		bulletPrefix := ""
+		content := t
+		if strings.HasPrefix(t, "• ") {
+			bulletPrefix = "• "
+			content = strings.TrimSpace(t[2:])
+		} else if strings.HasPrefix(t, "- ") {
+			bulletPrefix = "- "
+			content = strings.TrimSpace(t[2:])
+		} else if strings.HasPrefix(t, "* ") {
+			bulletPrefix = "• "
+			content = strings.TrimSpace(t[2:])
+		}
+
+		if bulletPrefix == "" {
+			heading := strings.ToLower(strings.TrimSpace(strings.TrimSuffix(content, ":")))
+			if heading != "" && heading == lastHeading {
+				continue
+			}
+			currentHeading = heading
+			if heading != "" {
+				lastHeading = heading
+			}
+			out = append(out, content)
+			continue
+		}
+
+		content = strings.ReplaceAll(content, "Case Study/Observation:", "Fact:")
+		content = strings.ReplaceAll(content, "Case study/observation:", "Fact:")
+		content = strings.ReplaceAll(content, "Case Study:", "Fact:")
+		content = strings.ReplaceAll(content, "Observation:", "Fact:")
+		content = strings.ReplaceAll(content, "Figure:", "Size:")
+		content = strings.ReplaceAll(content, "Example:", "Examples:")
 
 		// Trim redundant overview bullets after wrapper headings.
-		lt := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(t, "- "), "• ")))
+		lt := strings.ToLower(strings.TrimSpace(content))
 		if strings.HasPrefix(lt, "overview of ") {
 			continue
 		}
 
-		out = append(out, t)
+		if strings.Contains(currentHeading, "interesting facts") {
+			if strings.HasPrefix(strings.ToLower(content), "fact:") {
+				content = strings.TrimSpace(content[len("Fact:"):])
+			}
+		}
+
+		// Integrate size/details into the previous Definition bullet for consistency.
+		if strings.HasPrefix(strings.ToLower(content), "size:") {
+			sizeText := strings.TrimSpace(content[len("Size:"):])
+			if sizeText != "" {
+				for i := len(out) - 1; i >= 0; i-- {
+					prev := strings.TrimSpace(out[i])
+					if prev == "" {
+						continue
+					}
+					prevContent := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(prev, "• "), "- "))
+					if strings.HasPrefix(strings.ToLower(prevContent), "definition:") {
+						def := strings.TrimSpace(prevContent[len("Definition:"):])
+						if def != "" {
+							def = strings.TrimSuffix(def, ".")
+							sizeText = strings.TrimSuffix(sizeText, ".")
+							prefix := "• "
+							if strings.HasPrefix(prev, "- ") {
+								prefix = "- "
+							}
+							out[i] = prefix + "Definition: " + def + " (" + sizeText + ")."
+							content = ""
+						}
+						break
+					}
+				}
+			}
+			if content == "" {
+				continue
+			}
+		}
+
+		out = append(out, bulletPrefix+content)
 	}
 
 	cleaned := strings.Join(out, "\n")
@@ -978,16 +1044,18 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 	case "bullets":
 		b.WriteString("Format: Use structured bullet points with clear headings and concise bullets.\n")
 		b.WriteString("Bullets output rules:\n")
-		b.WriteString("1) Do NOT include redundant wrapper titles like 'Executive Summary:' or duplicate overview headings.\n")
-		b.WriteString("2) Keep wording plain and concrete; avoid unnecessarily academic jargon when simpler wording is possible.\n")
-		b.WriteString("3) For each major item (e.g., a brain part), use a consistent micro-structure in this order:\n")
+		b.WriteString("1) Required section flow (exact order): Overview -> Core Structures -> Interesting Facts.\n")
+		b.WriteString("2) Do NOT include redundant wrapper titles like 'Executive Summary:' and do NOT repeat section headings (e.g., 'Overview' twice).\n")
+		b.WriteString("3) Keep wording plain and concrete; avoid unnecessarily academic jargon when simpler wording is possible.\n")
+		b.WriteString("4) For each major item in Core Structures (e.g., a brain part), use a consistent micro-structure in this order:\n")
 		b.WriteString("   - Definition: <what it is>\n")
 		b.WriteString("   - Function: <what it does>\n")
-		b.WriteString("   - Examples: <brief, specific examples>\n")
-		b.WriteString("4) Keep labels consistent. Prefer Definition, Function, Examples, Size, and Fact. Avoid mixed labels like Figure or Case Study/Observation unless explicitly requested.\n")
-		b.WriteString("5) Keep bullets non-redundant and compact; one idea per bullet.\n")
-		b.WriteString("6) Group related bullets under clear headings with logical flow: Overview -> Core Structures -> Interesting Facts.\n")
-		b.WriteString("7) Return plain text bullets only (no markdown tables, no HTML).\n\n")
+		b.WriteString("   - Examples: <brief, specific examples; short phrase list, not long sentences>\n")
+		b.WriteString("5) Keep labels consistent. Prefer Definition, Function, Examples, and Fact. Integrate size/location details into Definition instead of a separate 'Size:' bullet.\n")
+		b.WriteString("6) In Interesting Facts, do NOT prefix each bullet with 'Fact:'; the heading already provides context.\n")
+		b.WriteString("7) Merge related facts into one bullet when they describe the same point (e.g., wattage + LED example).\n")
+		b.WriteString("8) Keep bullets non-redundant and compact; one idea per bullet.\n")
+		b.WriteString("9) Return plain text bullets only (no markdown tables, no HTML).\n\n")
 	case "paragraph":
 		b.WriteString("Format: Write in flowing academic prose with clear subheadings.\n\n")
 	case "smart":
