@@ -32,6 +32,10 @@ import { useToast } from '../components/ui/Toast'
 export function ContentInputPage() {
   const navigate = useNavigate()
   const toast = useToast()
+  const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
+  const ACCEPTED_EXTENSIONS = new Set(['.pdf', '.docx', '.txt', '.mp3', '.wav', '.mp4'])
+  const ACCEPT_ATTR = '.pdf,.docx,.txt,.mp3,.wav,.mp4'
+
   const [sourceType, setSourceType] = useState('youtube')
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [isValidating, setIsValidating] = useState(false)
@@ -45,8 +49,42 @@ export function ContentInputPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [validationError, setValidationError] = useState('')
+  const [isDragActive, setIsDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+
+  const getFileExtension = (filename: string) => {
+    const index = filename.lastIndexOf('.')
+    return index >= 0 ? filename.slice(index).toLowerCase() : ''
+  }
+
+  const validateSelectedFile = (file: File): string | null => {
+    const ext = getFileExtension(file.name)
+    if (!ACCEPTED_EXTENSIONS.has(ext)) {
+      return 'Unsupported file type. Allowed: PDF, DOCX, TXT, MP3, WAV, MP4.'
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return 'File is too large. Maximum allowed size is 500MB.'
+    }
+
+    return null
+  }
+
+  const handleSelectedFile = (file: File | null) => {
+    if (!file) return
+
+    const fileError = validateSelectedFile(file)
+    if (fileError) {
+      setUploadedFile(null)
+      setValidationError(fileError)
+      toast.error(fileError)
+      return
+    }
+
+    setUploadedFile(file)
+    setValidationError('')
+  }
 
   const handleValidate = async () => {
     const url = youtubeUrl.trim()
@@ -67,7 +105,6 @@ export function ContentInputPage() {
     try {
       const data = await api.content.validateYouTube(url)
       setIsValid(true)
-      setIsValid(true)
       setVideoMeta(data.metadata)
       setContentId(data.content_id)
       toast.success('Video validated successfully!')
@@ -81,9 +118,30 @@ export function ContentInputPage() {
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      setUploadedFile(e.target.files[0])
-    }
+    const file = e.target.files?.[0] || null
+    handleSelectedFile(file)
+    e.target.value = ''
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragActive(false)
+    setSourceType('file')
+    const file = e.dataTransfer.files?.[0] || null
+    handleSelectedFile(file)
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isDragActive) setIsDragActive(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragActive(false)
   }
 
   const handleGenerate = async () => {
@@ -234,11 +292,25 @@ export function ContentInputPage() {
                     <div
                       className={cn(
                         'border-2 border-dashed rounded-xl p-8 md:p-10 text-center transition-all cursor-pointer',
+                        isDragActive && 'border-primary bg-primary/10',
                         uploadedFile
                           ? 'border-emerald-300 bg-emerald-50/30 dark:bg-emerald-500/5'
                           : 'border-muted-foreground/25 hover:border-primary/40 hover:bg-muted/30',
                       )}
                       onClick={() => fileInputRef.current?.click()}
+                      onDrop={handleDrop}
+                      onDragOver={handleDragOver}
+                      onDragEnter={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          fileInputRef.current?.click()
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Upload file"
                     >
                       <div
                         className={cn(
@@ -261,15 +333,22 @@ export function ContentInputPage() {
                           : 'Click to upload or drag and drop'}
                       </h3>
                       <p className="text-sm text-muted-foreground mb-4">
-                        MP3, MP4, PDF, or DOCX (max 500MB)
+                        PDF, DOCX, TXT, MP3, WAV, or MP4 (max 500MB)
                       </p>
-                      <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          fileInputRef.current?.click()
+                        }}
+                      >
                         {uploadedFile ? 'Replace File' : 'Select File'}
                       </Button>
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept=".pdf,.docx,.txt,.mp3,.wav,.mp4"
+                        accept={ACCEPT_ATTR}
                         className="hidden"
                         onChange={handleFileChange}
                       />
@@ -363,10 +442,13 @@ export function ContentInputPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 gap-3">
-                    <div
+                  <div className="grid grid-cols-1 gap-3" role="radiogroup" aria-label="Output format">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={outputFormat === 'cornell'}
                       className={cn(
-                        'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
+                        'w-full text-left flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
                         outputFormat === 'cornell'
                           ? 'border-primary bg-primary/5 ring-1 ring-primary'
                           : 'hover:bg-secondary/50',
@@ -385,11 +467,14 @@ export function ContentInputPage() {
                       {outputFormat === 'cornell' && (
                         <div className="h-2 w-2 rounded-full bg-primary" />
                       )}
-                    </div>
+                    </button>
 
-                    <div
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={outputFormat === 'bullets'}
                       className={cn(
-                        'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
+                        'w-full text-left flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
                         outputFormat === 'bullets'
                           ? 'border-primary bg-primary/5 ring-1 ring-primary'
                           : 'hover:bg-secondary/50',
@@ -410,11 +495,14 @@ export function ContentInputPage() {
                       {outputFormat === 'bullets' && (
                         <div className="h-2 w-2 rounded-full bg-primary" />
                       )}
-                    </div>
+                    </button>
 
-                    <div
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={outputFormat === 'paragraph'}
                       className={cn(
-                        'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
+                        'w-full text-left flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
                         outputFormat === 'paragraph'
                           ? 'border-primary bg-primary/5 ring-1 ring-primary'
                           : 'hover:bg-secondary/50',
@@ -433,11 +521,14 @@ export function ContentInputPage() {
                       {outputFormat === 'paragraph' && (
                         <div className="h-2 w-2 rounded-full bg-primary" />
                       )}
-                    </div>
+                    </button>
 
-                    <div
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={outputFormat === 'smart'}
                       className={cn(
-                        'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
+                        'w-full text-left flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all',
                         outputFormat === 'smart'
                           ? 'border-primary bg-primary/5 ring-1 ring-primary'
                           : 'hover:bg-secondary/50',
@@ -456,7 +547,7 @@ export function ContentInputPage() {
                       {outputFormat === 'smart' && (
                         <div className="h-2 w-2 rounded-full bg-primary" />
                       )}
-                    </div>
+                    </button>
                   </div>
                 </CardContent>
               </Card>
