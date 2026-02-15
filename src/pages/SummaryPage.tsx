@@ -251,12 +251,9 @@ function normalizeSmartSummaryMarkdown(value: string): string {
       continue
     }
 
-    const smartTitle = raw.match(/^smart\s*summary\s*:\s*(.+)$/i)
-    if (smartTitle) {
-      if (out.length > 0 && out[out.length - 1] !== '') out.push('')
-      out.push(`## ${cleanInlineMarkdown(smartTitle[1])}`)
-      out.push('')
-      currentSmartSection = cleanInlineMarkdown(smartTitle[1]).toLowerCase()
+    // Drop wrapper titles like "Smart Summary" / "Smart Summary: ..."
+    // so they do not render as visible content in Smart mode.
+    if (/^smart\s*summary\s*(?::\s*.*)?$/i.test(raw)) {
       i += 1
       continue
     }
