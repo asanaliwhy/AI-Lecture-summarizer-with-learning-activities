@@ -171,7 +171,10 @@ function normalizeCornellText(value: string): string {
 function normalizeSmartSummaryMarkdown(value: string): string {
   if (!value) return ''
 
-  const lines = value.replace(/\r\n/g, '\n').split('\n')
+  const lines = value
+    .replace(/\r\n/g, '\n')
+    .replace(/^#{1,6}\s+/gm, '')
+    .split('\n')
   const out: string[] = []
 
   const addImplicitSpaces = (line: string): string =>
@@ -242,33 +245,6 @@ function normalizeSmartSummaryMarkdown(value: string): string {
   while (i < lines.length) {
     const raw = lines[i].trim()
     if (!raw) {
-      out.push('')
-      i += 1
-      continue
-    }
-
-    const smartTitle = raw.match(/^smart\s*summary\s*:\s*(.+)$/i)
-    if (smartTitle) {
-      if (out.length > 0 && out[out.length - 1] !== '') out.push('')
-      out.push(`# ${cleanInlineMarkdown(smartTitle[1])}`)
-      out.push('')
-      i += 1
-      continue
-    }
-
-    const numberedHeading = raw.match(/^\d+[.)]\s+(.+)$/)
-    if (numberedHeading) {
-      if (out.length > 0 && out[out.length - 1] !== '') out.push('')
-      out.push(`## ${cleanInlineMarkdown(numberedHeading[1])}`)
-      out.push('')
-      i += 1
-      continue
-    }
-
-    const knownSectionHeading = raw.match(/^(Summary of Video Content|Key Insights and Core Concepts|Brain Structure and Functions|Additional Interesting Facts|Conclusions|Summary Highlights)$/i)
-    if (knownSectionHeading) {
-      if (out.length > 0 && out[out.length - 1] !== '') out.push('')
-      out.push(`## ${cleanInlineMarkdown(knownSectionHeading[1])}`)
       out.push('')
       i += 1
       continue
@@ -706,9 +682,9 @@ export function SummaryPage() {
           {/* Center - Content (60%) */}
           <div className={centerColumnClass}>
             <Card className="min-h-[620px] shadow-sm border-border/70">
-              <CardContent className="p-6 md:p-10 lg:p-12">
+              <CardContent className={isSmartSummary ? 'p-1.5 md:p-2.5 lg:p-3.5' : 'p-6 md:p-10 lg:p-12'}>
                 {isSmartSummary ? (
-                  <article className="smart-summary-content smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:text-2xl prose-h2:font-bold prose-h2:mt-10 prose-h2:mb-4 prose-h3:text-xl prose-h3:mt-7 prose-h3:mb-3 prose-p:my-3 prose-p:leading-8 prose-strong:text-slate-900 prose-li:leading-8 prose-ul:my-4 prose-ol:my-4 prose-hr:my-8 prose-a:text-blue-700 hover:prose-a:text-blue-800">
+                  <article className="smart-summary-content smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-medium prose-headings:text-base prose-headings:tracking-normal prose-headings:text-slate-900 prose-h2:mt-3 prose-h2:mb-1 prose-h3:mt-2 prose-h3:mb-1 prose-p:my-1.5 prose-p:leading-7 prose-strong:text-slate-900 prose-li:leading-7 prose-ul:my-2 prose-ol:my-2 prose-hr:my-5 prose-a:text-blue-700 hover:prose-a:text-blue-800">
                     <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
                   </article>
                 ) : hasSections ? (
