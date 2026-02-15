@@ -148,6 +148,18 @@
     @apply inline-flex items-center rounded-md bg-blue-100 text-blue-700 font-extrabold px-2 py-0.5 mr-1;
   }
 
+  .smart-summary-content .smart-key-title {
+    @apply inline-block font-semibold text-slate-900;
+  }
+
+  .smart-summary-content .smart-key-detail {
+    @apply block mt-1.5 text-slate-800;
+  }
+
+  .smart-summary-content .smart-facts-list {
+    @apply mt-2 list-disc pl-6 space-y-2;
+  }
+
   .smart-summary-content table {
     @apply w-full border-separate border-spacing-0 overflow-hidden rounded-lg border border-slate-300 bg-white text-[14px];
     min-width: 640px;

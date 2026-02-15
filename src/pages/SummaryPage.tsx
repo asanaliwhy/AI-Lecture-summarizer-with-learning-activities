@@ -395,7 +395,17 @@ function enhanceSmartSummaryHtml(html: string): string {
       const match = text.match(keyLabelRegex)
       if (match) {
         const label = match[1]
-        const rest = text.slice(match[0].length)
+        let rest = text.slice(match[0].length).trim()
+
+        // Fix collapsed text like "Boss of Your BodyThe brain..."
+        if (/^key concept$/i.test(label)) {
+          rest = rest.replace(/([a-z\)])([A-Z][a-z])/g, '$1\n$2')
+        }
+
+        const parts = rest.split(/\n+/, 2).map((v) => v.trim()).filter(Boolean)
+        const title = parts[0] || ''
+        const detail = parts[1] || (parts.length === 1 ? '' : parts.slice(1).join(' '))
+
         const p = doc.createElement('p')
         p.className = 'smart-key-row'
 
@@ -404,8 +414,18 @@ function enhanceSmartSummaryHtml(html: string): string {
         badge.textContent = `${label}:`
         p.appendChild(badge)
 
-        if (rest) {
-          p.appendChild(doc.createTextNode(` ${rest}`))
+        if (title) {
+          const titleSpan = doc.createElement('span')
+          titleSpan.className = 'smart-key-title'
+          titleSpan.textContent = title
+          p.appendChild(titleSpan)
+        }
+
+        if (detail) {
+          const detailSpan = doc.createElement('span')
+          detailSpan.className = 'smart-key-detail'
+          detailSpan.textContent = detail
+          p.appendChild(detailSpan)
         }
 
         currentSection.appendChild(p)
@@ -418,6 +438,50 @@ function enhanceSmartSummaryHtml(html: string): string {
 
   root.innerHTML = ''
   root.appendChild(body)
+
+  // Ensure Additional Interesting Facts renders as bullet points for faster scanning.
+  const sectionNodes = body.querySelectorAll('.smart-summary-section')
+  sectionNodes.forEach((section) => {
+    const heading = section.querySelector('h1, h2')
+    const headingText = heading?.textContent?.trim().toLowerCase() || ''
+    if (!headingText.includes('additional interesting facts')) return
+
+    const existingList = section.querySelector('ul, ol')
+    if (existingList) return
+
+    const paragraphs = Array.from(section.querySelectorAll('p'))
+    if (paragraphs.length === 0) return
+
+    const ul = doc.createElement('ul')
+    ul.className = 'smart-facts-list'
+
+    paragraphs.forEach((p) => {
+      const htmlParts = p.innerHTML.split(/<br\s*\/?>/i)
+      if (htmlParts.length > 1) {
+        htmlParts.forEach((part) => {
+          const temp = doc.createElement('div')
+          temp.innerHTML = part
+          const txt = temp.textContent?.trim() || ''
+          if (!txt) return
+          const li = doc.createElement('li')
+          li.textContent = txt
+          ul.appendChild(li)
+        })
+      } else {
+        const txt = p.textContent?.trim() || ''
+        if (!txt) return
+        const li = doc.createElement('li')
+        li.textContent = txt
+        ul.appendChild(li)
+      }
+      p.remove()
+    })
+
+    if (ul.children.length > 0) {
+      section.appendChild(ul)
+    }
+  })
+
   return root.innerHTML
 }
 
