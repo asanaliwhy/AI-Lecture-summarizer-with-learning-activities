@@ -714,7 +714,9 @@ export function SummaryPage() {
   const smartSummaryHtml = summary.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
   const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
   const isSmartSummary = summary.format === 'smart'
-  const leftColumnClass = isSmartSummary ? 'lg:col-span-2 space-y-6' : 'lg:col-span-3 space-y-6'
+  const leftColumnClass = isSmartSummary
+    ? 'lg:col-span-2 space-y-6 lg:-ml-6 xl:-ml-8'
+    : 'lg:col-span-3 space-y-6 lg:-ml-6 xl:-ml-8'
   const centerColumnClass = isSmartSummary ? 'lg:col-span-8' : 'lg:col-span-7'
   const rightColumnClass = isSmartSummary ? 'lg:col-span-2 space-y-6' : 'lg:col-span-2 space-y-6'
 
