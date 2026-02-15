@@ -297,6 +297,22 @@ export interface FlashcardDeckListItemResponse {
     created_at?: string
 }
 
+export type LibraryItemType = 'summary' | 'quiz' | 'flashcard' | 'flashcards' | string
+
+export interface LibraryItemResponse {
+    id: string
+    type: LibraryItemType
+    title?: string
+    tags?: string[]
+    is_favorite?: boolean
+    created_at?: string
+}
+
+export interface LibraryListResponse {
+    items: LibraryItemResponse[]
+    total?: number
+}
+
 export interface GenerateFlashcardsPayload {
     summary_id: string
     title: string
@@ -497,7 +513,7 @@ export const api = {
     library: {
         list: (params?: Record<string, string>) => {
             const qs = params ? '?' + new URLSearchParams(params).toString() : ''
-            return apiFetch<{ items: any[]; total: number }>(`/library${qs}`)
+            return apiFetch<LibraryListResponse>(`/library${qs}`)
         },
     },
 
