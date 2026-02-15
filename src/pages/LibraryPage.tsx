@@ -224,7 +224,12 @@ export function LibraryPage() {
                           selectedItems.includes(item.id) ? 'ring-2 ring-primary border-primary' : 'border-l-transparent',
                         )}
                       >
-                        <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        {item.is_favorite && (
+                          <div className="absolute top-3 right-3 z-10">
+                            <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                          </div>
+                        )}
+                        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                           <Checkbox
                             checked={selectedItems.includes(item.id)}
                             onCheckedChange={() => toggleSelection(item.id)}
@@ -245,9 +250,6 @@ export function LibraryPage() {
                                 : item.type === 'quiz' ? <BrainCircuit className="h-5 w-5" />
                                   : <Layers className="h-5 w-5" />}
                             </div>
-                            {item.is_favorite && (
-                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                            )}
                           </div>
                           <h3 className="font-semibold text-lg mb-2 line-clamp-1 group-hover:text-primary transition-colors">
                             {item.title}
