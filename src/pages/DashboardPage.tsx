@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
@@ -72,8 +72,18 @@ export function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isActivityEstimated, setIsActivityEstimated] = useState(false)
+  const loadRequestIdRef = useRef(0)
+  const saveGoalRequestIdRef = useRef(0)
+
+  useEffect(() => {
+    return () => {
+      loadRequestIdRef.current += 1
+      saveGoalRequestIdRef.current += 1
+    }
+  }, [])
 
   const loadDashboard = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current
     setIsLoading(true)
     setLoadError(null)
     try {
@@ -83,12 +93,21 @@ export function DashboardPage() {
         api.dashboard.streak(),
         api.dashboard.activity(),
       ])
+
+      if (requestId !== loadRequestIdRef.current) {
+        return
+      }
+
       setDashStats(stats)
       setRecentItems(recent?.recent ?? recent?.items ?? [])
       setStreakData(streak)
       setActivityItems(activity?.activity ?? activity?.days ?? [])
       setIsActivityEstimated(Boolean(activity?.estimated))
     } catch (err: unknown) {
+      if (requestId !== loadRequestIdRef.current) {
+        return
+      }
+
       setDashStats(null)
       setRecentItems([])
       setStreakData(null)
@@ -98,7 +117,9 @@ export function DashboardPage() {
       const message = err instanceof Error ? err.message : 'Failed to load dashboard'
       setLoadError(message)
     } finally {
-      setIsLoading(false)
+      if (requestId === loadRequestIdRef.current) {
+        setIsLoading(false)
+      }
     }
   }, [])
 
@@ -246,6 +267,8 @@ export function DashboardPage() {
   }
 
   const handleSaveGoal = async () => {
+    const requestId = ++saveGoalRequestIdRef.current
+
     const inputValue =
       selectedGoalType === 'quiz'
         ? quizGoalInput
@@ -263,6 +286,11 @@ export function DashboardPage() {
     setIsSavingGoal(true)
     try {
       const data = await api.dashboard.setWeeklyGoal(target, selectedGoalType)
+
+      if (requestId !== saveGoalRequestIdRef.current) {
+        return
+      }
+
       setDashStats((prev) => ({
         ...(prev || {}),
         weekly_goal_target: data?.weekly_goal_target ?? target,
@@ -271,10 +299,16 @@ export function DashboardPage() {
       setGoalModalOpen(false)
       toast.success('Weekly goal updated')
     } catch (err: unknown) {
+      if (requestId !== saveGoalRequestIdRef.current) {
+        return
+      }
+
       const message = err instanceof Error ? err.message : 'Failed to update weekly goal'
       toast.error(message)
     } finally {
-      setIsSavingGoal(false)
+      if (requestId === saveGoalRequestIdRef.current) {
+        setIsSavingGoal(false)
+      }
     }
   }
 
