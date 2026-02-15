@@ -516,11 +516,33 @@ func enforceSmartAdditionalFactsBullets(text string) (string, bool) {
 	}
 
 	sectionLines := lines[start+1 : end]
+	hasBullets := false
 	for _, line := range sectionLines {
 		t := strings.TrimSpace(line)
 		if strings.HasPrefix(t, "- ") || strings.HasPrefix(t, "* ") || strings.HasPrefix(t, "+ ") {
-			return normalized, false
+			hasBullets = true
+			break
 		}
+	}
+
+	if hasBullets {
+		// Ensure markdown list parsing stability: keep a blank line after heading.
+		if len(sectionLines) > 0 && strings.TrimSpace(sectionLines[0]) != "" {
+			rebuilt := make([]string, 0, len(lines)+1)
+			rebuilt = append(rebuilt, lines[:start+1]...)
+			rebuilt = append(rebuilt, "")
+			rebuilt = append(rebuilt, sectionLines...)
+			if end < len(lines) {
+				rebuilt = append(rebuilt, lines[end:]...)
+			}
+
+			cleaned := strings.Join(rebuilt, "\n")
+			for strings.Contains(cleaned, "\n\n\n") {
+				cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+			}
+			return strings.TrimSpace(cleaned), true
+		}
+		return normalized, false
 	}
 
 	paragraphs := collectParagraphChunks(sectionLines)
