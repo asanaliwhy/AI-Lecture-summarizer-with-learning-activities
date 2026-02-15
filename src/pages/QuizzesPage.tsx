@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError, type QuizListItemResponse, type QuizQuestionResponse } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
@@ -34,8 +34,11 @@ export function QuizzesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
   const [quickFilter, setQuickFilter] = useState<'all' | 'starred' | 'new' | 'completed' | 'easy' | 'medium' | 'hard'>('all')
+  const loadRequestIdRef = useRef(0)
 
-  const toNumber = (value: any): number | null => {
+  type DifficultyValue = 'easy' | 'medium' | 'hard'
+
+  const toNumber = (value: unknown): number | null => {
     if (typeof value === 'number' && Number.isFinite(value)) return value
     if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) {
       return Number(value)
@@ -43,7 +46,7 @@ export function QuizzesPage() {
     return null
   }
 
-  const safeParseJSON = (value: any) => {
+  const safeParseJSON = (value: unknown): unknown => {
     if (typeof value !== 'string') return value
     try {
       return JSON.parse(value)
@@ -52,26 +55,44 @@ export function QuizzesPage() {
     }
   }
 
-  useEffect(() => {
-    async function load() {
-      setLoadError(null)
-      try {
-        const data = await api.quizzes.list()
-        setQuizzes(data.quizzes || [])
-      } catch (err: unknown) {
-        setQuizzes([])
-        const message = err instanceof ApiError
+  const loadQuizzes = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current
+
+    setIsLoading(true)
+    setLoadError(null)
+    try {
+      const data = await api.quizzes.list()
+      if (requestId !== loadRequestIdRef.current) {
+        return
+      }
+
+      setQuizzes(data.quizzes || [])
+    } catch (err: unknown) {
+      if (requestId !== loadRequestIdRef.current) {
+        return
+      }
+
+      setQuizzes([])
+      const message = err instanceof ApiError
+        ? err.message
+        : err instanceof Error
           ? err.message
-          : err instanceof Error
-            ? err.message
-            : 'Failed to load quizzes'
-        setLoadError(message)
-      } finally {
+          : 'Failed to load quizzes'
+      setLoadError(message)
+    } finally {
+      if (requestId === loadRequestIdRef.current) {
         setIsLoading(false)
       }
     }
-    load()
   }, [])
+
+  useEffect(() => {
+    loadQuizzes()
+
+    return () => {
+      loadRequestIdRef.current += 1
+    }
+  }, [loadQuizzes])
 
   const isQuizStarred = (quizId: string) => {
     const quiz = quizzes.find((q) => q.id === quizId)
@@ -164,14 +185,19 @@ export function QuizzesPage() {
     }
   }
 
-  const getDifficultyLabel = (diff: any) => {
+  const getDifficultyLabel = (diff: unknown): 'Easy' | 'Medium' | 'Hard' => {
     if (diff === 1 || diff === 'easy') return 'Easy'
     if (diff === 2 || diff === 'medium') return 'Medium'
     if (diff === 3 || diff === 'hard') return 'Hard'
-    return diff || 'Medium'
+    if (typeof diff === 'string') {
+      const normalized = diff.trim().toLowerCase()
+      if (normalized === 'easy') return 'Easy'
+      if (normalized === 'hard') return 'Hard'
+    }
+    return 'Medium'
   }
 
-  const resolveQuizDifficulty = (quiz: QuizListItemResponse): QuizListItemResponse['difficulty'] => {
+  const resolveQuizDifficulty = (quiz: QuizListItemResponse): unknown => {
     const direct = quiz?.difficulty
     if (direct !== undefined && direct !== null && String(direct).trim() !== '') {
       return direct
@@ -190,7 +216,10 @@ export function QuizzesPage() {
       return fromConfig
     }
 
-    const questions = safeParseJSON(quiz?.questions) as QuizQuestionResponse[] | string | undefined
+    const parsedQuestions = safeParseJSON(quiz?.questions)
+    const questions = Array.isArray(parsedQuestions)
+      ? parsedQuestions as QuizQuestionResponse[]
+      : undefined
     if (Array.isArray(questions) && questions.length > 0) {
       const fromQuestion = questions[0]?.difficulty
       if (fromQuestion !== undefined && fromQuestion !== null && String(fromQuestion).trim() !== '') {
@@ -201,7 +230,7 @@ export function QuizzesPage() {
     return 'medium'
   }
 
-  const normalizeDifficulty = (diff: any): 'easy' | 'medium' | 'hard' => {
+  const normalizeDifficulty = (diff: unknown): DifficultyValue => {
     const value = String(diff ?? '').toLowerCase().trim()
     if (value === '1' || value === 'easy') return 'easy'
     if (value === '3' || value === 'hard') return 'hard'
@@ -431,7 +460,7 @@ export function QuizzesPage() {
           <div className="text-center py-16 border rounded-xl bg-secondary/10">
             <h3 className="text-lg font-semibold mb-2">Failed to load quizzes</h3>
             <p className="text-muted-foreground mb-4">{loadError}</p>
-            <Button onClick={() => window.location.reload()}>Retry</Button>
+            <Button onClick={loadQuizzes}>Retry</Button>
           </div>
         ) : quizzes.length === 0 ? (
           <div className="text-center py-16">
@@ -452,6 +481,14 @@ export function QuizzesPage() {
                   key={quiz.id}
                   className="group hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer border relative overflow-hidden"
                   onClick={() => navigate(`/quiz/results/${quiz.last_attempt_id || quiz.id}`)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate(`/quiz/results/${quiz.last_attempt_id || quiz.id}`)
+                    }
+                  }}
                 >
                   <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500/60 via-teal-500/40 to-cyan-500/30" />
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
