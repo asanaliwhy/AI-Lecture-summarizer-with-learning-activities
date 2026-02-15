@@ -93,12 +93,28 @@ function splitIntoSections(value: string): Array<{ title: string; body: string }
     const line = rawLine.trim()
     if (!line) continue
 
+    const normalizedHeading = line.toLowerCase().replace(/:\s*$/, '')
+    const isKnownHeading = [
+      'overview',
+      'core structures',
+      'interesting facts',
+      'summary',
+      'key insights',
+      'key insights and core concepts',
+      'brain structure and functions',
+    ].includes(normalizedHeading)
+
     const headingMatch = line.match(/^(.{3,80}):$/)
     const looksLikeHeading =
       !line.startsWith('• ') &&
       line.length <= 80 &&
       !/[.!?]$/.test(line) &&
       /[A-Za-zÀ-ÿ]/.test(line)
+
+    if (isKnownHeading && currentBody.length === 0) {
+      currentTitle = line.replace(/:\s*$/, '')
+      continue
+    }
 
     if (headingMatch) {
       flush()
