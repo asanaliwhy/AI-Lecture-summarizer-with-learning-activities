@@ -431,7 +431,7 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if typeFilter == "" || typeFilter == "quiz" {
-		query := "SELECT id, title, created_at FROM quizzes WHERE user_id = $1"
+		query := "SELECT id, title, is_favorite, created_at FROM quizzes WHERE user_id = $1"
 		args := []interface{}{userID}
 		if searchQuery != "" {
 			query += " AND LOWER(title) LIKE $2"
@@ -442,14 +442,14 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		rows, _ := h.pool.Query(ctx, query, args...)
 		for rows.Next() {
 			item := LibraryItem{Type: "quiz"}
-			rows.Scan(&item.ID, &item.Title, &item.CreatedAt)
+			rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt)
 			items = append(items, item)
 		}
 		rows.Close()
 	}
 
 	if typeFilter == "" || typeFilter == "flashcard" || typeFilter == "flashcards" {
-		query := "SELECT id, title, created_at FROM flashcard_decks WHERE user_id = $1"
+		query := "SELECT id, title, is_favorite, created_at FROM flashcard_decks WHERE user_id = $1"
 		args := []interface{}{userID}
 		if searchQuery != "" {
 			query += " AND LOWER(title) LIKE $2"
@@ -460,7 +460,7 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		rows, _ := h.pool.Query(ctx, query, args...)
 		for rows.Next() {
 			item := LibraryItem{Type: "flashcard"}
-			rows.Scan(&item.ID, &item.Title, &item.CreatedAt)
+			rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt)
 			items = append(items, item)
 		}
 		rows.Close()
