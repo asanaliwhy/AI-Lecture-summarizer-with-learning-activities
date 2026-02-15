@@ -16,16 +16,19 @@ import {
   Calendar,
   Loader2,
   Search,
+  Star,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 export function QuizzesPage() {
+  const QUIZ_FAVORITES_STORAGE_KEY = 'quiz_favorite_ids'
   const navigate = useNavigate()
   const [quizzes, setQuizzes] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
-  const [quickFilter, setQuickFilter] = useState<'all' | 'new' | 'completed' | 'easy' | 'medium' | 'hard'>('all')
+  const [quickFilter, setQuickFilter] = useState<'all' | 'starred' | 'new' | 'completed' | 'easy' | 'medium' | 'hard'>('all')
+  const [starredQuizIds, setStarredQuizIds] = useState<string[]>([])
 
   const toNumber = (value: any): number | null => {
     if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -57,6 +60,37 @@ export function QuizzesPage() {
     }
     load()
   }, [])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(QUIZ_FAVORITES_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        const normalized = parsed
+          .filter((id) => typeof id === 'string' && id.trim().length > 0)
+          .map((id) => id.trim())
+        setStarredQuizIds(Array.from(new Set(normalized)))
+      }
+    } catch {
+      setStarredQuizIds([])
+    }
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem(QUIZ_FAVORITES_STORAGE_KEY, JSON.stringify(starredQuizIds))
+  }, [starredQuizIds])
+
+  const isQuizStarred = (quizId: string | number) => starredQuizIds.includes(String(quizId))
+
+  const toggleFavorite = (quizId: string | number) => {
+    const normalized = String(quizId)
+    setStarredQuizIds((prev) =>
+      prev.includes(normalized)
+        ? prev.filter((id) => id !== normalized)
+        : [...prev, normalized],
+    )
+  }
 
   // Compute stats from real data
   const completedQuizzes = quizzes.filter((q: any) => q.last_score !== undefined && q.last_score !== null)
@@ -143,6 +177,7 @@ export function QuizzesPage() {
 
   const filterOptions: Array<{ key: typeof quickFilter; label: string }> = [
     { key: 'all', label: 'All' },
+    { key: 'starred', label: 'Starred' },
     { key: 'new', label: 'New' },
     { key: 'completed', label: 'Completed' },
     { key: 'easy', label: 'Easy' },
@@ -162,6 +197,10 @@ export function QuizzesPage() {
       if (!matchesSearch) return false
 
       if (quickFilter === 'all') return true
+
+      if (quickFilter === 'starred') {
+        return isQuizStarred(quiz.id)
+      }
 
       const hasScore = quiz.last_score !== undefined && quiz.last_score !== null
       if (quickFilter === 'new') return !hasScore
@@ -328,6 +367,7 @@ export function QuizzesPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {filteredQuizzes.map((quiz: any) => {
               const difficultyValue = resolveQuizDifficulty(quiz)
+              const starred = isQuizStarred(quiz.id)
               return (
                 <Card
                   key={quiz.id}
@@ -365,6 +405,29 @@ export function QuizzesPage() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
+                        <button
+                          type="button"
+                          className={cn(
+                            'h-8 w-8 rounded-full border flex items-center justify-center transition-colors',
+                            starred
+                              ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
+                              : 'border-border bg-background hover:bg-secondary',
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleFavorite(quiz.id)
+                          }}
+                          aria-label={starred ? 'Remove from favorites' : 'Add to favorites'}
+                        >
+                          <Star
+                            className={cn(
+                              'h-4 w-4',
+                              starred
+                                ? 'text-amber-500 fill-amber-500'
+                                : 'text-muted-foreground',
+                            )}
+                          />
+                        </button>
                         {quiz.last_score !== undefined && quiz.last_score !== null ? (
                           <ScoreRing score={toNumber(quiz.last_score) ?? 0} />
                         ) : (
