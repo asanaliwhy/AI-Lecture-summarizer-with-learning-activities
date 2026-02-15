@@ -12,6 +12,9 @@ import {
   Trophy,
   Target,
   Flame,
+  Sparkles,
+  SlidersHorizontal,
+  Plus,
   RotateCcw,
   Eye,
   Calendar,
@@ -262,6 +265,19 @@ export function QuizzesPage() {
       return bDate - aDate
     })
 
+  const starredQuizzesCount = quizzes.filter((q) => Boolean(q.is_favorite)).length
+  const newQuizzesCount = quizzes.filter((q) => q.last_score === undefined || q.last_score === null).length
+  const completedQuizzesCount = completedQuizzes.length
+
+  const getQuickFilterCount = (key: typeof quickFilter) => {
+    if (key === 'all') return quizzes.length
+    if (key === 'starred') return starredQuizzesCount
+    if (key === 'new') return newQuizzesCount
+    if (key === 'completed') return completedQuizzesCount
+
+    return quizzes.filter((quiz) => normalizeDifficulty(resolveQuizDifficulty(quiz)) === key).length
+  }
+
   const ScoreRing = ({ score }: { score: number }) => {
     const radius = 24
     const circumference = 2 * Math.PI * radius
@@ -285,31 +301,58 @@ export function QuizzesPage() {
   return (
     <AppLayout>
       <div className="space-y-8 animate-in fade-in duration-500">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-3xl font-bold tracking-tight">My Quizzes</h1>
-              <Badge variant="secondary" className="rounded-full px-3">{quizzes.length}</Badge>
+        {/* Hero */}
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background via-background to-secondary/25 p-6 shadow-sm">
+          <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+          <div className="pointer-events-none absolute -left-16 -bottom-20 h-44 w-44 rounded-full bg-purple-400/10 blur-3xl" />
+
+          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-3xl font-bold tracking-tight">My Quizzes</h1>
+                <Badge variant="secondary" className="rounded-full px-3">{quizzes.length}</Badge>
+              </div>
+              <p className="text-muted-foreground">Review your performance and retake assessments.</p>
             </div>
-            <p className="text-muted-foreground">Review your performance and retake assessments.</p>
+
+            <Button variant="outline" className="bg-background/80 backdrop-blur" onClick={() => navigate('/summaries')}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Quiz
+            </Button>
           </div>
-          <Button variant="outline" onClick={() => navigate('/summaries')}>
-            Create Quiz (Select Summary First)
-          </Button>
+
+          <div className="relative mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: 'Total', value: quizzes.length, icon: BrainCircuit },
+              { label: 'Starred', value: starredQuizzesCount, icon: Star },
+              { label: 'New', value: newQuizzesCount, icon: Sparkles },
+              { label: 'Completed', value: completedQuizzesCount, icon: Trophy },
+            ].map((stat) => {
+              const Icon = stat.icon
+              return (
+                <div key={stat.label} className="rounded-xl border bg-card/90 p-3 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight">{stat.value}</p>
+                </div>
+              )
+            })}
+          </div>
         </div>
 
         {/* Stats Row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {stats.map((stat) => (
-            <Card key={stat.label} className="border-none shadow-sm bg-secondary/30 hover:bg-secondary/50 transition-colors">
+            <Card key={stat.label} className="border shadow-sm bg-card hover:shadow-md transition-shadow">
               <CardContent className="p-4 flex items-center gap-4">
-                <div className={cn('h-10 w-10 rounded-full flex items-center justify-center shadow-sm', stat.bg, stat.color)}>
+                <div className={cn('h-10 w-10 rounded-xl flex items-center justify-center shadow-sm', stat.bg, stat.color)}>
                   <stat.icon className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{stat.value}</p>
-                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{stat.label}</p>
+                  <p className="text-2xl font-bold leading-none">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mt-1">{stat.label}</p>
                 </div>
               </CardContent>
             </Card>
@@ -317,75 +360,89 @@ export function QuizzesPage() {
         </div>
 
         {/* Controls */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search quizzes..."
-              className="pl-9 transition-all focus-visible:ring-primary"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground whitespace-nowrap hidden sm:inline">
-              Sort by:
-            </span>
-            <div className="flex bg-secondary/50 rounded-lg p-1">
-              <button
-                onClick={() => setSortOrder('newest')}
-                className={cn(
-                  'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
-                  sortOrder === 'newest'
-                    ? 'bg-background shadow-sm text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                Newest
-              </button>
-              <button
-                onClick={() => setSortOrder('oldest')}
-                className={cn(
-                  'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
-                  sortOrder === 'oldest'
-                    ? 'bg-background shadow-sm text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                Oldest
-              </button>
-              <button
-                onClick={() => setSortOrder('az')}
-                className={cn(
-                  'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
-                  sortOrder === 'az'
-                    ? 'bg-background shadow-sm text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                A-Z
-              </button>
-            </div>
-          </div>
-        </div>
+        <Card className="border shadow-sm">
+          <CardContent className="p-4 md:p-5 space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search quizzes..."
+                  className="pl-9 transition-all focus-visible:ring-primary"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {filterOptions.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              onClick={() => setQuickFilter(option.key)}
-              className={cn(
-                'px-3 py-1.5 text-xs rounded-full border transition-colors',
-                quickFilter === option.key
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-background text-muted-foreground hover:text-foreground border-border',
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground whitespace-nowrap hidden md:inline">
+                  <SlidersHorizontal className="h-4 w-4 inline mr-1" />
+                  Sort:
+                </span>
+                <div className="flex bg-secondary/50 rounded-lg p-1 border">
+                  <button
+                    onClick={() => setSortOrder('newest')}
+                    className={cn(
+                      'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
+                      sortOrder === 'newest'
+                        ? 'bg-background shadow-sm text-foreground'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    Newest
+                  </button>
+                  <button
+                    onClick={() => setSortOrder('oldest')}
+                    className={cn(
+                      'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
+                      sortOrder === 'oldest'
+                        ? 'bg-background shadow-sm text-foreground'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    Oldest
+                  </button>
+                  <button
+                    onClick={() => setSortOrder('az')}
+                    className={cn(
+                      'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
+                      sortOrder === 'az'
+                        ? 'bg-background shadow-sm text-foreground'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    A-Z
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {filterOptions.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setQuickFilter(option.key)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-colors',
+                    quickFilter === option.key
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background text-muted-foreground hover:text-foreground border-border',
+                  )}
+                >
+                  <span>{option.label}</span>
+                  <span className={cn(
+                    'rounded-full px-1.5 py-0.5 text-[10px] leading-none',
+                    quickFilter === option.key
+                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                      : 'bg-secondary text-secondary-foreground',
+                  )}>
+                    {getQuickFilterCount(option.key)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Grid */}
         {isLoading ? (
@@ -415,14 +472,15 @@ export function QuizzesPage() {
               return (
                 <Card
                   key={quiz.id}
-                  className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-l-4 border-l-transparent hover:border-l-primary relative overflow-hidden"
+                  className="group hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer border relative overflow-hidden"
                   onClick={() => navigate(`/quiz/results/${quiz.last_attempt_id || quiz.id}`)}
                 >
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500/60 via-teal-500/40 to-cyan-500/30" />
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                   <CardContent className="p-6 relative z-10">
                     <div className="flex justify-between items-start gap-4">
                       <div className="flex gap-4 min-w-0">
-                        <div className="h-12 w-12 rounded-xl bg-green-100 text-green-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                        <div className="h-12 w-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                           <BrainCircuit className="h-6 w-6" />
                         </div>
                         <div className="min-w-0">
@@ -435,7 +493,7 @@ export function QuizzesPage() {
                             </p>
                           )}
                           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 rounded-md bg-secondary/40 px-2 py-1">
                               <Calendar className="h-3 w-3" />
                               {quiz.created_at ? new Date(quiz.created_at).toLocaleDateString() : ''}
                             </div>
