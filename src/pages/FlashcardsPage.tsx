@@ -200,9 +200,8 @@ export function FlashcardsPage() {
                     <div className="relative mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
                         {[
                             { label: 'Total', value: decks.length, icon: LayoutGrid },
-                            { label: 'Starred', value: starredDecksCount, icon: Star },
-                            { label: 'New', value: newDecksCount, icon: Sparkles },
                             { label: 'Total Cards', value: totalCards, icon: Library },
+                            { label: 'Avg Cards/Deck', value: decks.length > 0 ? Math.round(totalCards / decks.length) : 0, icon: BarChart3 },
                         ].map((stat) => {
                             const Icon = stat.icon
                             return (
