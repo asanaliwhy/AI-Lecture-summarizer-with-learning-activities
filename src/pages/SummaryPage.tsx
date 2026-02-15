@@ -467,6 +467,8 @@ function enhanceSmartSummaryHtml(html: string): string {
     const ul = doc.createElement('ul')
     ul.className = 'smart-facts-list'
 
+    const sentenceSplitRegex = /(?<=[.!?])\s+(?=[A-Z0-9“"(])/g
+
     paragraphs.forEach((p) => {
       const htmlParts = p.innerHTML.split(/<br\s*\/?>/i)
       if (htmlParts.length > 1) {
@@ -482,9 +484,21 @@ function enhanceSmartSummaryHtml(html: string): string {
       } else {
         const txt = p.textContent?.trim() || ''
         if (!txt) return
-        const li = doc.createElement('li')
-        li.textContent = txt
-        ul.appendChild(li)
+
+        // Fallback: if model emitted one paragraph instead of bullets,
+        // split into sentence-level bullets for scanability.
+        const sentenceParts = txt.split(sentenceSplitRegex).map((v) => v.trim()).filter(Boolean)
+        if (sentenceParts.length >= 2) {
+          sentenceParts.forEach((part) => {
+            const li = doc.createElement('li')
+            li.textContent = part
+            ul.appendChild(li)
+          })
+        } else {
+          const li = doc.createElement('li')
+          li.textContent = txt
+          ul.appendChild(li)
+        }
       }
       p.remove()
     })
