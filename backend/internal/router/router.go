@@ -94,6 +94,7 @@ func New(
 			r.Get("/", quizHandler.List)
 			r.Get("/{id}", quizHandler.Get)
 			r.Put("/{id}/favorite", quizHandler.ToggleFavorite)
+			r.Delete("/{id}", quizHandler.Delete)
 			r.Post("/{id}/start", quizHandler.StartAttempt)
 		})
 
@@ -114,6 +115,7 @@ func New(
 				r.Get("/{id}", flashcardHandler.GetDeck)
 				r.Get("/{id}/stats", flashcardHandler.GetDeckStats)
 				r.Put("/{id}/favorite", flashcardHandler.ToggleFavorite)
+				r.Delete("/{id}", flashcardHandler.DeleteDeck)
 			})
 
 			r.Route("/cards", func(r chi.Router) {

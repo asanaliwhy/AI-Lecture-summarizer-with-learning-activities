@@ -411,6 +411,9 @@ export const api = {
 
         get: (id: string) => apiFetch<any>(`/quizzes/${id}`),
 
+        delete: (id: string) =>
+            apiFetch<{ message: string }>(`/quizzes/${id}`, { method: 'DELETE' }),
+
         startAttempt: (quizId: string) =>
             apiFetch<{ attempt?: any; attempt_id?: string; started_at?: string }>(`/quizzes/${quizId}/start`, { method: 'POST' }),
 
@@ -445,6 +448,9 @@ export const api = {
 
         toggleFavorite: (id: string) =>
             apiFetch<{ message: string }>(`/flashcards/decks/${id}/favorite`, { method: 'PUT' }),
+
+        deleteDeck: (id: string) =>
+            apiFetch<{ message: string }>(`/flashcards/decks/${id}`, { method: 'DELETE' }),
 
         rateCard: (cardId: string, rating: number) =>
             apiFetch(`/flashcards/cards/${cardId}/rating`, {

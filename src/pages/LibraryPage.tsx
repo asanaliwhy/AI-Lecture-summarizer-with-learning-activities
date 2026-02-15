@@ -81,13 +81,30 @@ export function LibraryPage() {
   }
 
   const handleDelete = async () => {
-    // Delete selected items (summaries for now)
     for (const id of selectedItems) {
-      try { await api.summaries.delete(id) } catch { }
+      const item = items.find((i) => i.id === id)
+      if (!item) continue
+
+      try {
+        if (item.type === 'summary') {
+          await api.summaries.delete(id)
+        } else if (item.type === 'quiz') {
+          await api.quizzes.delete(id)
+        } else if (item.type === 'flashcard' || item.type === 'flashcards') {
+          await api.flashcards.deleteDeck(id)
+        }
+      } catch { }
     }
+
     setSelectedItems([])
-    // Refresh
-    const data = await api.library.list()
+
+    const params: Record<string, string> = {}
+    if (searchQuery) params.search = searchQuery
+    if (typeFilter !== 'all') {
+      params.type = typeFilter === 'flashcards' ? 'flashcard' : typeFilter
+    }
+
+    const data = await api.library.list(params)
     setItems(data.items || [])
   }
 

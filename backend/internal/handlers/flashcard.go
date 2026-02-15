@@ -175,6 +175,33 @@ func (h *FlashcardHandler) ToggleFavorite(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Favorite toggled"})
 }
 
+func (h *FlashcardHandler) DeleteDeck(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid deck ID", r))
+		return
+	}
+
+	deck, err := h.flashRepo.GetDeckByID(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Deck not found", r))
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	if deck.UserID != userID {
+		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
+		return
+	}
+
+	if err := h.flashRepo.DeleteDeck(r.Context(), id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to delete deck", r))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Deck deleted"})
+}
+
 func (h *FlashcardHandler) RateCard(w http.ResponseWriter, r *http.Request) {
 	cardID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {

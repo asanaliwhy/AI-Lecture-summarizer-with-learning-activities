@@ -142,6 +142,33 @@ func (h *QuizHandler) ToggleFavorite(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Favorite toggled"})
 }
 
+func (h *QuizHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid quiz ID", r))
+		return
+	}
+
+	quiz, err := h.quizRepo.GetByID(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Quiz not found", r))
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	if quiz.UserID != userID {
+		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
+		return
+	}
+
+	if err := h.quizRepo.Delete(r.Context(), id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to delete quiz", r))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Quiz deleted"})
+}
+
 func (h *QuizHandler) StartAttempt(w http.ResponseWriter, r *http.Request) {
 	quizID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
