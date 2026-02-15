@@ -577,6 +577,86 @@ function renderSmartSummaryHtml(value: string): string {
   return DOMPurify.sanitize(enhanced)
 }
 
+type PdfContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'table'; headers: string[]; rows: string[][] }
+
+function isMarkdownTableSeparator(line: string): boolean {
+  return /^\|\s*:?-{3,}.*\|$/.test(line.trim())
+}
+
+function parseMarkdownTableRow(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cleanInlineMarkdown(cell))
+}
+
+function parseSmartPdfBlocks(markdown: string): PdfContentBlock[] {
+  const normalized = markdown.replace(/\r\n/g, '\n').trim()
+  if (!normalized) return []
+
+  const lines = normalized.split('\n')
+  const blocks: PdfContentBlock[] = []
+  const textLines: string[] = []
+
+  const flushText = () => {
+    const text = textLines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+    if (text) blocks.push({ type: 'text', text })
+    textLines.length = 0
+  }
+
+  let i = 0
+  while (i < lines.length) {
+    const raw = lines[i]
+    const line = raw.trim()
+
+    if (!line) {
+      textLines.push('')
+      i += 1
+      continue
+    }
+
+    const next = (lines[i + 1] || '').trim()
+    const isTableHeader = line.startsWith('|') && line.endsWith('|') && isMarkdownTableSeparator(next)
+    if (isTableHeader) {
+      flushText()
+
+      const headers = parseMarkdownTableRow(line)
+      const rows: string[][] = []
+      i += 2 // skip separator line
+
+      while (i < lines.length) {
+        const rowLine = lines[i].trim()
+        if (!(rowLine.startsWith('|') && rowLine.endsWith('|'))) break
+        const row = parseMarkdownTableRow(rowLine)
+        if (row.length > 0) rows.push(row)
+        i += 1
+      }
+
+      if (headers.length > 0 && rows.length > 0) {
+        blocks.push({ type: 'table', headers, rows })
+      }
+      continue
+    }
+
+    let cleaned = line
+      .replace(/^#{1,6}\s+/, '')
+      .replace(/^[-*+]\s+/, '• ')
+      .replace(/^•\s+/, '• ')
+    cleaned = cleanInlineMarkdown(cleaned)
+    if (cleaned) textLines.push(cleaned)
+
+    i += 1
+  }
+
+  flushText()
+
+  return blocks
+}
+
 export function SummaryPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -715,7 +795,8 @@ export function SummaryPage() {
       const margin = 48
       const contentWidth = pageWidth - margin * 2
 
-      const rawMain = normalizeGeneralSummaryText(summary?.content_raw || summary?.content || summary?.body || '')
+      const rawSmart = summary?.content_raw || summary?.content || summary?.body || ''
+      const rawMain = normalizeGeneralSummaryText(rawSmart)
       const cues = normalizeCornellText(summary?.cornell_cues || '')
       const notes = normalizeCornellText(summary?.cornell_notes || '')
       const cornellSummaryText = normalizeCornellText(summary?.cornell_summary || '')
@@ -737,16 +818,126 @@ export function SummaryPage() {
       doc.text(`Generated: ${dateLabel}`, margin, y)
       y += 24
 
-      doc.setFontSize(12)
-      const lines = doc.splitTextToSize(text, contentWidth)
-
-      for (const line of lines) {
-        if (y > pageHeight - margin) {
+      const ensurePageSpace = (heightNeeded: number) => {
+        if (y + heightNeeded > pageHeight - margin) {
           doc.addPage()
           y = margin
         }
-        doc.text(line, margin, y)
-        y += 18
+      }
+
+      const renderTextParagraphs = (blockText: string) => {
+        const rows = blockText.split('\n')
+        for (const row of rows) {
+          const line = row.trim()
+          if (!line) {
+            y += 8
+            continue
+          }
+
+          const looksLikeHeading = !line.startsWith('• ') && line.length <= 90 && !/[.!?]$/.test(line)
+          doc.setFont('helvetica', looksLikeHeading ? 'bold' : 'normal')
+          doc.setFontSize(looksLikeHeading ? 12.5 : 12)
+
+          const wrapped = doc.splitTextToSize(line, contentWidth) as string[]
+          for (const wrappedLine of wrapped) {
+            ensurePageSpace(18)
+            doc.text(wrappedLine, margin, y)
+            y += looksLikeHeading ? 18 : 17
+          }
+
+          if (looksLikeHeading) y += 2
+        }
+        y += 8
+      }
+
+      const renderMarkdownTable = (headers: string[], rows: string[][]) => {
+        const colCount = Math.max(headers.length, ...rows.map((r) => r.length), 2)
+        const colWidth = contentWidth / colCount
+
+        const normalizeRow = (row: string[]): string[] => {
+          const normalized = [...row]
+          while (normalized.length < colCount) normalized.push('')
+          return normalized.slice(0, colCount)
+        }
+
+        const tableHeaders = normalizeRow(headers)
+        const tableRows = rows.map(normalizeRow)
+
+        const getRowLayout = (cells: string[]) => {
+          const cellLines = cells.map((cell) =>
+            doc.splitTextToSize(cell || '—', Math.max(colWidth - 10, 24)) as string[],
+          )
+          const maxLines = Math.max(1, ...cellLines.map((lineGroup) => lineGroup.length))
+          const rowHeight = Math.max(22, maxLines * 13 + 8)
+          return { cellLines, rowHeight }
+        }
+
+        const drawRow = (cells: string[], isHeader: boolean) => {
+          const { cellLines, rowHeight } = getRowLayout(cells)
+
+          for (let c = 0; c < colCount; c += 1) {
+            const x = margin + c * colWidth
+            doc.setDrawColor(203, 213, 225)
+            if (isHeader) {
+              doc.setFillColor(241, 245, 249)
+              doc.rect(x, y, colWidth, rowHeight, 'FD')
+            } else {
+              doc.rect(x, y, colWidth, rowHeight)
+            }
+
+            doc.setFont('helvetica', isHeader ? 'bold' : 'normal')
+            doc.setFontSize(isHeader ? 10.5 : 10)
+            doc.text(cellLines[c], x + 5, y + 14, { maxWidth: Math.max(colWidth - 10, 24) })
+          }
+
+          y += rowHeight
+        }
+
+        const drawHeader = () => {
+          const { rowHeight } = getRowLayout(tableHeaders)
+          ensurePageSpace(rowHeight)
+          drawRow(tableHeaders, true)
+        }
+
+        y += 2
+        drawHeader()
+
+        for (const row of tableRows) {
+          const { rowHeight } = getRowLayout(row)
+          if (y + rowHeight > pageHeight - margin) {
+            doc.addPage()
+            y = margin
+            drawHeader()
+          }
+          drawRow(row, false)
+        }
+
+        y += 12
+      }
+
+      if (summary?.format === 'smart') {
+        const blocks = parseSmartPdfBlocks(rawSmart)
+        const safeBlocks =
+          blocks.length > 0
+            ? blocks
+            : [{ type: 'text', text: normalizeGeneralSummaryText(rawSmart) || 'No content available.' } as PdfContentBlock]
+
+        safeBlocks.forEach((block) => {
+          if (block.type === 'table') {
+            renderMarkdownTable(block.headers, block.rows)
+          } else {
+            renderTextParagraphs(block.text)
+          }
+        })
+      } else {
+        doc.setFontSize(12)
+        const lines = doc.splitTextToSize(text, contentWidth) as string[]
+
+        for (const line of lines) {
+          ensurePageSpace(18)
+          doc.text(line, margin, y)
+          y += 18
+        }
       }
 
       doc.save(`${fileTitle}.pdf`)
