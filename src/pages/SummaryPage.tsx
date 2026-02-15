@@ -330,7 +330,15 @@ function normalizeSmartSummaryMarkdown(value: string): string {
 
     const keyValue = raw.match(/^([A-Za-z][A-Za-z\s&/-]{1,40}):\s+(.+)$/)
     if (keyValue) {
-      out.push(`- **${cleanInlineMarkdown(keyValue[1])}:** ${cleanInlineMarkdown(keyValue[2])}`)
+      const label = cleanInlineMarkdown(keyValue[1])
+      const value = cleanInlineMarkdown(keyValue[2])
+      const normalizedLabel = label.toLowerCase()
+
+      if (/^(key concept|definition|example|insight|fact|figure)$/.test(normalizedLabel)) {
+        out.push(`> **${label}:** ${value}`)
+      } else {
+        out.push(`- **${label}:** ${value}`)
+      }
       i += 1
       continue
     }
@@ -759,7 +767,7 @@ export function SummaryPage() {
             <Card className="min-h-[620px] shadow-sm border-border/70">
               <CardContent className={isSmartSummary ? 'p-4 md:p-5 lg:p-6' : 'p-6 md:p-10 lg:p-12'}>
                 {isSmartSummary ? (
-                  <article className="smart-summary-content smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:text-[1.28rem] prose-h2:leading-tight prose-h2:mt-7 prose-h2:mb-3 prose-h3:text-[1.08rem] prose-h3:mt-5 prose-h3:mb-2 prose-p:my-2.5 prose-p:leading-[1.75] prose-strong:text-slate-900 prose-li:leading-[1.72] prose-ul:my-3 prose-ol:my-3 prose-hr:my-6 prose-a:text-blue-700 hover:prose-a:text-blue-800">
+                  <article className="smart-summary-content smart-summary-modern smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-bold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:text-[1.42rem] prose-h2:leading-tight prose-h2:border-l-4 prose-h2:border-blue-500 prose-h2:pl-3 prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-[1.14rem] prose-h3:mt-5 prose-h3:mb-3 prose-p:my-2.5 prose-p:leading-[1.78] prose-strong:text-slate-900 prose-li:leading-[1.75] prose-ul:my-3 prose-ol:my-3 prose-hr:my-6 prose-a:text-blue-700 hover:prose-a:text-blue-800">
                     <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
                   </article>
                 ) : hasSections ? (

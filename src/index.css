@@ -104,6 +104,8 @@
 
   .smart-summary-content {
     @apply p-1 md:p-1.5;
+    font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #0f172a;
   }
 
   .smart-summary-content.smart-summary-scroll {
@@ -116,6 +118,10 @@
 
   .smart-summary-content .smart-summary-section {
     @apply rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-4 md:px-5 md:py-5;
+  }
+
+  .smart-summary-content.smart-summary-modern {
+    --smart-accent: #2563eb;
   }
 
   .smart-summary-content .smart-summary-section>h1,
@@ -161,12 +167,26 @@
     @apply bg-slate-50/70;
   }
 
+  .smart-summary-content tbody tr:hover {
+    @apply bg-blue-50/70;
+  }
+
   .smart-summary-content tbody tr:last-child {
     @apply border-b-0;
   }
 
   .smart-summary-content blockquote {
-    @apply border-l-4 border-blue-200 bg-blue-50/50 px-4 py-3 rounded-r-md text-slate-700;
+    @apply border-l-4 border-blue-300 bg-blue-50/60 px-4 py-3 rounded-r-md text-slate-700;
+  }
+
+  .smart-summary-content ul>li::marker,
+  .smart-summary-content ol>li::marker {
+    color: var(--smart-accent);
+    font-weight: 700;
+  }
+
+  .smart-summary-content h2 {
+    color: var(--smart-accent);
   }
 
   .smart-summary-content code {
