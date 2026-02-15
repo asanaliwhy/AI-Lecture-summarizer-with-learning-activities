@@ -109,18 +109,50 @@ export function LibraryPage() {
     setItems(data.items || [])
   }
 
+  const sanitizeFileName = (value: string, fallback = 'export') => {
+    const cleaned = value
+      .replace(/[\\/:*?"<>|]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120)
+
+    return cleaned || fallback
+  }
+
   const handleExport = async () => {
     if (selectedItems.length === 0 || isExporting) return
 
     setIsExporting(true)
     try {
-      const exportItems: Array<{
-        id: string
-        type: string
-        title?: string
-        data: any
-      }> = []
-      const failed: Array<{ id: string; type?: string; reason: string }> = []
+      const { jsPDF } = await import('jspdf')
+
+      const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+      const writeWrapped = (
+        doc: any,
+        text: string,
+        state: { y: number; pageHeight: number; margin: number; width: number },
+        options?: { size?: number; bold?: boolean; gap?: number },
+      ) => {
+        const size = options?.size ?? 11
+        const bold = options?.bold ?? false
+        const gap = options?.gap ?? 6
+
+        doc.setFont('helvetica', bold ? 'bold' : 'normal')
+        doc.setFontSize(size)
+        const lines = doc.splitTextToSize(text || '', state.width) as string[]
+
+        for (const line of lines) {
+          if (state.y + size + 6 > state.pageHeight - state.margin) {
+            doc.addPage()
+            state.y = state.margin
+          }
+          doc.text(line, state.margin, state.y)
+          state.y += size + 4
+        }
+
+        state.y += gap
+      }
 
       for (const id of selectedItems) {
         const item = items.find((i) => i.id === id)
@@ -129,38 +161,118 @@ export function LibraryPage() {
         try {
           if (item.type === 'summary') {
             const data = await api.summaries.get(id)
-            exportItems.push({ id, type: 'summary', title: item.title, data })
+            const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+            const pageHeight = doc.internal.pageSize.getHeight()
+            const margin = 42
+            const width = doc.internal.pageSize.getWidth() - margin * 2
+            const state = { y: margin, pageHeight, margin, width }
+
+            const title = sanitizeFileName(item.title || data?.title || 'summary', 'summary')
+            const createdAt = item.created_at || data?.created_at
+            const summaryText =
+              data?.content_raw ||
+              data?.content ||
+              data?.body ||
+              (data?.format === 'cornell'
+                ? `CUES\n${data?.cornell_cues || ''}\n\nNOTES\n${data?.cornell_notes || ''}\n\nSUMMARY\n${data?.cornell_summary || ''}`
+                : '') ||
+              'No content available.'
+
+            writeWrapped(doc, title, state, { size: 17, bold: true, gap: 3 })
+            writeWrapped(doc, `Type: Summary`, state, { size: 10, gap: 2 })
+            writeWrapped(doc, `Generated: ${createdAt ? new Date(createdAt).toLocaleString() : '-'}`, state, { size: 10, gap: 10 })
+            writeWrapped(doc, summaryText, state, { size: 11, gap: 6 })
+
+            doc.save(`${title}-${id.slice(0, 8)}.pdf`)
           } else if (item.type === 'quiz') {
             const data = await api.quizzes.get(id)
-            exportItems.push({ id, type: 'quiz', title: item.title, data })
+            const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+            const pageHeight = doc.internal.pageSize.getHeight()
+            const margin = 42
+            const width = doc.internal.pageSize.getWidth() - margin * 2
+            const state = { y: margin, pageHeight, margin, width }
+
+            const title = sanitizeFileName(item.title || data?.title || 'quiz', 'quiz')
+            const createdAt = item.created_at || data?.created_at
+
+            let questions: any[] = []
+            if (Array.isArray(data?.questions)) {
+              questions = data.questions
+            } else if (Array.isArray(data?.questions_json)) {
+              questions = data.questions_json
+            } else if (typeof data?.questions_json === 'string') {
+              try {
+                const parsed = JSON.parse(data.questions_json)
+                if (Array.isArray(parsed)) questions = parsed
+              } catch {
+                questions = []
+              }
+            }
+
+            writeWrapped(doc, title, state, { size: 17, bold: true, gap: 3 })
+            writeWrapped(doc, `Type: Quiz`, state, { size: 10, gap: 2 })
+            writeWrapped(doc, `Generated: ${createdAt ? new Date(createdAt).toLocaleString() : '-'}`, state, { size: 10, gap: 10 })
+
+            if (questions.length === 0) {
+              writeWrapped(doc, 'No questions available.', state, { size: 11 })
+            } else {
+              questions.forEach((q: any, index: number) => {
+                const qText = q?.question || q?.text || `Question ${index + 1}`
+                const options = Array.isArray(q?.options)
+                  ? q.options
+                  : Array.isArray(q?.answers)
+                    ? q.answers
+                    : []
+                const correctIdx = Number.isInteger(q?.correct_index) ? q.correct_index : (Number.isInteger(q?.correctIndex) ? q.correctIndex : null)
+                const correctAnswer =
+                  correctIdx !== null && options[correctIdx] !== undefined
+                    ? options[correctIdx]
+                    : (q?.correct_answer || q?.correctAnswer || 'N/A')
+
+                writeWrapped(doc, `${index + 1}. ${qText}`, state, { size: 12, bold: true, gap: 2 })
+                options.forEach((opt: string, optIdx: number) => {
+                  writeWrapped(doc, `- ${String.fromCharCode(65 + optIdx)}. ${opt}`, state, { size: 11, gap: 1 })
+                })
+                writeWrapped(doc, `Correct answer: ${correctAnswer}`, state, { size: 10, gap: 7 })
+              })
+            }
+
+            doc.save(`${title}-${id.slice(0, 8)}.pdf`)
           } else if (item.type === 'flashcard' || item.type === 'flashcards') {
             const data = await api.flashcards.getDeck(id)
-            exportItems.push({ id, type: 'flashcard', title: item.title, data })
+            const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+            const pageHeight = doc.internal.pageSize.getHeight()
+            const margin = 42
+            const width = doc.internal.pageSize.getWidth() - margin * 2
+            const state = { y: margin, pageHeight, margin, width }
+
+            const title = sanitizeFileName(item.title || data?.deck?.title || 'flashcards', 'flashcards')
+            const createdAt = item.created_at || data?.deck?.created_at
+            const cards = Array.isArray(data?.cards) ? data.cards : []
+
+            writeWrapped(doc, title, state, { size: 17, bold: true, gap: 3 })
+            writeWrapped(doc, `Type: Flashcards`, state, { size: 10, gap: 2 })
+            writeWrapped(doc, `Generated: ${createdAt ? new Date(createdAt).toLocaleString() : '-'}`, state, { size: 10, gap: 10 })
+
+            if (cards.length === 0) {
+              writeWrapped(doc, 'No flashcards available.', state, { size: 11 })
+            } else {
+              cards.forEach((card: any, index: number) => {
+                const front = card?.front || card?.question || card?.term || `Card ${index + 1}`
+                const back = card?.back || card?.answer || card?.definition || ''
+
+                writeWrapped(doc, `${index + 1}. Front: ${front}`, state, { size: 12, bold: true, gap: 2 })
+                writeWrapped(doc, `Back: ${back || 'N/A'}`, state, { size: 11, gap: 8 })
+              })
+            }
+
+            doc.save(`${title}-${id.slice(0, 8)}.pdf`)
           }
+          await wait(120)
         } catch {
-          failed.push({ id, type: item.type, reason: 'Failed to fetch item details for export' })
+          // Continue with remaining selections even if one export fails.
         }
       }
-
-      const payload = {
-        exported_at: new Date().toISOString(),
-        selected_count: selectedItems.length,
-        exported_count: exportItems.length,
-        failed_count: failed.length,
-        items: exportItems,
-        failed,
-      }
-
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-      a.href = url
-      a.download = `library-export-${stamp}.json`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
     } finally {
       setIsExporting(false)
     }
