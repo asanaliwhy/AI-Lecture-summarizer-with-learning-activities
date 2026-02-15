@@ -1,4 +1,25 @@
-export const API_BASE = 'http://localhost:8081/api/v1'
+const DEFAULT_API_BASE = 'http://localhost:8081/api/v1'
+
+function normalizeApiBase(raw: string | undefined): string {
+    const value = (raw || '').trim()
+    if (!value) return DEFAULT_API_BASE
+
+    const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`
+
+    try {
+        const url = new URL(withProtocol)
+        const pathname = url.pathname.replace(/\/+$/, '')
+        const normalizedPath = pathname.endsWith('/api/v1')
+            ? pathname
+            : `${pathname}/api/v1`.replace(/\/+/g, '/').replace(/\/$/, '')
+
+        return `${url.protocol}//${url.host}${normalizedPath}`
+    } catch {
+        return DEFAULT_API_BASE
+    }
+}
+
+export const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE_URL)
 
 // ─── Token Management ───
 function getAccessToken(): string | null {

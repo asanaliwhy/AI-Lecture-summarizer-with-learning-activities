@@ -132,9 +132,17 @@ go mod download
 go run cmd/server/main.go
 
 # ─── Frontend (new terminal) ───
+cp .env.example .env.local
+# adjust VITE_API_BASE_URL if backend is on a different host/port
 npm install
 npm run dev
 ```
+
+### Frontend Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `VITE_API_BASE_URL` | Base URL for frontend API requests. Supports host-only (`api.example.com`) or full URL. `/api/v1` is enforced if omitted. | `https://api.example.com/api/v1` |
 
 ---
 
