@@ -31,6 +31,7 @@ export function LibraryPage() {
   const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [items, setItems] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isExporting, setIsExporting] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all')
@@ -108,6 +109,63 @@ export function LibraryPage() {
     setItems(data.items || [])
   }
 
+  const handleExport = async () => {
+    if (selectedItems.length === 0 || isExporting) return
+
+    setIsExporting(true)
+    try {
+      const exportItems: Array<{
+        id: string
+        type: string
+        title?: string
+        data: any
+      }> = []
+      const failed: Array<{ id: string; type?: string; reason: string }> = []
+
+      for (const id of selectedItems) {
+        const item = items.find((i) => i.id === id)
+        if (!item) continue
+
+        try {
+          if (item.type === 'summary') {
+            const data = await api.summaries.get(id)
+            exportItems.push({ id, type: 'summary', title: item.title, data })
+          } else if (item.type === 'quiz') {
+            const data = await api.quizzes.get(id)
+            exportItems.push({ id, type: 'quiz', title: item.title, data })
+          } else if (item.type === 'flashcard' || item.type === 'flashcards') {
+            const data = await api.flashcards.getDeck(id)
+            exportItems.push({ id, type: 'flashcard', title: item.title, data })
+          }
+        } catch {
+          failed.push({ id, type: item.type, reason: 'Failed to fetch item details for export' })
+        }
+      }
+
+      const payload = {
+        exported_at: new Date().toISOString(),
+        selected_count: selectedItems.length,
+        exported_count: exportItems.length,
+        failed_count: failed.length,
+        items: exportItems,
+        failed,
+      }
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      a.href = url
+      a.download = `library-export-${stamp}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   const getItemRoute = (item: any) => {
     if (item.type === 'summary') return `/summary/${item.id}`
     if (item.type === 'quiz') return `/quiz/take/${item.id}`
@@ -137,9 +195,13 @@ export function LibraryPage() {
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete
                 </Button>
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
+                <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting}>
+                  {isExporting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  {isExporting ? 'Exporting...' : 'Export'}
                 </Button>
               </div>
             )}
