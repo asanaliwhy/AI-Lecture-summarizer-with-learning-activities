@@ -144,7 +144,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	}
 
 	if config.Format == "smart" && !containsMarkdownTable(rawText) {
-		restructurePrompt := "Rewrite this Smart Summary in clean Markdown. Preserve all key information, and include at least one markdown table with 2+ columns and 3+ data rows. If entities are not obvious, create a table with columns: Concept | Explanation. Return markdown only:\n\n" + rawText
+		restructurePrompt := "Rewrite this Smart Summary in clean Markdown. Preserve all key information, preserve source terminology, and include at least one markdown table with 2+ columns and 3+ data rows. If entities are not obvious, create a table with columns: Concept | Explanation. Do NOT invent new coined terms that are not present in the source transcript. If a claim is uncertain, say: Not explicitly stated in transcript. Return markdown only:\n\n" + rawText
 		resp2, err := s.model.GenerateContent(ctx, genai.Text(restructurePrompt))
 		if err == nil {
 			rawText2 := extractText(resp2)
@@ -156,6 +156,13 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		if !containsMarkdownTable(rawText) {
 			rawText = ensureSmartSummaryTable(rawText)
 		}
+	}
+
+	if config.Format == "smart" {
+		if refined := s.rewriteSmartSummaryForFidelity(ctx, rawText, transcript); strings.TrimSpace(refined) != "" {
+			rawText = refined
+		}
+		rawText = normalizeSmartLabels(rawText)
 	}
 
 	// Parse Cornell if applicable
@@ -531,6 +538,50 @@ func ensureSmartSummaryTable(text string) string {
 	return b.String()
 }
 
+func normalizeSmartLabels(text string) string {
+	text = strings.ReplaceAll(text, "\nCore Concept:", "\nKey Concept:")
+	text = strings.ReplaceAll(text, "\nCore concept:", "\nKey Concept:")
+	text = strings.ReplaceAll(text, "\ncore concept:", "\nKey Concept:")
+	if strings.HasPrefix(text, "Core Concept:") || strings.HasPrefix(text, "Core concept:") || strings.HasPrefix(text, "core concept:") {
+		text = "Key Concept:" + text[strings.Index(text, ":")+1:]
+	}
+	return text
+}
+
+func (s *GeminiService) rewriteSmartSummaryForFidelity(ctx context.Context, summaryText, transcript string) string {
+	snippet := transcript[:min(len(transcript), 6000)]
+	prompt := fmt.Sprintf(`You are revising a Smart Summary for strict factual fidelity.
+
+Rules:
+1) Preserve terminology from the transcript; prefer exact source terms.
+2) Do NOT invent renamed concepts or neologisms.
+3) Keep facts grounded in transcript evidence only.
+4) For the section "Key Insights and Core Concepts", use consistent repeated triples:
+   - Key Concept: <term from transcript>
+   - Definition: <meaning grounded in transcript>
+   - Example: <explicitly stated example, or "Not explicitly stated in transcript">
+5) Keep markdown format and keep at least one markdown table.
+6) Return markdown only.
+
+Transcript excerpt:
+%s
+
+Current summary:
+%s`, snippet, summaryText)
+
+	resp, err := s.model.GenerateContent(ctx, genai.Text(prompt))
+	if err != nil {
+		return summaryText
+	}
+
+	text := strings.TrimSpace(extractText(resp))
+	if text == "" {
+		return summaryText
+	}
+
+	return text
+}
+
 func buildSummaryPrompt(format, length string, focusAreas []string, audience, language, transcript string) string {
 	var b strings.Builder
 
@@ -550,7 +601,11 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Format: Create a Smart Summary in Markdown with clear section headings and concise high-value synthesis.\n")
 		b.WriteString("Required sections (in this order):\n")
 		b.WriteString("1) Summary of Video Content\n2) Key Insights and Core Concepts\n3) Brain Structure and Functions (as a markdown table when entities/parts exist)\n4) Additional Interesting Facts\n5) Conclusions\n6) Summary Highlights\n\n")
-		b.WriteString("Output rules for Smart Summary: Use markdown headings and bullets. ALWAYS include at least one markdown table with at least 2 columns and 3 data rows. If the transcript has no obvious entities, create a table with columns: Concept | Explanation. Keep statements factual and avoid unsupported claims.\n\n")
+		b.WriteString("Output rules for Smart Summary: Use markdown headings and bullets. ALWAYS include at least one markdown table with at least 2 columns and 3 data rows. If the transcript has no obvious entities, create a table with columns: Concept | Explanation. Keep statements factual and avoid unsupported claims.\n")
+		b.WriteString("Terminology fidelity rules: reuse exact source terms from the transcript whenever possible (prefer direct phrasing over paraphrased/neologism terms). Do NOT invent renamed concepts.\n")
+		b.WriteString("For section 'Key Insights and Core Concepts', keep a consistent item schema per point:\n")
+		b.WriteString("- Key Concept: <term from transcript>\n- Definition: <concise meaning grounded in transcript>\n- Example: <example explicitly stated in transcript, or 'Not explicitly stated in transcript'>\n")
+		b.WriteString("If transcript evidence is weak, explicitly mark uncertainty instead of fabricating details.\n\n")
 	}
 
 	// Layer 3 — Length (strict bands)
