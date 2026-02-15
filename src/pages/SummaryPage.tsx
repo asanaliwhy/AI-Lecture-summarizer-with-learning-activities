@@ -140,6 +140,42 @@ function splitIntoSections(value: string): Array<{ title: string; body: string }
   return sections
 }
 
+type BulletHierarchyItem = {
+  text: string
+  children: string[]
+}
+
+function parseBulletHierarchy(body: string): BulletHierarchyItem[] {
+  if (!body) return []
+
+  const lines = body.replace(/\r\n/g, '\n').split('\n').filter((line) => line.trim())
+  const items: BulletHierarchyItem[] = []
+  let currentParent: BulletHierarchyItem | null = null
+
+  const childLabelRegex =
+    /^(definition|function|role|example|examples|detail|details|description|size\/location|location|primary function(?:\(s\))?|key figure\/detail|key figure|figure)\s*:/i
+
+  const stripBulletMarker = (line: string): string => line.replace(/^\s*[-*+•]\s+/, '').trim()
+
+  for (const rawLine of lines) {
+    const isExplicitIndentedChild = /^\s{2,}[-*+•]\s+/.test(rawLine)
+    const text = stripBulletMarker(rawLine)
+    if (!text) continue
+
+    const isLabeledChild = childLabelRegex.test(text)
+
+    if ((isExplicitIndentedChild || isLabeledChild) && currentParent) {
+      currentParent.children.push(text)
+      continue
+    }
+
+    currentParent = { text, children: [] }
+    items.push(currentParent)
+  }
+
+  return items
+}
+
 function normalizeCornellText(value: string): string {
   if (!value) return ''
 
@@ -760,8 +796,12 @@ export function SummaryPage() {
   const renderedSections = splitIntoSections(renderedContentRaw)
   const smartSummaryHtml = summary.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
   const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
+  const isCornellSummary = summary.format === 'cornell'
+  const isParagraphSummary = summary.format === 'paragraph'
   const isBulletSummary = summary.format === 'bullets'
   const isSmartSummary = summary.format === 'smart'
+  const isStyledSectionSummary = isBulletSummary || isParagraphSummary
+  const isWideSummaryLayout = isSmartSummary || isBulletSummary || isCornellSummary || isParagraphSummary
   const summaryFormatRaw = String(summary.format || summary.config?.format || '').toLowerCase()
   const summaryTypeLabel =
     summaryFormatRaw === 'cornell'
@@ -773,11 +813,11 @@ export function SummaryPage() {
           : summaryFormatRaw === 'smart'
             ? 'Smart Summary'
             : 'Summary'
-  const leftColumnClass = isSmartSummary
+  const leftColumnClass = isWideSummaryLayout
     ? 'lg:col-span-2 space-y-6 lg:-ml-8 xl:-ml-12'
     : 'lg:col-span-3 space-y-6 lg:-ml-8 xl:-ml-12'
-  const centerColumnClass = isSmartSummary ? 'lg:col-span-8' : 'lg:col-span-7'
-  const rightColumnClass = isSmartSummary ? 'lg:col-span-2 space-y-6' : 'lg:col-span-2 space-y-6'
+  const centerColumnClass = isWideSummaryLayout ? 'lg:col-span-8' : 'lg:col-span-7'
+  const rightColumnClass = 'lg:col-span-2 space-y-6'
 
   // Parse content sections
   const sections: SummarySectionResponse[] = summary.sections || []
@@ -914,9 +954,9 @@ export function SummaryPage() {
           {/* Center - Content (60%) */}
           <div className={centerColumnClass}>
             <Card className="min-h-[620px] shadow-sm border-border/70">
-              <CardContent className={isSmartSummary || hasCornellSections ? 'p-4 md:p-5 lg:p-6' : 'p-6 md:p-10 lg:p-12'}>
+              <CardContent className={isSmartSummary || hasCornellSections || isStyledSectionSummary ? 'p-4 md:p-5 lg:p-6' : 'p-6 md:p-10 lg:p-12'}>
                 {isSmartSummary ? (
-                  <article className="smart-summary-content smart-summary-modern smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-extrabold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:text-[1.62rem] prose-h2:leading-tight prose-h2:border-l-4 prose-h2:border-blue-500 prose-h2:pl-3 prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-[1.2rem] prose-h3:font-bold prose-h3:mt-5 prose-h3:mb-3 prose-p:my-2.5 prose-p:leading-[1.78] prose-strong:text-slate-900 prose-li:leading-[1.75] prose-ul:my-3 prose-ol:my-3 prose-hr:my-6 prose-a:text-blue-700 hover:prose-a:text-blue-800">
+                  <article className="smart-summary-content smart-summary-modern smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-extrabold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:text-[1.62rem] prose-h2:leading-tight prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-[1.2rem] prose-h3:font-bold prose-h3:mt-5 prose-h3:mb-3 prose-p:my-2.5 prose-p:leading-[1.78] prose-strong:text-slate-900 prose-li:leading-[1.75] prose-ul:my-3 prose-ol:my-3 prose-hr:my-6 prose-a:text-blue-700 hover:prose-a:text-blue-800">
                     <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
                   </article>
                 ) : hasSections ? (
@@ -965,7 +1005,7 @@ export function SummaryPage() {
                         <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
                         Cues
                       </h3>
-                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-[75ch]">
+                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-none">
                         {renderedCornellCues || 'No cues available.'}
                       </div>
                     </section>
@@ -974,7 +1014,7 @@ export function SummaryPage() {
                         <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
                         Notes
                       </h3>
-                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-[75ch]">
+                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-none">
                         {renderedCornellNotes || 'No notes available.'}
                       </div>
                     </section>
@@ -983,35 +1023,60 @@ export function SummaryPage() {
                         <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
                         Summary
                       </h3>
-                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-[75ch]">
+                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-none">
                         {renderedCornellSummary || 'No summary available.'}
                       </div>
                     </section>
                   </div>
                 ) : (
-                  <div className={isBulletSummary ? 'space-y-3' : 'space-y-6'}>
-                    {(renderedSections.length > 0 ? renderedSections : [{ title: 'Summary', body: renderedContentRaw || 'No content available yet.' }]).map((section, idx) => (
-                      <section
-                        key={idx}
-                        className={isBulletSummary
-                          ? 'rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4'
-                          : 'border border-border/70 rounded-xl p-6 bg-muted/20'}
-                      >
-                        <h3 className={isBulletSummary
-                          ? 'flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.02rem] tracking-tight'
-                          : 'text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3'}>
-                          {isBulletSummary && (
-                            <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
+                  <div className={isStyledSectionSummary ? 'space-y-3' : 'space-y-6'}>
+                    {(renderedSections.length > 0 ? renderedSections : [{ title: 'Summary', body: renderedContentRaw || 'No content available yet.' }]).map((section, idx) => {
+                      const bulletHierarchy = isBulletSummary ? parseBulletHierarchy(section.body) : []
+                      const hasBulletHierarchy = bulletHierarchy.some((item) => item.children.length > 0)
+
+                      return (
+                        <section
+                          key={idx}
+                          className={isStyledSectionSummary
+                            ? 'rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4'
+                            : 'border border-border/70 rounded-xl p-6 bg-muted/20'}
+                        >
+                          <h3 className={isStyledSectionSummary
+                            ? 'flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.02rem] tracking-tight'
+                            : 'text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3'}>
+                            {isStyledSectionSummary && (
+                              <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
+                            )}
+                            {section.title}
+                          </h3>
+
+                          {isBulletSummary && hasBulletHierarchy ? (
+                            <ul className="list-disc pl-5 space-y-2 leading-[1.72] text-slate-800 text-[15px] max-w-none marker:text-slate-500">
+                              {bulletHierarchy.map((item, itemIdx) => (
+                                <li key={itemIdx}>
+                                  <span className={item.children.length > 0 ? 'font-semibold text-slate-900' : ''}>{item.text}</span>
+                                  {item.children.length > 0 && (
+                                    <ul className="list-disc pl-6 mt-1.5 space-y-1 marker:text-slate-400">
+                                      {item.children.map((child, childIdx) => (
+                                        <li key={childIdx} className="font-normal text-slate-800">{child}</li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className={isBulletSummary
+                              ? 'whitespace-pre-wrap leading-[1.72] text-slate-800 text-[15px] max-w-none'
+                              : isParagraphSummary
+                                ? 'whitespace-pre-wrap leading-8 text-slate-800 text-[15px] max-w-none'
+                                : 'whitespace-pre-wrap leading-8 text-slate-800 text-[15px] max-w-[75ch]'}>
+                              {section.body}
+                            </div>
                           )}
-                          {section.title}
-                        </h3>
-                        <div className={isBulletSummary
-                          ? 'whitespace-pre-wrap leading-[1.72] text-slate-800 text-[15px] max-w-[75ch]'
-                          : 'whitespace-pre-wrap leading-8 text-slate-800 text-[15px] max-w-[75ch]'}>
-                          {section.body}
-                        </div>
-                      </section>
-                    ))}
+                        </section>
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>

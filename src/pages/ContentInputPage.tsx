@@ -42,25 +42,11 @@ export function ContentInputPage() {
   const [outputFormat, setOutputFormat] = useState('cornell')
   const [targetAudience, setTargetAudience] = useState('academic')
   const [language, setLanguage] = useState('en')
-  const [focusAreas, setFocusAreas] = useState<string[]>([
-    'key concepts',
-    'definitions & terms',
-    'examples & case studies',
-    'dates & figures',
-  ])
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [validationError, setValidationError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-
-  const toggleFocusArea = (area: string) => {
-    setFocusAreas((prev) =>
-      prev.includes(area)
-        ? prev.filter((a) => a !== area)
-        : [...prev, area],
-    )
-  }
 
   const handleValidate = async () => {
     const url = youtubeUrl.trim()
@@ -118,7 +104,7 @@ export function ContentInputPage() {
           content_id: uploaded.content_id,
           length: lengthSetting,
           format: outputFormat,
-          focus_areas: focusAreas,
+          focus_areas: [],
           target_audience: targetAudience,
           language,
         })
@@ -132,7 +118,7 @@ export function ContentInputPage() {
           content_id: contentId,
           length: lengthSetting,
           format: outputFormat,
-          focus_areas: focusAreas,
+          focus_areas: [],
           target_audience: targetAudience,
           language,
         })
@@ -471,41 +457,6 @@ export function ContentInputPage() {
                         <div className="h-2 w-2 rounded-full bg-primary" />
                       )}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Focus Areas */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base uppercase tracking-wider text-muted-foreground font-semibold">
-                    Focus Areas
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {[
-                      'Key Concepts',
-                      'Definitions & Terms',
-                      'Examples & Case Studies',
-                      'Dates & Figures',
-                    ].map((item) => (
-                      <div key={item} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id={item}
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                          checked={focusAreas.includes(item.toLowerCase())}
-                          onChange={() => toggleFocusArea(item.toLowerCase())}
-                        />
-                        <label
-                          htmlFor={item}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                          {item}
-                        </label>
-                      </div>
-                    ))}
                   </div>
                 </CardContent>
               </Card>

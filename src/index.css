@@ -103,7 +103,7 @@
   }
 
   .smart-summary-content {
-    @apply p-1 md:p-1.5;
+    @apply p-0.5 md:p-1;
     font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color: #0f172a;
   }
@@ -117,7 +117,7 @@
   }
 
   .smart-summary-content .smart-summary-section {
-    @apply rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-4 md:px-5 md:py-5;
+    @apply rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-3 py-3 md:px-4 md:py-4;
   }
 
   .smart-summary-content.smart-summary-modern {

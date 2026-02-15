@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -174,6 +175,10 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 
 	if config.Format == "bullets" {
 		rawText = normalizeBulletsSummary(rawText)
+	}
+
+	if config.Format == "paragraph" {
+		rawText = normalizeParagraphSummary(rawText)
 	}
 
 	// Parse Cornell if applicable
@@ -858,6 +863,44 @@ func normalizeBulletsSummary(text string) string {
 	return strings.TrimSpace(cleaned)
 }
 
+func normalizeParagraphSummary(text string) string {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+	out := make([]string, 0, len(lines))
+
+	boldLabelRe := regexp.MustCompile(`(?i)\*\*\s*(key concept|definition|example|case study|dates\s*&\s*figures|dates and figures|fact)\s*:\s*([^*]+?)\s*\*\*`)
+	inlineLabelRe := regexp.MustCompile(`(?i)\b(key concept|definition|example|case study|dates\s*&\s*figures|dates and figures|fact)\s*:\s*`)
+	multiSpaceRe := regexp.MustCompile(`[ \t]{2,}`)
+
+	for _, line := range lines {
+		t := strings.TrimSpace(line)
+		if t == "" {
+			out = append(out, "")
+			continue
+		}
+
+		if strings.HasPrefix(t, "- ") || strings.HasPrefix(t, "• ") || strings.HasPrefix(t, "* ") {
+			t = strings.TrimSpace(t[2:])
+		}
+
+		t = boldLabelRe.ReplaceAllString(t, `$2`)
+		t = inlineLabelRe.ReplaceAllString(t, "")
+		t = multiSpaceRe.ReplaceAllString(t, " ")
+		t = strings.TrimSpace(t)
+
+		if t != "" {
+			out = append(out, t)
+		}
+	}
+
+	cleaned := strings.Join(out, "\n")
+	for strings.Contains(cleaned, "\n\n\n") {
+		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+	}
+
+	return strings.TrimSpace(cleaned)
+}
+
 func containsMarkdownTable(text string) bool {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	for i := 0; i < len(lines)-1; i++ {
@@ -1057,7 +1100,14 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("8) Keep bullets non-redundant and compact; one idea per bullet.\n")
 		b.WriteString("9) Return plain text bullets only (no markdown tables, no HTML).\n\n")
 	case "paragraph":
-		b.WriteString("Format: Write in flowing academic prose with clear subheadings.\n\n")
+		b.WriteString("Format: Write in flowing, readable prose with clear subheadings.\n")
+		b.WriteString("Paragraph output rules:\n")
+		b.WriteString("1) Use natural essay-style paragraphs; prioritize readability and narrative flow over study-note labels.\n")
+		b.WriteString("2) Keep section headings concise, then explain ideas in full sentences.\n")
+		b.WriteString("3) STRICTLY FORBIDDEN labels in output: 'Key Concept:', 'Definition:', 'Example:', 'Case Study:', 'Dates & Figures:'.\n")
+		b.WriteString("4) Weave those ideas naturally into prose (e.g., 'Energybending is ...'), without meta-prefixes.\n")
+		b.WriteString("5) Avoid repetitive phrasing and repeated sentence templates.\n")
+		b.WriteString("6) Do not use bullet-list study-note formatting unless explicitly requested by format.\n\n")
 	case "smart":
 		b.WriteString("Format: Create a Smart Summary in Markdown with clear section headings and concise high-value synthesis.\n")
 		b.WriteString("Required sections (in this order):\n")
