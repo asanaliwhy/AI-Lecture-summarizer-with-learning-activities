@@ -594,7 +594,7 @@ function parseMarkdownTableRow(line: string): string[] {
     .map((cell) => cleanInlineMarkdown(cell))
 }
 
-function parseSmartPdfBlocks(markdown: string): PdfContentBlock[] {
+function parsePdfBlocks(markdown: string): PdfContentBlock[] {
   const normalized = markdown.replace(/\r\n/g, '\n').trim()
   if (!normalized) return []
 
@@ -915,30 +915,29 @@ export function SummaryPage() {
         y += 12
       }
 
-      if (summary?.format === 'smart') {
-        const blocks = parseSmartPdfBlocks(rawSmart)
-        const safeBlocks =
-          blocks.length > 0
-            ? blocks
-            : [{ type: 'text', text: normalizeGeneralSummaryText(rawSmart) || 'No content available.' } as PdfContentBlock]
+      const exportSource =
+        summary?.format === 'cornell'
+          ? `# CUES\n${cues || 'No cues available.'}\n\n# NOTES\n${notes || 'No notes available.'}\n\n# SUMMARY\n${cornellSummaryText || 'No summary available.'}`
+          : (summary?.content_raw || summary?.content || summary?.body || text)
 
-        safeBlocks.forEach((block) => {
-          if (block.type === 'table') {
-            renderMarkdownTable(block.headers, block.rows)
-          } else {
-            renderTextParagraphs(block.text)
-          }
-        })
-      } else {
-        doc.setFontSize(12)
-        const lines = doc.splitTextToSize(text, contentWidth) as string[]
+      const normalizedExportSource =
+        summary?.format === 'smart'
+          ? rawSmart
+          : normalizeGeneralSummaryText(exportSource || text || 'No content available.')
 
-        for (const line of lines) {
-          ensurePageSpace(18)
-          doc.text(line, margin, y)
-          y += 18
+      const blocks = parsePdfBlocks(normalizedExportSource)
+      const safeBlocks =
+        blocks.length > 0
+          ? blocks
+          : [{ type: 'text', text: normalizeGeneralSummaryText(normalizedExportSource) || 'No content available.' } as PdfContentBlock]
+
+      safeBlocks.forEach((block) => {
+        if (block.type === 'table') {
+          renderMarkdownTable(block.headers, block.rows)
+        } else {
+          renderTextParagraphs(block.text)
         }
-      }
+      })
 
       doc.save(`${fileTitle}.pdf`)
       toast.success('PDF exported')
