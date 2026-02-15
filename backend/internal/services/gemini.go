@@ -144,7 +144,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	}
 
 	if config.Format == "smart" && !containsMarkdownTable(rawText) {
-		restructurePrompt := "Rewrite this Smart Summary in clean Markdown. Preserve all key information, preserve source terminology, and include at least one markdown table with 2+ columns and 3+ data rows. If entities are not obvious, create a table with columns: Concept | Explanation. Do NOT invent new coined terms that are not present in the source transcript. If a claim is uncertain, say: Not explicitly stated in transcript. Return markdown only:\n\n" + rawText
+		restructurePrompt := "Rewrite this Smart Summary in clean Markdown. Preserve all key information, preserve source terminology, and include at least one markdown table with 2+ columns and 3+ data rows. If entities are not obvious, create a table with columns: Concept | Explanation. In the section 'Additional Interesting Facts', output 3-6 markdown bullet points (each line must start with '- '). Do NOT invent new coined terms that are not present in the source transcript. If a claim is uncertain, say: Not explicitly stated in transcript. Return markdown only:\n\n" + rawText
 		resp2, err := s.model.GenerateContent(ctx, genai.Text(restructurePrompt))
 		if err == nil {
 			rawText2 := extractText(resp2)
@@ -632,8 +632,9 @@ Rules:
 6) Keep brain-part descriptions ONLY in "Brain Structure and Functions" table; avoid repeating those details in Key Insights.
 7) Remove redundant sections; do NOT include "Conclusions" or "Summary Highlights".
 8) Additional Interesting Facts must exclude trivial/silly statements and focus on substantial facts with concrete value.
-9) Keep markdown format and keep at least one markdown table.
-10) Return markdown only.
+9) For "Additional Interesting Facts", output 3-6 markdown bullets (each line starts with '- '). Do NOT output that section as a paragraph.
+10) Keep markdown format and keep at least one markdown table.
+11) Return markdown only.
 
 Transcript excerpt:
 %s
@@ -683,10 +684,11 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("  Do NOT output repetitive 'Definition' lines for every item.\n")
 		b.WriteString("  Include 'Example:' ONLY if explicitly present in transcript; otherwise omit the Example line entirely.\n")
 		b.WriteString("- Brain Structure and Functions: this is the ONLY place for brain-part functional descriptions.\n")
-		b.WriteString("- Additional Interesting Facts: only non-duplicated noteworthy facts, with numbers/evidence when present; avoid trivial or playful statements.\n")
+		b.WriteString("- Additional Interesting Facts: output ONLY as a markdown bullet list (3-6 bullets, each line starts with '- '). Include only non-duplicated noteworthy facts, with numbers/evidence when present; avoid trivial or playful statements.\n")
 		b.WriteString("Forbidden sections: DO NOT output 'Conclusions' or 'Summary Highlights'.\n")
 		b.WriteString("For section 'Key Insights and Core Concepts', keep concept names faithful to transcript terminology and avoid invented terms.\n")
-		b.WriteString("If transcript evidence is weak, explicitly mark uncertainty instead of fabricating details.\n\n")
+		b.WriteString("If transcript evidence is weak, explicitly mark uncertainty instead of fabricating details.\n")
+		b.WriteString("Markdown structure rule for Additional Interesting Facts: this section MUST be a markdown unordered list ('- item'). Do NOT write it as a paragraph.\n\n")
 	}
 
 	// Layer 3 — Length (strict bands)
