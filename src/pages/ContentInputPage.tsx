@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
@@ -57,7 +57,27 @@ export function ContentInputPage() {
   const [validationError, setValidationError] = useState('')
   const [isDragActive, setIsDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const validationRequestIdRef = useRef(0)
+  const generationRequestIdRef = useRef(0)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+
+  useEffect(() => {
+    validationRequestIdRef.current += 1
+    generationRequestIdRef.current += 1
+
+    setIsValidating(false)
+    setIsGenerating(false)
+    setValidationError('')
+
+    if (sourceType === 'youtube') {
+      setUploadedFile(null)
+      return
+    }
+
+    setIsValid(false)
+    setContentId(null)
+    setVideoMeta(null)
+  }, [sourceType])
 
   const getFileExtension = (filename: string) => {
     const index = filename.lastIndexOf('.')
@@ -68,6 +88,20 @@ export function ContentInputPage() {
     const ext = getFileExtension(file.name)
     if (!ACCEPTED_EXTENSIONS.has(ext)) {
       return 'Unsupported file type. Allowed: PDF, DOCX, TXT, MP3, WAV, MP4.'
+    }
+
+    const expectedMimeByExtension: Record<string, string[]> = {
+      '.pdf': ['application/pdf'],
+      '.docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      '.txt': ['text/plain'],
+      '.mp3': ['audio/mpeg', 'audio/mp3'],
+      '.wav': ['audio/wav', 'audio/x-wav', 'audio/wave'],
+      '.mp4': ['video/mp4'],
+    }
+
+    const expectedMimes = expectedMimeByExtension[ext] || []
+    if (file.type && expectedMimes.length > 0 && !expectedMimes.includes(file.type)) {
+      return `File content type mismatch for ${ext}. Please choose a valid file. Server-side validation will also be applied.`
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
@@ -93,6 +127,8 @@ export function ContentInputPage() {
   }
 
   const handleValidate = async () => {
+    const requestId = ++validationRequestIdRef.current
+
     const url = youtubeUrl.trim()
     if (url !== youtubeUrl) {
       setYoutubeUrl(url)
@@ -110,17 +146,28 @@ export function ContentInputPage() {
     setValidationError('')
     try {
       const data = await api.content.validateYouTube(url)
+
+      if (requestId !== validationRequestIdRef.current || sourceType !== 'youtube') {
+        return
+      }
+
       setIsValid(true)
       setVideoMeta(data.metadata)
       setContentId(data.content_id)
       toast.success('Video validated successfully!')
     } catch (err: unknown) {
+      if (requestId !== validationRequestIdRef.current || sourceType !== 'youtube') {
+        return
+      }
+
       const message = err instanceof Error ? err.message : 'Invalid URL'
       setValidationError(message)
       toast.error(message || 'Could not validate video')
       setIsValid(false)
     } finally {
-      setIsValidating(false)
+      if (requestId === validationRequestIdRef.current) {
+        setIsValidating(false)
+      }
     }
   }
 
@@ -152,7 +199,10 @@ export function ContentInputPage() {
   }
 
   const handleGenerate = async () => {
+    const requestId = ++generationRequestIdRef.current
+
     setIsGenerating(true)
+    setValidationError('')
     try {
       const lengthSetting =
         summaryLength[0] <= 25
@@ -191,11 +241,17 @@ export function ContentInputPage() {
         navigate(`/processing/${result.job_id}`)
       }
     } catch (err: unknown) {
+      if (requestId !== generationRequestIdRef.current) {
+        return
+      }
+
       const message = err instanceof Error ? err.message : 'Generation failed'
       setValidationError(message)
       toast.error(message || 'Failed to start generation')
     } finally {
-      setIsGenerating(false)
+      if (requestId === generationRequestIdRef.current) {
+        setIsGenerating(false)
+      }
     }
   }
   return (
