@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import {
@@ -12,12 +13,17 @@ import {
     Eye,
     Loader2,
     BrainCircuit,
+    Search,
 } from 'lucide-react'
+import { cn } from '../lib/utils'
 
 export function FlashcardsPage() {
     const navigate = useNavigate()
     const [decks, setDecks] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
+    const [quickFilter, setQuickFilter] = useState<'all' | 'new' | 'small' | 'medium' | 'large'>('all')
 
     useEffect(() => {
         async function load() {
@@ -38,6 +44,52 @@ export function FlashcardsPage() {
         () => decks.reduce((sum, d) => sum + (Number(d.card_count) || 0), 0),
         [decks],
     )
+
+    const getCardCount = (deck: any): number => {
+        const value = Number(deck?.card_count)
+        return Number.isFinite(value) ? value : 0
+    }
+
+    const filteredDecks = useMemo(() => {
+        return decks
+            .filter((deck: any) => {
+                const title = String(deck?.title || '').toLowerCase()
+                const query = searchQuery.trim().toLowerCase()
+
+                const matchesSearch = !query || title.includes(query)
+                if (!matchesSearch) return false
+
+                if (quickFilter === 'all') return true
+
+                const cardCount = getCardCount(deck)
+                const createdAt = deck?.created_at ? new Date(deck.created_at).getTime() : 0
+                const ageDays = createdAt > 0 ? (Date.now() - createdAt) / (1000 * 60 * 60 * 24) : Number.POSITIVE_INFINITY
+
+                if (quickFilter === 'new') return ageDays <= 7
+                if (quickFilter === 'small') return cardCount <= 15
+                if (quickFilter === 'medium') return cardCount >= 16 && cardCount <= 30
+                return cardCount > 30
+            })
+            .sort((a: any, b: any) => {
+                if (sortOrder === 'az') {
+                    return String(a?.title || '').localeCompare(String(b?.title || ''))
+                }
+
+                const aDate = a?.created_at ? new Date(a.created_at).getTime() : 0
+                const bDate = b?.created_at ? new Date(b.created_at).getTime() : 0
+
+                if (sortOrder === 'oldest') return aDate - bDate
+                return bDate - aDate
+            })
+    }, [decks, searchQuery, quickFilter, sortOrder])
+
+    const filterOptions: Array<{ key: typeof quickFilter; label: string }> = [
+        { key: 'all', label: 'All' },
+        { key: 'new', label: 'New' },
+        { key: 'small', label: 'Small' },
+        { key: 'medium', label: 'Medium' },
+        { key: 'large', label: 'Large' },
+    ]
 
     return (
         <AppLayout>
@@ -76,6 +128,75 @@ export function FlashcardsPage() {
                     </Card>
                 </div>
 
+                {/* Controls */}
+                <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search decks..."
+                            className="pl-9 transition-all focus-visible:ring-primary"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground whitespace-nowrap hidden sm:inline">Sort by:</span>
+                        <div className="flex bg-secondary/50 rounded-lg p-1">
+                            <button
+                                onClick={() => setSortOrder('newest')}
+                                className={cn(
+                                    'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
+                                    sortOrder === 'newest'
+                                        ? 'bg-background shadow-sm text-foreground'
+                                        : 'text-muted-foreground hover:text-foreground',
+                                )}
+                            >
+                                Newest
+                            </button>
+                            <button
+                                onClick={() => setSortOrder('oldest')}
+                                className={cn(
+                                    'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
+                                    sortOrder === 'oldest'
+                                        ? 'bg-background shadow-sm text-foreground'
+                                        : 'text-muted-foreground hover:text-foreground',
+                                )}
+                            >
+                                Oldest
+                            </button>
+                            <button
+                                onClick={() => setSortOrder('az')}
+                                className={cn(
+                                    'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
+                                    sortOrder === 'az'
+                                        ? 'bg-background shadow-sm text-foreground'
+                                        : 'text-muted-foreground hover:text-foreground',
+                                )}
+                            >
+                                A-Z
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    {filterOptions.map((option) => (
+                        <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => setQuickFilter(option.key)}
+                            className={cn(
+                                'px-3 py-1.5 text-xs rounded-full border transition-colors',
+                                quickFilter === option.key
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'bg-background text-muted-foreground hover:text-foreground border-border',
+                            )}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+
                 {isLoading ? (
                     <div className="flex justify-center py-16">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -89,9 +210,9 @@ export function FlashcardsPage() {
                         <p className="text-muted-foreground mb-4">Generate flashcards from a summary to start spaced repetition study.</p>
                         <Button onClick={() => navigate('/summaries')}>Go to Summaries</Button>
                     </div>
-                ) : (
+                ) : filteredDecks.length > 0 ? (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {decks.map((deck: any) => (
+                        {filteredDecks.map((deck: any) => (
                             <Card
                                 key={deck.id}
                                 className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-l-4 border-l-transparent hover:border-l-primary relative overflow-hidden"
@@ -149,6 +270,11 @@ export function FlashcardsPage() {
                                 </CardContent>
                             </Card>
                         ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-16 border rounded-xl bg-secondary/10">
+                        <h3 className="text-lg font-semibold mb-2">No decks match your filters</h3>
+                        <p className="text-muted-foreground mb-4">Try adjusting search, sort, or filter chips.</p>
                     </div>
                 )}
             </div>
