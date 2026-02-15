@@ -11,7 +11,6 @@ import {
   Trophy,
   Target,
   RotateCcw,
-  Share2,
   Download,
   ChevronDown,
   ChevronUp,
@@ -189,10 +188,6 @@ export function QuizResultsPage() {
           <Button size="lg" onClick={() => quizId && navigate(`/quiz/take/${quizId}`)} disabled={!quizId}>
             <RotateCcw className="mr-2 h-4 w-4" />
             Retake Quiz
-          </Button>
-          <Button variant="outline" size="lg">
-            <Share2 className="mr-2 h-4 w-4" />
-            Share Result
           </Button>
           <Button variant="outline" size="lg">
             <Download className="mr-2 h-4 w-4" />
