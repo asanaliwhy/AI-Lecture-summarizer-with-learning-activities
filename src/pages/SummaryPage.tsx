@@ -845,7 +845,7 @@ export function SummaryPage() {
                   variant="outline"
                   onClick={() => navigate(`/flashcards/create/${id}`)}
                 >
-                  <Layers className="h-4 w-4 mr-2 shrink-0 text-amber-500" />
+                  <Layers className="h-4 w-4 mr-2 shrink-0 text-blue-700" />
                   Create Flashcards
                 </Button>
               </div>
