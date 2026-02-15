@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"log"
 
@@ -165,6 +166,10 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		rawText = normalizeSmartLabels(rawText)
 		rawText = removeWeakExampleLines(rawText)
 		rawText = pruneSmartRedundantSections(rawText)
+		if repairedText, repaired := enforceSmartAdditionalFactsBullets(rawText); repaired {
+			rawText = repairedText
+			log.Println("INFO: Smart summary Additional Interesting Facts auto-repaired to markdown bullets")
+		}
 	}
 
 	// Parse Cornell if applicable
@@ -481,6 +486,242 @@ func parseCornell(text string) (cues, notes, summary string) {
 	}
 
 	return
+}
+
+func enforceSmartAdditionalFactsBullets(text string) (string, bool) {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+
+	start := -1
+	for i, line := range lines {
+		if isAdditionalFactsHeading(line) {
+			start = i
+			break
+		}
+	}
+	if start == -1 {
+		return text, false
+	}
+
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if isSmartSectionBoundary(lines[i]) {
+			end = i
+			break
+		}
+	}
+
+	if end <= start+1 {
+		return normalized, false
+	}
+
+	sectionLines := lines[start+1 : end]
+	for _, line := range sectionLines {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "- ") || strings.HasPrefix(t, "* ") || strings.HasPrefix(t, "+ ") {
+			return normalized, false
+		}
+	}
+
+	paragraphs := collectParagraphChunks(sectionLines)
+	if len(paragraphs) == 0 {
+		return normalized, false
+	}
+
+	bullets := make([]string, 0, len(paragraphs)*2)
+	for _, paragraph := range paragraphs {
+		parts := splitSentenceLikeChunks(paragraph)
+		if len(parts) == 0 {
+			continue
+		}
+		for _, part := range parts {
+			bullets = append(bullets, "- "+part)
+		}
+	}
+
+	if len(bullets) == 0 {
+		return normalized, false
+	}
+
+	rebuilt := make([]string, 0, len(lines)+len(bullets))
+	rebuilt = append(rebuilt, lines[:start+1]...)
+	rebuilt = append(rebuilt, "")
+	rebuilt = append(rebuilt, bullets...)
+	if end < len(lines) {
+		rebuilt = append(rebuilt, "")
+		rebuilt = append(rebuilt, lines[end:]...)
+	}
+
+	cleaned := strings.Join(rebuilt, "\n")
+	for strings.Contains(cleaned, "\n\n\n") {
+		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+	}
+
+	return strings.TrimSpace(cleaned), true
+}
+
+func normalizeSmartHeadingCandidate(line string) string {
+	t := strings.TrimSpace(line)
+	t = strings.TrimLeft(t, "#")
+	t = strings.TrimSpace(t)
+
+	if isOrderedListLine(t) {
+		idx := strings.IndexAny(t, ".)")
+		if idx >= 0 && idx+1 < len(t) {
+			t = strings.TrimSpace(t[idx+1:])
+		}
+	}
+
+	t = strings.TrimPrefix(t, "- ")
+	t = strings.TrimPrefix(t, "* ")
+	t = strings.TrimPrefix(t, "+ ")
+	t = strings.TrimSpace(strings.TrimSuffix(t, ":"))
+
+	return strings.ToLower(t)
+}
+
+func isAdditionalFactsHeading(line string) bool {
+	normalized := normalizeSmartHeadingCandidate(line)
+	return strings.Contains(normalized, "additional interesting facts")
+}
+
+func isSmartSectionBoundary(line string) bool {
+	t := strings.TrimSpace(line)
+	if t == "" {
+		return false
+	}
+	if strings.HasPrefix(t, "#") || isOrderedListLine(t) {
+		return true
+	}
+
+	normalized := normalizeSmartHeadingCandidate(t)
+	return strings.Contains(normalized, "summary of video content") ||
+		strings.Contains(normalized, "key insights and core concepts") ||
+		strings.Contains(normalized, "brain structure and functions") ||
+		strings.Contains(normalized, "additional interesting facts") ||
+		strings.Contains(normalized, "conclusions") ||
+		strings.Contains(normalized, "summary highlights")
+}
+
+func isOrderedListLine(line string) bool {
+	t := strings.TrimSpace(line)
+	if t == "" {
+		return false
+	}
+
+	i := 0
+	for i < len(t) && t[i] >= '0' && t[i] <= '9' {
+		i++
+	}
+	if i == 0 || i >= len(t) {
+		return false
+	}
+
+	if (t[i] != '.' && t[i] != ')') || i+1 >= len(t) || t[i+1] != ' ' {
+		return false
+	}
+
+	return true
+}
+
+func collectParagraphChunks(lines []string) []string {
+	chunks := []string{}
+	current := []string{}
+
+	flush := func() {
+		if len(current) == 0 {
+			return
+		}
+		merged := strings.TrimSpace(strings.Join(current, " "))
+		if merged != "" {
+			chunks = append(chunks, merged)
+		}
+		current = current[:0]
+	}
+
+	for _, line := range lines {
+		t := strings.TrimSpace(line)
+		if t == "" {
+			flush()
+			continue
+		}
+
+		t = strings.TrimSpace(strings.TrimPrefix(t, ">"))
+		if t == "" {
+			continue
+		}
+
+		if strings.HasPrefix(t, "- ") || strings.HasPrefix(t, "* ") || strings.HasPrefix(t, "+ ") {
+			flush()
+			item := strings.TrimSpace(t[2:])
+			if item != "" {
+				chunks = append(chunks, item)
+			}
+			continue
+		}
+
+		if isOrderedListLine(t) {
+			flush()
+			idx := strings.IndexAny(t, ".)")
+			if idx >= 0 && idx+1 < len(t) {
+				item := strings.TrimSpace(t[idx+1:])
+				if item != "" {
+					chunks = append(chunks, item)
+				}
+			}
+			continue
+		}
+
+		current = append(current, t)
+	}
+
+	flush()
+	return chunks
+}
+
+func splitSentenceLikeChunks(text string) []string {
+	text = strings.Join(strings.Fields(text), " ")
+	if text == "" {
+		return nil
+	}
+
+	runes := []rune(text)
+	parts := []string{}
+	var current strings.Builder
+
+	flush := func() {
+		value := strings.TrimSpace(current.String())
+		if value != "" {
+			parts = append(parts, value)
+		}
+		current.Reset()
+	}
+
+	for i, r := range runes {
+		current.WriteRune(r)
+		if r != '.' && r != '!' && r != '?' {
+			continue
+		}
+
+		j := i + 1
+		for j < len(runes) && unicode.IsSpace(runes[j]) {
+			j++
+		}
+
+		if j < len(runes) {
+			next := runes[j]
+			if unicode.IsUpper(next) || unicode.IsDigit(next) || next == '(' || next == '[' || next == '"' || next == '“' {
+				flush()
+			}
+		}
+	}
+
+	flush()
+	if len(parts) == 0 {
+		return []string{text}
+	}
+
+	return parts
 }
 
 func containsMarkdownTable(text string) bool {
