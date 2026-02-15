@@ -399,89 +399,31 @@ export function DashboardPage() {
       hours: formatActivityHours(value),
     }
   })
-
-  const dashboardHeroStats = [
-    {
-      label: 'Streak',
-      value: `${Number(streakData?.current_streak ?? 0)}d`,
-      icon: Flame,
-      iconClassName: 'text-orange-600',
-      iconBgClassName: 'bg-orange-100',
-    },
-    {
-      label: 'Weekly Goal',
-      value: `${weeklyCurrentValue}/${weeklyGoalTarget}`,
-      icon: Target,
-      iconClassName: 'text-blue-600',
-      iconBgClassName: 'bg-blue-100',
-    },
-    {
-      label: 'To Review',
-      value: String(recentItems.length),
-      icon: BookOpen,
-      iconClassName: 'text-violet-600',
-      iconBgClassName: 'bg-violet-100',
-    },
-    {
-      label: 'Study Hours',
-      value: formatStudyHours(Number(dashStats?.study_hours ?? 0)),
-      icon: Clock,
-      iconClassName: 'text-emerald-600',
-      iconBgClassName: 'bg-emerald-100',
-    },
-  ]
-
   return (
     <AppLayout>
       <div className="space-y-8 pb-8 animate-in fade-in duration-500">
         {/* Header Section */}
-        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background via-background to-secondary/25 p-6 shadow-sm">
-          <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
-          <div className="pointer-events-none absolute -left-16 -bottom-20 h-44 w-44 rounded-full bg-sky-400/10 blur-3xl" />
-
-          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-3xl font-bold tracking-tight">
-                  {greeting}, {user?.full_name?.split(' ')[0] || 'there'}
-                </h1>
-                <Badge variant="secondary" className="rounded-full px-3">Dashboard</Badge>
-              </div>
-              <p className="text-muted-foreground mt-1">
-                {recentItems.length > 0
-                  ? `You have ${recentItems.length} items to review today. Keep up the momentum!`
-                  : 'Start by creating your first summary!'}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-2 bg-orange-50 text-orange-700 px-4 py-2 rounded-full border border-orange-100 shadow-sm cursor-default">
-                <Flame className="h-5 w-5 fill-orange-500 text-orange-500" />
-                <span className="font-semibold">{streakData?.current_streak || 0} Day Streak</span>
-              </div>
-              <Link to="/create">
-                <Button variant="outline" className="bg-background/80 backdrop-blur">
-                  <Plus className="mr-2 h-4 w-4" /> New Summary
-                </Button>
-              </Link>
-            </div>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {greeting}, {user?.full_name?.split(' ')[0] || 'there'}
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              {recentItems.length > 0
+                ? `You have ${recentItems.length} items to review today. Keep up the momentum!`
+                : 'Start by creating your first summary!'}
+            </p>
           </div>
-
-          <div className="relative mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {dashboardHeroStats.map((stat) => {
-              const Icon = stat.icon
-              return (
-                <div key={stat.label} className="rounded-xl border bg-card/90 p-3 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
-                    <span className={cn('rounded-full p-1.5', stat.iconBgClassName)}>
-                      <Icon className={cn('h-3.5 w-3.5', stat.iconClassName)} />
-                    </span>
-                  </div>
-                  <p className="mt-2 text-2xl font-semibold tracking-tight">{stat.value}</p>
-                </div>
-              )
-            })}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 bg-orange-50 text-orange-700 px-4 py-2 rounded-full border border-orange-100 shadow-sm hover:shadow-md transition-all cursor-default">
+              <Flame className="h-5 w-5 fill-orange-500 text-orange-500 animate-pulse" />
+              <span className="font-semibold">{streakData?.current_streak || 0} Day Streak</span>
+            </div>
+            <Link to="/create">
+              <Button className="shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
+                <Plus className="mr-2 h-4 w-4" /> New Summary
+              </Button>
+            </Link>
           </div>
         </div>
 
@@ -496,20 +438,10 @@ export function DashboardPage() {
                 className={cn(
                   'block transition-all duration-300',
                   stat.clickable &&
-                  'cursor-pointer hover:-translate-y-0.5 hover:shadow-lg',
+                  'cursor-pointer hover:-translate-y-1 hover:shadow-lg',
                 )}
               >
-                <Card className="overflow-hidden border shadow-sm h-full relative group bg-card/90">
-                  <div className={cn(
-                    'absolute inset-x-0 top-0 h-1 bg-gradient-to-r',
-                    stat.label === 'Total Summaries'
-                      ? 'from-blue-500/70 via-indigo-500/40 to-transparent'
-                      : stat.label === 'Quizzes Taken'
-                        ? 'from-purple-500/70 via-violet-500/40 to-transparent'
-                        : stat.label === 'Flashcard Decks'
-                          ? 'from-orange-500/70 via-amber-500/40 to-transparent'
-                          : 'from-emerald-500/70 via-teal-500/40 to-transparent',
-                  )} />
+                <Card className="overflow-hidden border-none shadow-sm h-full relative group">
                   <div
                     className={cn(
                       'absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-gradient-to-br from-transparent',
