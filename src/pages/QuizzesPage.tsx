@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, ApiError, type QuizListItemResponse, type QuizQuestionResponse } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -21,14 +21,13 @@ import {
 import { cn } from '../lib/utils'
 
 export function QuizzesPage() {
-  const QUIZ_FAVORITES_STORAGE_KEY = 'quiz_favorite_ids'
   const navigate = useNavigate()
-  const [quizzes, setQuizzes] = useState<any[]>([])
+  const [quizzes, setQuizzes] = useState<QuizListItemResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
   const [quickFilter, setQuickFilter] = useState<'all' | 'starred' | 'new' | 'completed' | 'easy' | 'medium' | 'hard'>('all')
-  const [starredQuizIds, setStarredQuizIds] = useState<string[]>([])
 
   const toNumber = (value: any): number | null => {
     if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -49,11 +48,18 @@ export function QuizzesPage() {
 
   useEffect(() => {
     async function load() {
+      setLoadError(null)
       try {
         const data = await api.quizzes.list()
         setQuizzes(data.quizzes || [])
-      } catch {
+      } catch (err: unknown) {
         setQuizzes([])
+        const message = err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to load quizzes'
+        setLoadError(message)
       } finally {
         setIsLoading(false)
       }
@@ -61,41 +67,39 @@ export function QuizzesPage() {
     load()
   }, [])
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(QUIZ_FAVORITES_STORAGE_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) {
-        const normalized = parsed
-          .filter((id) => typeof id === 'string' && id.trim().length > 0)
-          .map((id) => id.trim())
-        setStarredQuizIds(Array.from(new Set(normalized)))
-      }
-    } catch {
-      setStarredQuizIds([])
-    }
-  }, [])
+  const isQuizStarred = (quizId: string) => {
+    const quiz = quizzes.find((q) => q.id === quizId)
+    return Boolean(quiz?.is_favorite)
+  }
 
-  useEffect(() => {
-    localStorage.setItem(QUIZ_FAVORITES_STORAGE_KEY, JSON.stringify(starredQuizIds))
-  }, [starredQuizIds])
+  const toggleFavorite = async (quizId: string) => {
+    const current = isQuizStarred(quizId)
 
-  const isQuizStarred = (quizId: string | number) => starredQuizIds.includes(String(quizId))
-
-  const toggleFavorite = (quizId: string | number) => {
-    const normalized = String(quizId)
-    setStarredQuizIds((prev) =>
-      prev.includes(normalized)
-        ? prev.filter((id) => id !== normalized)
-        : [...prev, normalized],
+    setQuizzes((prev) =>
+      prev.map((q) =>
+        q.id === quizId
+          ? { ...q, is_favorite: !current }
+          : q,
+      ),
     )
+
+    try {
+      await api.quizzes.toggleFavorite(quizId)
+    } catch {
+      setQuizzes((prev) =>
+        prev.map((q) =>
+          q.id === quizId
+            ? { ...q, is_favorite: current }
+            : q,
+        ),
+      )
+    }
   }
 
   // Compute stats from real data
-  const completedQuizzes = quizzes.filter((q: any) => q.last_score !== undefined && q.last_score !== null)
+  const completedQuizzes = quizzes.filter((q) => q.last_score !== undefined && q.last_score !== null)
   const avgScore = completedQuizzes.length > 0
-    ? Math.round(completedQuizzes.reduce((s: number, q: any) => s + (toNumber(q.last_score) ?? 0), 0) / completedQuizzes.length)
+    ? Math.round(completedQuizzes.reduce((s: number, q) => s + (toNumber(q.last_score) ?? 0), 0) / completedQuizzes.length)
     : 0
 
   const stats = [
@@ -145,19 +149,26 @@ export function QuizzesPage() {
     return diff || 'Medium'
   }
 
-  const resolveQuizDifficulty = (quiz: any) => {
+  const resolveQuizDifficulty = (quiz: QuizListItemResponse): QuizListItemResponse['difficulty'] => {
     const direct = quiz?.difficulty
     if (direct !== undefined && direct !== null && String(direct).trim() !== '') {
       return direct
     }
 
     const config = safeParseJSON(quiz?.config)
-    const fromConfig = config?.difficulty
+    const fromConfigRaw =
+      config && typeof config === 'object' && !Array.isArray(config)
+        ? (config as Record<string, unknown>).difficulty
+        : undefined
+    const fromConfig =
+      typeof fromConfigRaw === 'string' || typeof fromConfigRaw === 'number'
+        ? fromConfigRaw
+        : undefined
     if (fromConfig !== undefined && fromConfig !== null && String(fromConfig).trim() !== '') {
       return fromConfig
     }
 
-    const questions = safeParseJSON(quiz?.questions)
+    const questions = safeParseJSON(quiz?.questions) as QuizQuestionResponse[] | string | undefined
     if (Array.isArray(questions) && questions.length > 0) {
       const fromQuestion = questions[0]?.difficulty
       if (fromQuestion !== undefined && fromQuestion !== null && String(fromQuestion).trim() !== '') {
@@ -175,6 +186,14 @@ export function QuizzesPage() {
     return 'medium'
   }
 
+  const getQuestionCount = (quiz: QuizListItemResponse): number => {
+    const direct = toNumber(quiz.question_count)
+    if (direct !== null) return direct
+
+    const parsed = safeParseJSON(quiz.questions)
+    return Array.isArray(parsed) ? parsed.length : 0
+  }
+
   const filterOptions: Array<{ key: typeof quickFilter; label: string }> = [
     { key: 'all', label: 'All' },
     { key: 'starred', label: 'Starred' },
@@ -186,7 +205,7 @@ export function QuizzesPage() {
   ]
 
   const filteredQuizzes = quizzes
-    .filter((quiz: any) => {
+    .filter((quiz) => {
       const title = String(quiz?.title || '').toLowerCase()
       const sourceSummary = String(quiz?.source_summary || '').toLowerCase()
       const query = searchQuery.trim().toLowerCase()
@@ -199,7 +218,7 @@ export function QuizzesPage() {
       if (quickFilter === 'all') return true
 
       if (quickFilter === 'starred') {
-        return isQuizStarred(quiz.id)
+        return Boolean(quiz.is_favorite)
       }
 
       const hasScore = quiz.last_score !== undefined && quiz.last_score !== null
@@ -209,7 +228,7 @@ export function QuizzesPage() {
       const difficultyValue = normalizeDifficulty(resolveQuizDifficulty(quiz))
       return difficultyValue === quickFilter
     })
-    .sort((a: any, b: any) => {
+    .sort((a, b) => {
       if (sortOrder === 'az') {
         return String(a?.title || '').localeCompare(String(b?.title || ''))
       }
@@ -354,6 +373,12 @@ export function QuizzesPage() {
           <div className="flex justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
+        ) : loadError ? (
+          <div className="text-center py-16 border rounded-xl bg-secondary/10">
+            <h3 className="text-lg font-semibold mb-2">Failed to load quizzes</h3>
+            <p className="text-muted-foreground mb-4">{loadError}</p>
+            <Button onClick={() => window.location.reload()}>Retry</Button>
+          </div>
         ) : quizzes.length === 0 ? (
           <div className="text-center py-16">
             <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -365,9 +390,9 @@ export function QuizzesPage() {
           </div>
         ) : filteredQuizzes.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredQuizzes.map((quiz: any) => {
+            {filteredQuizzes.map((quiz) => {
               const difficultyValue = resolveQuizDifficulty(quiz)
-              const starred = isQuizStarred(quiz.id)
+              const starred = Boolean(quiz.is_favorite)
               return (
                 <Card
                   key={quiz.id}
@@ -413,7 +438,7 @@ export function QuizzesPage() {
                           </div>
                         )}
                         <span className="text-xs text-muted-foreground whitespace-nowrap font-medium">
-                          {quiz.question_count || quiz.questions?.length || '?'} Questions
+                          {getQuestionCount(quiz) || '?'} Questions
                         </span>
                       </div>
                     </div>

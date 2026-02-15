@@ -61,6 +61,7 @@ func (r *QuizRepo) ListByUser(ctx context.Context, userID uuid.UUID) ([]*models.
 		q.config_json,
 		q.questions_json,
 		q.question_count,
+		q.is_favorite,
 		q.created_at,
 		qa.score_percent::float8 AS last_score,
 		qa.id AS last_attempt_id
@@ -94,6 +95,7 @@ func (r *QuizRepo) ListByUser(ctx context.Context, userID uuid.UUID) ([]*models.
 			&q.ConfigJSON,
 			&q.QuestionsJSON,
 			&q.QuestionCount,
+			&q.IsFavorite,
 			&q.CreatedAt,
 			&q.LastScore,
 			&q.LastAttemptID,
@@ -116,6 +118,11 @@ func (r *QuizRepo) UpdateQuestions(ctx context.Context, id uuid.UUID, questions 
 
 func (r *QuizRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, "DELETE FROM quizzes WHERE id = $1", id)
+	return err
+}
+
+func (r *QuizRepo) ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, "UPDATE quizzes SET is_favorite = NOT is_favorite WHERE id = $1 AND user_id = $2", id, userID)
 	return err
 }
 

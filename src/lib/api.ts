@@ -248,6 +248,44 @@ export interface GenerateSummaryPayload {
     language: string
 }
 
+export interface QuizQuestionResponse {
+    question?: string
+    type?: string
+    options?: string[]
+    correct_index?: number
+    explanation?: string
+    hint?: string
+    difficulty?: 'easy' | 'medium' | 'hard' | string
+    topic?: string
+}
+
+export interface QuizListItemResponse {
+    id: string
+    summary_id?: string | null
+    title?: string
+    config?: Record<string, unknown> | string
+    questions?: QuizQuestionResponse[] | string
+    question_count?: number
+    difficulty?: 'easy' | 'medium' | 'hard' | string | number
+    is_favorite?: boolean
+    source_summary?: string
+    created_at?: string
+    last_score?: number | null
+    last_attempt_id?: string | null
+}
+
+export interface GenerateQuizPayload {
+    summary_id: string
+    title: string
+    num_questions: number
+    difficulty: 'easy' | 'medium' | 'hard'
+    question_types: string[]
+    enable_timer: boolean
+    shuffle_questions: boolean
+    enable_hints: boolean
+    topics: string[]
+}
+
 // ─── API Methods ───
 export const api = {
     // Auth
@@ -338,13 +376,16 @@ export const api = {
 
     // Quizzes
     quizzes: {
-        generate: (data: any) =>
+        generate: (data: GenerateQuizPayload) =>
             apiFetch<{ quiz_id: string; job_id: string }>('/quizzes/generate', {
                 method: 'POST',
                 body: JSON.stringify(data),
             }),
 
-        list: () => apiFetch<{ quizzes: any[] }>('/quizzes'),
+        list: () => apiFetch<{ quizzes: QuizListItemResponse[] }>('/quizzes'),
+
+        toggleFavorite: (id: string) =>
+            apiFetch<{ message: string }>(`/quizzes/${id}/favorite`, { method: 'PUT' }),
 
         get: (id: string) => apiFetch<any>(`/quizzes/${id}`),
 

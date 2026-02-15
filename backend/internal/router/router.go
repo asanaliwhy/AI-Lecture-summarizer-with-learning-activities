@@ -93,6 +93,7 @@ func New(
 			r.Post("/generate", quizHandler.Generate)
 			r.Get("/", quizHandler.List)
 			r.Get("/{id}", quizHandler.Get)
+			r.Put("/{id}/favorite", quizHandler.ToggleFavorite)
 			r.Post("/{id}/start", quizHandler.StartAttempt)
 		})
 
