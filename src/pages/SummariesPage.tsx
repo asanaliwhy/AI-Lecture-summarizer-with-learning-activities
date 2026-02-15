@@ -113,6 +113,24 @@ export function SummariesPage() {
     return Math.max(0, Math.min(100, raw))
   }
 
+  const getFormatLabel = (summary: SummaryListItemResponse) => {
+    const raw = String(summary?.format || summary?.config?.format || '').toLowerCase()
+    if (raw === 'cornell') return 'Cornell'
+    if (raw === 'bullets') return 'Bullet Points'
+    if (raw === 'paragraph') return 'Paragraph'
+    if (raw === 'smart') return 'Smart Summary'
+    return 'Summary'
+  }
+
+  const getFormatBadgeClass = (summary: SummaryListItemResponse) => {
+    const raw = String(summary?.format || summary?.config?.format || '').toLowerCase()
+    if (raw === 'cornell') return 'bg-violet-50 text-violet-700'
+    if (raw === 'bullets') return 'bg-cyan-50 text-cyan-700'
+    if (raw === 'paragraph') return 'bg-amber-50 text-amber-700'
+    if (raw === 'smart') return 'bg-blue-50 text-blue-700'
+    return 'bg-secondary/80 text-secondary-foreground'
+  }
+
   const filteredSummaries = summaries
   return (
     <AppLayout>
@@ -250,6 +268,14 @@ export function SummariesPage() {
                     </CardHeader>
 
                     <CardContent className="pb-3 relative z-10">
+                      <div className="mb-3">
+                        <Badge
+                          variant="secondary"
+                          className={cn('font-medium text-[11px] px-2.5 py-1', getFormatBadgeClass(summary))}
+                        >
+                          {getFormatLabel(summary)}
+                        </Badge>
+                      </div>
                       <div className="flex flex-wrap gap-2 mb-4">
                         {(summary.tags || []).map((tag: string) => (
                           <Badge

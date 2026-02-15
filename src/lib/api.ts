@@ -165,6 +165,7 @@ export interface SummaryListItemResponse {
     id: string
     content_id?: string
     title?: string
+    format?: 'cornell' | 'bullets' | 'paragraph' | 'smart' | string
     source?: string
     source_type?: string
     config?: {
