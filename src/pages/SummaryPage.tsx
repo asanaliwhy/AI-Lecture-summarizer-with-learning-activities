@@ -242,6 +242,7 @@ function normalizeSmartSummaryMarkdown(value: string): string {
   }
 
   let i = 0
+  let currentSmartSection = ''
   while (i < lines.length) {
     const raw = lines[i].trim()
     if (!raw) {
@@ -255,6 +256,7 @@ function normalizeSmartSummaryMarkdown(value: string): string {
       if (out.length > 0 && out[out.length - 1] !== '') out.push('')
       out.push(`## ${cleanInlineMarkdown(smartTitle[1])}`)
       out.push('')
+      currentSmartSection = cleanInlineMarkdown(smartTitle[1]).toLowerCase()
       i += 1
       continue
     }
@@ -262,17 +264,21 @@ function normalizeSmartSummaryMarkdown(value: string): string {
     const numberedHeading = raw.match(/^\d+[.)]\s+(.+)$/)
     if (numberedHeading) {
       if (out.length > 0 && out[out.length - 1] !== '') out.push('')
-      out.push(`## ${cleanInlineMarkdown(numberedHeading[1])}`)
+      const headingText = cleanInlineMarkdown(numberedHeading[1]).replace(/:\s*$/, '')
+      out.push(`## ${headingText}`)
       out.push('')
+      currentSmartSection = headingText.toLowerCase()
       i += 1
       continue
     }
 
-    const knownSectionHeading = raw.match(/^(Summary of Video Content|Key Insights and Core Concepts|Brain Structure and Functions|Additional Interesting Facts|Conclusions|Summary Highlights)$/i)
+    const knownSectionHeading = raw.match(/^(Summary of Video Content|Key Insights and Core Concepts|Brain Structure and Functions|Additional Interesting Facts|Conclusions|Summary Highlights):?$/i)
     if (knownSectionHeading) {
       if (out.length > 0 && out[out.length - 1] !== '') out.push('')
-      out.push(`## ${cleanInlineMarkdown(knownSectionHeading[1])}`)
+      const headingText = cleanInlineMarkdown(knownSectionHeading[1]).replace(/:\s*$/, '')
+      out.push(`## ${headingText}`)
       out.push('')
+      currentSmartSection = headingText.toLowerCase()
       i += 1
       continue
     }
@@ -285,6 +291,12 @@ function normalizeSmartSummaryMarkdown(value: string): string {
 
     if (/^[-*+]\s+/.test(raw)) {
       out.push(`- ${cleanInlineMarkdown(raw.replace(/^[-*+]\s+/, ''))}`)
+      i += 1
+      continue
+    }
+
+    if (currentSmartSection.includes('additional interesting facts')) {
+      out.push(`- ${cleanInlineMarkdown(raw)}`)
       i += 1
       continue
     }
