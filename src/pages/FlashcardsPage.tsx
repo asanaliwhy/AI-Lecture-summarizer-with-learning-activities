@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError, type FlashcardDeckListItemResponse } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
@@ -35,28 +35,46 @@ export function FlashcardsPage() {
     const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
     const [quickFilter, setQuickFilter] = useState<'all' | 'starred' | 'new' | 'small' | 'medium' | 'large'>('all')
     const [favoritePendingIds, setFavoritePendingIds] = useState<string[]>([])
+    const loadRequestIdRef = useRef(0)
 
-    useEffect(() => {
-        async function load() {
-            setLoadError(null)
-            try {
-                const data = await api.flashcards.listDecks()
-                setDecks(data.decks || [])
-            } catch (err: unknown) {
-                setDecks([])
-                const message = err instanceof ApiError
+    const loadDecks = useCallback(async () => {
+        const requestId = ++loadRequestIdRef.current
+
+        setIsLoading(true)
+        setLoadError(null)
+        try {
+            const data = await api.flashcards.listDecks()
+            if (requestId !== loadRequestIdRef.current) {
+                return
+            }
+
+            setDecks(data.decks || [])
+        } catch (err: unknown) {
+            if (requestId !== loadRequestIdRef.current) {
+                return
+            }
+
+            setDecks([])
+            const message = err instanceof ApiError
+                ? err.message
+                : err instanceof Error
                     ? err.message
-                    : err instanceof Error
-                        ? err.message
-                        : 'Failed to load flashcard decks'
-                setLoadError(message)
-            } finally {
+                    : 'Failed to load flashcard decks'
+            setLoadError(message)
+        } finally {
+            if (requestId === loadRequestIdRef.current) {
                 setIsLoading(false)
             }
         }
-
-        load()
     }, [])
+
+    useEffect(() => {
+        loadDecks()
+
+        return () => {
+            loadRequestIdRef.current += 1
+        }
+    }, [loadDecks])
 
     const totalCards = useMemo(
         () => decks.reduce((sum, d) => sum + (Number(d.card_count) || 0), 0),
@@ -309,7 +327,7 @@ export function FlashcardsPage() {
                     <div className="text-center py-16 border rounded-xl bg-secondary/10">
                         <h3 className="text-lg font-semibold mb-2">Failed to load flashcard decks</h3>
                         <p className="text-muted-foreground mb-4">{loadError}</p>
-                        <Button onClick={() => window.location.reload()}>Retry</Button>
+                        <Button onClick={loadDecks}>Retry</Button>
                     </div>
                 ) : decks.length === 0 ? (
                     <div className="text-center py-16">
@@ -327,6 +345,14 @@ export function FlashcardsPage() {
                                 key={deck.id}
                                 className="group hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer border relative overflow-hidden"
                                 onClick={() => navigate(`/flashcards/study/${deck.id}`)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault()
+                                        navigate(`/flashcards/study/${deck.id}`)
+                                    }
+                                }}
                             >
                                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500/60 via-orange-500/40 to-yellow-500/30" />
                                 <CardContent className="p-6 relative z-10">
