@@ -29,10 +29,11 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useToast } from '../components/ui/Toast'
+import defaultVideoThumbnail from '../assets/default-video-thumbnail.svg'
 export function ContentInputPage() {
   const navigate = useNavigate()
   const toast = useToast()
-  const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
+  const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024
   const ACCEPTED_EXTENSIONS = new Set(['.pdf', '.docx', '.txt', '.mp3', '.wav', '.mp4'])
   const ACCEPT_ATTR = '.pdf,.docx,.txt,.mp3,.wav,.mp4'
 
@@ -40,7 +41,12 @@ export function ContentInputPage() {
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [isValidating, setIsValidating] = useState(false)
   const [isValid, setIsValid] = useState(false)
-  const [videoMeta, setVideoMeta] = useState<any>(null)
+  type VideoMetadata = {
+    thumbnail_url?: string
+    title?: string
+    channel_name?: string
+  }
+  const [videoMeta, setVideoMeta] = useState<VideoMetadata | null>(null)
   const [contentId, setContentId] = useState<string | null>(null)
   const [summaryLength, setSummaryLength] = useState([50])
   const [outputFormat, setOutputFormat] = useState('cornell')
@@ -65,7 +71,7 @@ export function ContentInputPage() {
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return 'File is too large. Maximum allowed size is 500MB.'
+      return 'File is too large. Maximum allowed size is 100MB.'
     }
 
     return null
@@ -108,9 +114,10 @@ export function ContentInputPage() {
       setVideoMeta(data.metadata)
       setContentId(data.content_id)
       toast.success('Video validated successfully!')
-    } catch (err: any) {
-      setValidationError(err.message || 'Invalid URL')
-      toast.error(err.message || 'Could not validate video')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Invalid URL'
+      setValidationError(message)
+      toast.error(message || 'Could not validate video')
       setIsValid(false)
     } finally {
       setIsValidating(false)
@@ -183,9 +190,10 @@ export function ContentInputPage() {
         toast.success('Summary generation started!')
         navigate(`/processing/${result.job_id}`)
       }
-    } catch (err: any) {
-      setValidationError(err.message || 'Generation failed')
-      toast.error(err.message || 'Failed to start generation')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Generation failed'
+      setValidationError(message)
+      toast.error(message || 'Failed to start generation')
     } finally {
       setIsGenerating(false)
     }
@@ -269,7 +277,7 @@ export function ContentInputPage() {
                         <div
                           className="w-full aspect-video bg-slate-200 rounded-md bg-cover bg-center"
                           style={{
-                            backgroundImage: `url(${videoMeta?.thumbnail_url || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&q=80'})`,
+                            backgroundImage: `url(${videoMeta?.thumbnail_url || defaultVideoThumbnail})`,
                           }}
                         ></div>
                         <div className="mt-3 min-w-0">
@@ -333,7 +341,7 @@ export function ContentInputPage() {
                           : 'Click to upload or drag and drop'}
                       </h3>
                       <p className="text-sm text-muted-foreground mb-4">
-                        PDF, DOCX, TXT, MP3, WAV, or MP4 (max 500MB)
+                        PDF, DOCX, TXT, MP3, WAV, or MP4 (max 100MB)
                       </p>
                       <Button
                         variant="outline"

@@ -140,9 +140,22 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	}
 
 	rawText := extractText(resp)
+	isQualityFallback := false
+	var qualityFallbackReason *string
 	if rawText == "" {
 		log.Println("WARNING: Gemini returned empty text. Using fallback.")
 		rawText = "We could not generate a summary for this content. The transcript was likely unavailable or the content was blocked by safety filters."
+		isQualityFallback = true
+		reason := "gemini_empty_response"
+		qualityFallbackReason = &reason
+	}
+
+	if strings.Contains(strings.ToLower(transcript), "transcript is unavailable for this content") {
+		isQualityFallback = true
+		if qualityFallbackReason == nil {
+			reason := "metadata_only_transcript"
+			qualityFallbackReason = &reason
+		}
 	}
 
 	if config.Format == "smart" && !containsMarkdownTable(rawText) {
@@ -254,7 +267,19 @@ Summary:
 	}
 
 	// Update summary in database
-	err = s.summaryRepo.UpdateContent(ctx, job.ReferenceID, rawText, cues, notes, summaryText, tags, description, wordCount)
+	err = s.summaryRepo.UpdateContent(
+		ctx,
+		job.ReferenceID,
+		rawText,
+		cues,
+		notes,
+		summaryText,
+		tags,
+		description,
+		wordCount,
+		isQualityFallback,
+		qualityFallbackReason,
+	)
 	if err != nil {
 		return err
 	}

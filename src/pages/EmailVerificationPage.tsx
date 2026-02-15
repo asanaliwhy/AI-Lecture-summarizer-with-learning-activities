@@ -13,6 +13,8 @@ import {
 import { Mail, ArrowRight, Loader2, CheckCircle, XCircle } from 'lucide-react'
 import { useToast } from '../components/ui/Toast'
 
+const RESEND_STORAGE_KEY = 'pending_verification_email'
+
 export function EmailVerificationPage() {
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
@@ -21,7 +23,17 @@ export function EmailVerificationPage() {
 
   const [status, setStatus] = useState<'idle' | 'verifying' | 'success' | 'error'>('idle')
   const [countdown, setCountdown] = useState(0)
+  const [resendEmail, setResendEmail] = useState('')
+  const [isResending, setIsResending] = useState(false)
+  const [resendError, setResendError] = useState('')
   const verifyCalled = useRef(false)
+
+  useEffect(() => {
+    const stored = localStorage.getItem(RESEND_STORAGE_KEY)
+    if (stored) {
+      setResendEmail(stored)
+    }
+  }, [])
 
   useEffect(() => {
     if (token && !verifyCalled.current) {
@@ -51,20 +63,48 @@ export function EmailVerificationPage() {
     }
   }
 
-  const handleResend = async () => {
-    // For now, just a dummy countdown since we don't have the user's email 
-    // accessible here easily unless we store it in local state/context during registration.
-    // Real implementation would need the email address.
-    setCountdown(60)
-    const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval)
-          return 0
-        }
-        return prev - 1
-      })
+  useEffect(() => {
+    if (countdown <= 0) return
+
+    const timeout = window.setTimeout(() => {
+      setCountdown((prev) => Math.max(0, prev - 1))
     }, 1000)
+
+    return () => window.clearTimeout(timeout)
+  }, [countdown])
+
+  const handleResend = async () => {
+    const email = resendEmail.trim().toLowerCase()
+
+    if (!email) {
+      setResendError('Enter the email used during registration.')
+      return
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setResendError('Enter a valid email address.')
+      return
+    }
+
+    if (countdown > 0 || isResending) {
+      return
+    }
+
+    setIsResending(true)
+    setResendError('')
+
+    try {
+      await api.auth.resendVerification(email)
+      localStorage.setItem(RESEND_STORAGE_KEY, email)
+      setCountdown(60)
+      success('Verification email sent again.')
+    } catch (err: any) {
+      const message = err?.message || 'Failed to resend verification email'
+      setResendError(message)
+      error(message)
+    } finally {
+      setIsResending(false)
+    }
   }
 
   // Render "Verifying" state
@@ -144,6 +184,38 @@ export function EmailVerificationPage() {
           <p className="text-sm text-muted-foreground">
             Click the link in the email to verify your account.
           </p>
+
+          <div className="space-y-2 text-left">
+            <label htmlFor="resend-email" className="text-sm font-medium">
+              Email address
+            </label>
+            <input
+              id="resend-email"
+              type="email"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="name@example.com"
+              value={resendEmail}
+              onChange={(e) => {
+                setResendEmail(e.target.value)
+                if (resendError) setResendError('')
+              }}
+            />
+            {resendError && <p className="text-xs text-destructive">{resendError}</p>}
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleResend}
+            disabled={isResending || countdown > 0}
+            className="w-full"
+          >
+            {isResending
+              ? 'Sending...'
+              : countdown > 0
+                ? `Resend in ${countdown}s`
+                : 'Resend verification email'}
+          </Button>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <Link

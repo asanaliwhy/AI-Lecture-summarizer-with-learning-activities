@@ -85,10 +85,10 @@ jobs:
         run: npm ci
 
       - name: TypeScript check
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Run tests
-        run: npx vitest run --reporter=verbose 2>/dev/null || echo "Tests completed"
+        run: npm run test:ci
 
       - name: Build
         run: npm run build

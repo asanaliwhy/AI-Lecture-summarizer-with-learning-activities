@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -16,13 +18,22 @@ import (
 )
 
 type SummaryHandler struct {
-	summaryRepo *repository.SummaryRepo
+	summaryRepo summaryRepository
 	contentRepo *repository.ContentRepo
 	jobRepo     *repository.JobRepo
 	redis       *redis.Client
 }
 
-func NewSummaryHandler(summaryRepo *repository.SummaryRepo, contentRepo *repository.ContentRepo, jobRepo *repository.JobRepo, redisClient *redis.Client) *SummaryHandler {
+type summaryRepository interface {
+	Create(ctx context.Context, s *models.Summary) error
+	ListByUser(ctx context.Context, userID uuid.UUID, search, sortBy string, limit, offset int) ([]*models.Summary, int, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Summary, error)
+	Update(ctx context.Context, s *models.Summary) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
+}
+
+func NewSummaryHandler(summaryRepo summaryRepository, contentRepo *repository.ContentRepo, jobRepo *repository.JobRepo, redisClient *redis.Client) *SummaryHandler {
 	return &SummaryHandler{
 		summaryRepo: summaryRepo,
 		contentRepo: contentRepo,
@@ -77,7 +88,18 @@ func (h *SummaryHandler) Generate(w http.ResponseWriter, r *http.Request) {
 
 	// Push to Redis queue
 	jobBytes, _ := json.Marshal(job)
-	h.redis.LPush(r.Context(), "queue:summary-generation", string(jobBytes))
+	if h.redis == nil {
+		_ = h.jobRepo.UpdateStatus(r.Context(), job.ID, "failed")
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Summary queue is unavailable", r))
+		return
+	}
+
+	if err := h.redis.LPush(r.Context(), "queue:summary-generation", string(jobBytes)).Err(); err != nil {
+		log.Printf("failed to enqueue summary-generation job %s: %v", job.ID, err)
+		_ = h.jobRepo.UpdateStatus(r.Context(), job.ID, "failed")
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to enqueue summary job", r))
+		return
+	}
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"job_id":     job.ID,
@@ -206,7 +228,19 @@ func (h *SummaryHandler) ToggleFavorite(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.summaryRepo.ToggleFavorite(r.Context(), id); err != nil {
+	summary, err := h.summaryRepo.GetByID(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Summary not found", r))
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	if summary.UserID != userID {
+		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
+		return
+	}
+
+	if err := h.summaryRepo.ToggleFavorite(r.Context(), id, userID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to update favorite", r))
 		return
 	}
@@ -300,7 +334,18 @@ func (h *SummaryHandler) Regenerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jobBytes, _ := json.Marshal(job)
-	h.redis.LPush(r.Context(), "queue:summary-generation", string(jobBytes))
+	if h.redis == nil {
+		_ = h.jobRepo.UpdateStatus(r.Context(), job.ID, "failed")
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Summary queue is unavailable", r))
+		return
+	}
+
+	if err := h.redis.LPush(r.Context(), "queue:summary-generation", string(jobBytes)).Err(); err != nil {
+		log.Printf("failed to enqueue summary-regeneration job %s: %v", job.ID, err)
+		_ = h.jobRepo.UpdateStatus(r.Context(), job.ID, "failed")
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to enqueue summary job", r))
+		return
+	}
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"job_id":     job.ID,

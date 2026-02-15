@@ -2,7 +2,12 @@ const DEFAULT_API_BASE = 'http://localhost:8081/api/v1'
 
 function normalizeApiBase(raw: string | undefined): string {
     const value = (raw || '').trim()
-    if (!value) return DEFAULT_API_BASE
+    if (!value) {
+        if (import.meta.env.PROD) {
+            throw new Error('VITE_API_BASE_URL is required in production')
+        }
+        return DEFAULT_API_BASE
+    }
 
     const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`
 
@@ -15,6 +20,9 @@ function normalizeApiBase(raw: string | undefined): string {
 
         return `${url.protocol}//${url.host}${normalizedPath}`
     } catch {
+        if (import.meta.env.PROD) {
+            throw new Error('VITE_API_BASE_URL is invalid in production')
+        }
         return DEFAULT_API_BASE
     }
 }
@@ -173,6 +181,7 @@ export interface DashboardStreakResponse {
 export interface DashboardActivityResponse {
     activity?: number[]
     days?: number[]
+    estimated?: boolean
 }
 
 export interface SummarySectionResponse {
@@ -208,6 +217,8 @@ export interface SummaryListItemResponse {
     wordCount?: number
     progress?: number
     completion?: number
+    is_quality_fallback?: boolean
+    quality_fallback_reason?: string
 }
 
 export interface SummaryDetailResponse extends SummaryListItemResponse {
@@ -224,6 +235,8 @@ export interface SummaryDetailResponse extends SummaryListItemResponse {
     source_url?: string
     source_duration?: string
     duration?: string
+    is_quality_fallback?: boolean
+    quality_fallback_reason?: string
 }
 
 export interface GenerateSummaryPayload {

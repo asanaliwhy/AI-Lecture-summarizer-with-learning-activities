@@ -269,12 +269,22 @@ export function SummariesPage() {
 
                     <CardContent className="pb-3 relative z-10">
                       <div className="mb-3">
-                        <Badge
-                          variant="secondary"
-                          className={cn('font-medium text-[11px] px-2.5 py-1', getFormatBadgeClass(summary))}
-                        >
-                          {getFormatLabel(summary)}
-                        </Badge>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge
+                            variant="secondary"
+                            className={cn('font-medium text-[11px] px-2.5 py-1', getFormatBadgeClass(summary))}
+                          >
+                            {getFormatLabel(summary)}
+                          </Badge>
+                          {summary.is_quality_fallback && (
+                            <Badge
+                              variant="outline"
+                              className="font-medium text-[11px] px-2.5 py-1 border-amber-300 text-amber-700 bg-amber-50"
+                            >
+                              Estimated Content
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2 mb-4">
                         {(summary.tags || []).map((tag: string) => (

@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { api, type SummaryDetailResponse, type SummarySectionResponse } from '../lib/api'
+import { ApiError } from '../lib/api'
 import { useStudySession } from '../lib/useStudySession'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
@@ -668,21 +669,33 @@ export function SummaryPage() {
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [isNotFound, setIsNotFound] = useState(false)
+
+  const loadSummary = async () => {
+    if (!id) return
+    setIsLoading(true)
+    setLoadError(null)
+    setIsNotFound(false)
+    try {
+      const data = await api.summaries.get(id)
+      setSummary(data)
+      setTitle(data.title || 'Untitled Summary')
+    } catch (err: unknown) {
+      setSummary(null)
+      if (err instanceof ApiError && err.status === 404) {
+        setIsNotFound(true)
+      } else {
+        const message = err instanceof Error ? err.message : 'Failed to load summary'
+        setLoadError(message)
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    if (!id) return
-    async function load() {
-      try {
-        const data = await api.summaries.get(id!)
-        setSummary(data)
-        setTitle(data.title || 'Untitled Summary')
-      } catch {
-        setSummary(null)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    load()
+    loadSummary()
   }, [id])
 
   useStudySession({
@@ -956,7 +969,22 @@ export function SummaryPage() {
     )
   }
 
-  if (!summary) {
+  if (loadError) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center h-96 text-center">
+          <h2 className="text-2xl font-bold mb-2">Failed to load summary</h2>
+          <p className="text-muted-foreground mb-6">{loadError}</p>
+          <div className="flex items-center gap-3">
+            <Button onClick={loadSummary}>Retry</Button>
+            <Button variant="outline" onClick={() => navigate('/summaries')}>Back to Summaries</Button>
+          </div>
+        </div>
+      </AppLayout>
+    )
+  }
+
+  if (isNotFound || !summary) {
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center h-96 text-center">
@@ -1026,10 +1054,24 @@ export function SummaryPage() {
               >
                 {summaryTypeLabel}
               </Badge>
+              {summary.is_quality_fallback && (
+                <Badge
+                  variant="outline"
+                  className="border-amber-300 text-amber-700 bg-amber-50"
+                >
+                  Estimated Content
+                </Badge>
+              )}
               <span className="text-xs text-muted-foreground">
                 Generated {createdAt}
               </span>
             </div>
+            {summary.is_quality_fallback && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-2 max-w-2xl">
+                This summary was generated with limited source data and may contain assumptions.
+                {summary.quality_fallback_reason ? ` (${summary.quality_fallback_reason.replace(/_/g, ' ')})` : ''}
+              </p>
+            )}
             {isEditingTitle ? (
               <input
                 type="text"

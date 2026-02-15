@@ -58,6 +58,7 @@ export function RegisterPage() {
 
     try {
       await register(fullName, email, password)
+      localStorage.setItem('pending_verification_email', email.trim().toLowerCase())
       toastSuccess('Account created! Check your email to verify.')
       navigate('/verify-email')
     } catch (err) {

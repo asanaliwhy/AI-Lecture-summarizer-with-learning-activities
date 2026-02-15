@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
@@ -70,28 +70,58 @@ export function DashboardPage() {
   const [selectedGoalType, setSelectedGoalType] = useState<GoalType>('summary')
   const [goalError, setGoalError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [isActivityEstimated, setIsActivityEstimated] = useState(false)
+
+  const loadDashboard = useCallback(async () => {
+    setIsLoading(true)
+    setLoadError(null)
+    try {
+      const [stats, recent, streak, activity] = await Promise.all([
+        api.dashboard.stats(),
+        api.dashboard.recent(),
+        api.dashboard.streak(),
+        api.dashboard.activity(),
+      ])
+      setDashStats(stats)
+      setRecentItems(recent?.recent ?? recent?.items ?? [])
+      setStreakData(streak)
+      setActivityItems(activity?.activity ?? activity?.days ?? [])
+      setIsActivityEstimated(Boolean(activity?.estimated))
+    } catch (err: unknown) {
+      setDashStats(null)
+      setRecentItems([])
+      setStreakData(null)
+      setActivityItems([])
+      setIsActivityEstimated(false)
+
+      const message = err instanceof Error ? err.message : 'Failed to load dashboard'
+      setLoadError(message)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [stats, recent, streak, activity] = await Promise.all([
-          api.dashboard.stats().catch(() => null),
-          api.dashboard.recent().catch((): DashboardRecentResponse => ({ recent: [], items: [] })),
-          api.dashboard.streak().catch(() => null),
-          api.dashboard.activity().catch((): DashboardActivityResponse => ({ activity: [], days: [] })),
-        ])
-        setDashStats(stats)
-        setRecentItems(recent?.recent ?? recent?.items ?? [])
-        setStreakData(streak)
-        setActivityItems(activity?.activity ?? activity?.days ?? [])
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    load()
-  }, [])
+    loadDashboard()
+  }, [loadDashboard])
   if (isLoading) {
     return <AppLayout><DashboardSkeleton /></AppLayout>
+  }
+
+  if (loadError) {
+    return (
+      <AppLayout>
+        <div className="max-w-xl mx-auto py-20 text-center space-y-4">
+          <h1 className="text-2xl font-bold tracking-tight">Failed to load dashboard</h1>
+          <p className="text-muted-foreground">{loadError}</p>
+          <div className="flex items-center justify-center gap-3">
+            <Button onClick={loadDashboard}>Retry</Button>
+            <Button variant="outline" onClick={() => navigate('/summaries')}>Go to Summaries</Button>
+          </div>
+        </div>
+      </AppLayout>
+    )
   }
 
   const formatTrend = (value: number) => {
@@ -700,9 +730,16 @@ export function DashboardPage() {
 
             {/* Weekly Activity */}
             <section>
-              <h2 className="text-lg font-semibold tracking-tight mb-4">
-                Weekly Activity
-              </h2>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-lg font-semibold tracking-tight">
+                  Weekly Activity
+                </h2>
+                {isActivityEstimated && (
+                  <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                    Estimated
+                  </Badge>
+                )}
+              </div>
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
                   <div className="relative h-32">
@@ -748,6 +785,11 @@ export function DashboardPage() {
                       ))}
                     </div>
                   </div>
+                  {isActivityEstimated && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Activity is estimated from recent summary creation because tracked study-session data is unavailable.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </section>

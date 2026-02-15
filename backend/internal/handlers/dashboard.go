@@ -321,6 +321,7 @@ func (h *DashboardHandler) Activity(w http.ResponseWriter, r *http.Request) {
 
 	// Weekly activity (Sun-Sat in backend response; frontend maps to Mon-first)
 	activity := make([]float64, 7)
+	estimated := false
 	rows, err := h.pool.Query(ctx, `
 		SELECT
 			EXTRACT(DOW FROM started_at)::int AS dow,
@@ -356,6 +357,7 @@ func (h *DashboardHandler) Activity(w http.ResponseWriter, r *http.Request) {
 
 	if totalHours <= 0 {
 		// Backward compatibility fallback for older accounts without tracked study sessions yet.
+		estimated = true
 		fallbackRows, fallbackErr := h.pool.Query(ctx, `
 			SELECT EXTRACT(DOW FROM created_at)::int AS dow, COUNT(*)
 			FROM summaries
@@ -376,7 +378,10 @@ func (h *DashboardHandler) Activity(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{"activity": activity})
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"activity":  activity,
+		"estimated": estimated,
+	})
 }
 
 // Library handler

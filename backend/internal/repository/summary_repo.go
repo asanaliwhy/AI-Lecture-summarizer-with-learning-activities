@@ -40,7 +40,7 @@ func (r *SummaryRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Summar
 	s := &models.Summary{}
 	query := `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
 		s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
-		s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.created_at, s.last_accessed_at
+		s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
 		FROM summaries s
 		LEFT JOIN content c ON c.id = s.content_id
 		WHERE s.id = $1`
@@ -48,7 +48,7 @@ func (r *SummaryRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Summar
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&s.ID, &s.UserID, &s.ContentID, &s.Source, &s.Title, &s.Format, &s.LengthSetting, &s.ConfigJSON,
 		&s.ContentRaw, &s.CornellCues, &s.CornellNotes, &s.CornellSummary,
-		&s.Tags, &s.Description, &s.WordCount, &s.IsFavorite, &s.IsArchived,
+		&s.Tags, &s.Description, &s.WordCount, &s.IsFavorite, &s.IsArchived, &s.IsQualityFallback, &s.QualityFallbackReason,
 		&s.CreatedAt, &s.LastAccessedAt,
 	)
 	if err != nil {
@@ -95,7 +95,7 @@ func (r *SummaryRepo) ListByUser(ctx context.Context, userID uuid.UUID, search, 
 
 	query := fmt.Sprintf(`SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
 		s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
-		s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.created_at, s.last_accessed_at
+		s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
 		FROM summaries s
 		LEFT JOIN content c ON c.id = s.content_id
 		%s ORDER BY %s LIMIT $%d OFFSET $%d`,
@@ -115,7 +115,7 @@ func (r *SummaryRepo) ListByUser(ctx context.Context, userID uuid.UUID, search, 
 		err := rows.Scan(
 			&s.ID, &s.UserID, &s.ContentID, &s.Source, &s.Title, &s.Format, &s.LengthSetting, &s.ConfigJSON,
 			&s.ContentRaw, &s.CornellCues, &s.CornellNotes, &s.CornellSummary,
-			&s.Tags, &s.Description, &s.WordCount, &s.IsFavorite, &s.IsArchived,
+			&s.Tags, &s.Description, &s.WordCount, &s.IsFavorite, &s.IsArchived, &s.IsQualityFallback, &s.QualityFallbackReason,
 			&s.CreatedAt, &s.LastAccessedAt,
 		)
 		if err != nil {
@@ -135,11 +135,21 @@ func (r *SummaryRepo) Update(ctx context.Context, s *models.Summary) error {
 	return err
 }
 
-func (r *SummaryRepo) UpdateContent(ctx context.Context, id uuid.UUID, raw string, cues, notes, summary *string, tags []string, desc *string, wordCount int) error {
+func (r *SummaryRepo) UpdateContent(
+	ctx context.Context,
+	id uuid.UUID,
+	raw string,
+	cues, notes, summary *string,
+	tags []string,
+	desc *string,
+	wordCount int,
+	isQualityFallback bool,
+	qualityFallbackReason *string,
+) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE summaries SET content_raw = $1, cornell_cues = $2, cornell_notes = $3, cornell_summary = $4,
-		 tags = $5, description = $6, word_count = $7 WHERE id = $8`,
-		raw, cues, notes, summary, tags, desc, wordCount, id,
+		 tags = $5, description = $6, word_count = $7, is_quality_fallback = $8, quality_fallback_reason = $9 WHERE id = $10`,
+		raw, cues, notes, summary, tags, desc, wordCount, isQualityFallback, qualityFallbackReason, id,
 	)
 	return err
 }
@@ -149,8 +159,8 @@ func (r *SummaryRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-func (r *SummaryRepo) ToggleFavorite(ctx context.Context, id uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, "UPDATE summaries SET is_favorite = NOT is_favorite WHERE id = $1", id)
+func (r *SummaryRepo) ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, "UPDATE summaries SET is_favorite = NOT is_favorite WHERE id = $1 AND user_id = $2", id, userID)
 	return err
 }
 

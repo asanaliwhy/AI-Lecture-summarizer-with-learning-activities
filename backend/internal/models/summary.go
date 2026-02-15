@@ -8,25 +8,27 @@ import (
 )
 
 type Summary struct {
-	ID             uuid.UUID       `json:"id"`
-	UserID         uuid.UUID       `json:"user_id"`
-	ContentID      *uuid.UUID      `json:"content_id"`
-	Source         string          `json:"source"`
-	Title          string          `json:"title"`
-	Format         string          `json:"format"` // "cornell" | "bullets" | "paragraph" | "smart"
-	LengthSetting  string          `json:"length_setting"`
-	ConfigJSON     json.RawMessage `json:"config"`
-	ContentRaw     *string         `json:"content_raw"`
-	CornellCues    *string         `json:"cornell_cues"`
-	CornellNotes   *string         `json:"cornell_notes"`
-	CornellSummary *string         `json:"cornell_summary"`
-	Tags           []string        `json:"tags"`
-	Description    *string         `json:"description"`
-	WordCount      int             `json:"word_count"`
-	IsFavorite     bool            `json:"is_favorite"`
-	IsArchived     bool            `json:"is_archived"`
-	CreatedAt      time.Time       `json:"created_at"`
-	LastAccessedAt *time.Time      `json:"last_accessed_at"`
+	ID                    uuid.UUID       `json:"id"`
+	UserID                uuid.UUID       `json:"user_id"`
+	ContentID             *uuid.UUID      `json:"content_id"`
+	Source                string          `json:"source"`
+	Title                 string          `json:"title"`
+	Format                string          `json:"format"` // "cornell" | "bullets" | "paragraph" | "smart"
+	LengthSetting         string          `json:"length_setting"`
+	ConfigJSON            json.RawMessage `json:"config"`
+	ContentRaw            *string         `json:"content_raw"`
+	CornellCues           *string         `json:"cornell_cues"`
+	CornellNotes          *string         `json:"cornell_notes"`
+	CornellSummary        *string         `json:"cornell_summary"`
+	Tags                  []string        `json:"tags"`
+	Description           *string         `json:"description"`
+	WordCount             int             `json:"word_count"`
+	IsFavorite            bool            `json:"is_favorite"`
+	IsArchived            bool            `json:"is_archived"`
+	IsQualityFallback     bool            `json:"is_quality_fallback"`
+	QualityFallbackReason *string         `json:"quality_fallback_reason,omitempty"`
+	CreatedAt             time.Time       `json:"created_at"`
+	LastAccessedAt        *time.Time      `json:"last_accessed_at"`
 }
 
 type GenerateSummaryRequest struct {
