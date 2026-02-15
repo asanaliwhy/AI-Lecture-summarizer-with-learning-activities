@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { useToast } from '../components/ui/Toast'
 import {
     Layers,
     Calendar,
@@ -23,6 +24,7 @@ import { cn } from '../lib/utils'
 
 export function FlashcardsPage() {
     const navigate = useNavigate()
+    const toast = useToast()
     const [decks, setDecks] = useState<FlashcardDeckListItemResponse[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [loadError, setLoadError] = useState<string | null>(null)
@@ -86,7 +88,7 @@ export function FlashcardsPage() {
 
         try {
             await api.flashcards.toggleFavorite(deckId)
-        } catch {
+        } catch (err: unknown) {
             setDecks((prev) =>
                 prev.map((d) =>
                     d.id === deckId
@@ -94,6 +96,15 @@ export function FlashcardsPage() {
                         : d,
                 ),
             )
+
+            const message = err instanceof ApiError
+                ? err.status === 404
+                    ? 'Favorites endpoint is unavailable. Please update/restart backend and run latest migrations.'
+                    : err.message
+                : err instanceof Error
+                    ? err.message
+                    : 'Failed to update favorite'
+            toast.error(message)
         } finally {
             setFavoritePendingIds((prev) => prev.filter((id) => id !== deckId))
         }
@@ -342,6 +353,7 @@ export function FlashcardsPage() {
                                             variant="ghost"
                                             size="sm"
                                             disabled={isFavoritePending(deck.id)}
+                                            title={deck.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                                             className={cn(
                                                 'h-9 px-3 text-xs font-medium border',
                                                 Boolean(deck.is_favorite)
@@ -353,7 +365,11 @@ export function FlashcardsPage() {
                                                 toggleDeckFavorite(deck.id)
                                             }}
                                         >
-                                            <Star className={cn('h-3.5 w-3.5', deck.is_favorite ? 'fill-amber-500 text-amber-500' : '')} />
+                                            {isFavoritePending(deck.id) ? (
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            ) : (
+                                                <Star className={cn('h-3.5 w-3.5', deck.is_favorite ? 'fill-amber-500 text-amber-500' : '')} />
+                                            )}
                                         </Button>
                                     </div>
                                 </CardContent>
