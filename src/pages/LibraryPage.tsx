@@ -20,6 +20,7 @@ import {
   Trash2,
   Download,
   Star,
+  Heart,
   Loader2,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -289,20 +290,100 @@ export function LibraryPage() {
     ? items.filter((item) => Boolean(item?.is_favorite))
     : items
 
+  const summaryCount = items.filter((item) => item?.type === 'summary').length
+  const quizCount = items.filter((item) => item?.type === 'quiz').length
+  const flashcardCount = items.filter((item) => item?.type === 'flashcard' || item?.type === 'flashcards').length
+  const favoriteCount = items.filter((item) => Boolean(item?.is_favorite)).length
+
+  const getTypeMeta = (type: string) => {
+    if (type === 'summary') {
+      return {
+        label: 'Summary',
+        icon: FileText,
+        iconClass: 'bg-blue-100 text-blue-700',
+        badgeClass: 'bg-blue-100 text-blue-700 border-blue-200',
+        railClass: 'from-blue-500/50 to-blue-300/20',
+      }
+    }
+
+    if (type === 'quiz') {
+      return {
+        label: 'Quiz',
+        icon: BrainCircuit,
+        iconClass: 'bg-emerald-100 text-emerald-700',
+        badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+        railClass: 'from-emerald-500/50 to-emerald-300/20',
+      }
+    }
+
+    return {
+      label: 'Flashcards',
+      icon: Layers,
+      iconClass: 'bg-amber-100 text-amber-700',
+      badgeClass: 'bg-amber-100 text-amber-700 border-amber-200',
+      railClass: 'from-amber-500/50 to-amber-300/20',
+    }
+  }
+
   return (
     <AppLayout>
-      <div className="flex flex-col h-full">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Library</h1>
-            <p className="text-muted-foreground">Manage your generated content.</p>
+      <div className="flex flex-col h-full gap-6">
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background to-secondary/30 p-6 shadow-sm">
+          <div className="pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Library</h1>
+              <p className="text-muted-foreground">Manage your generated content.</p>
+            </div>
+
+            <div className="inline-flex items-center gap-2 rounded-xl border bg-background/80 p-1 backdrop-blur">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setViewMode('grid')}
+                className={cn('rounded-lg', viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground')}
+              >
+                <Grid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setViewMode('list')}
+                className={cn('rounded-lg', viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground')}
+              >
+                <ListIcon className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            {selectedItems.length > 0 && (
-              <div className="flex items-center gap-2 mr-4 animate-in fade-in slide-in-from-right-4">
-                <span className="text-sm text-muted-foreground">
-                  {selectedItems.length} selected
-                </span>
+
+          <div className="relative mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: 'Total', value: items.length, icon: Search },
+              { label: 'Favorites', value: favoriteCount, icon: Heart },
+              { label: 'Summaries', value: summaryCount, icon: FileText },
+              { label: 'Quizzes / Flashcards', value: quizCount + flashcardCount, icon: BrainCircuit },
+            ].map((stat) => {
+              const Icon = stat.icon
+              return (
+                <div key={stat.label} className="rounded-xl border bg-card/90 p-3 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight">{stat.value}</p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {selectedItems.length > 0 && (
+          <div className="rounded-xl border bg-card p-3 shadow-sm animate-in fade-in slide-in-from-top-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-sm text-muted-foreground">
+                {selectedItems.length} selected
+              </span>
+              <div className="flex items-center gap-2">
                 <Button variant="destructive" size="sm" onClick={handleDelete}>
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete
@@ -316,30 +397,14 @@ export function LibraryPage() {
                   {isExporting ? 'Exporting...' : 'Export'}
                 </Button>
               </div>
-            )}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setViewMode('grid')}
-              className={viewMode === 'grid' ? 'bg-secondary' : ''}
-            >
-              <Grid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setViewMode('list')}
-              className={viewMode === 'list' ? 'bg-secondary' : ''}
-            >
-              <ListIcon className="h-4 w-4" />
-            </Button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Filters Sidebar */}
           <div className="lg:col-span-3 space-y-6">
-            <Card>
+            <Card className="border shadow-sm">
               <CardContent className="p-4 space-y-6">
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -352,7 +417,10 @@ export function LibraryPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Type</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <Filter className="h-3.5 w-3.5" />
+                    Type
+                  </h3>
                   <div className="space-y-2">
                     {[
                       { id: 'all', label: 'All Content' },
@@ -360,7 +428,10 @@ export function LibraryPage() {
                       { id: 'quiz', label: 'Quizzes' },
                       { id: 'flashcards', label: 'Flashcards' },
                     ].map(opt => (
-                      <div key={opt.id} className="flex items-center space-x-2">
+                      <div key={opt.id} className={cn(
+                        'flex items-center space-x-2 rounded-lg border px-3 py-2 transition-colors',
+                        typeFilter === opt.id ? 'bg-secondary/60 border-primary/30' : 'hover:bg-secondary/30',
+                      )}>
                         <Checkbox
                           id={opt.id}
                           checked={typeFilter === opt.id}
@@ -378,7 +449,7 @@ export function LibraryPage() {
           {/* Content Grid */}
           <div className="lg:col-span-9">
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'all' | 'favorites')} className="w-full">
-              <TabsList className="mb-6">
+              <TabsList className="mb-6 bg-muted/70 border">
                 <TabsTrigger value="all">All Items</TabsTrigger>
                 <TabsTrigger value="favorites">Favorites</TabsTrigger>
               </TabsList>
@@ -407,105 +478,105 @@ export function LibraryPage() {
                   </div>
                 ) : viewMode === 'grid' ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {displayItems.map((item: any) => (
-                      <Card
-                        key={item.id}
-                        className={cn(
-                          'group relative transition-all hover:shadow-md cursor-pointer border-l-4',
-                          selectedItems.includes(item.id) ? 'ring-2 ring-primary border-primary' : 'border-l-transparent',
-                        )}
-                      >
-                        {item.is_favorite && (
-                          <div className="absolute top-3 right-3 z-10">
-                            <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                    {displayItems.map((item: any) => {
+                      const typeMeta = getTypeMeta(item.type)
+                      const TypeIcon = typeMeta.icon
+
+                      return (
+                        <Card
+                          key={item.id}
+                          className={cn(
+                            'group relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer border',
+                            selectedItems.includes(item.id) ? 'ring-2 ring-primary border-primary shadow-md' : 'border-border/70',
+                          )}
+                        >
+                          <div className={cn('absolute inset-x-0 top-0 h-1 bg-gradient-to-r', typeMeta.railClass)} />
+                          {item.is_favorite && (
+                            <div className="absolute top-3 right-3 z-10 rounded-full bg-background/85 p-1 shadow-sm">
+                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                            </div>
+                          )}
+                          <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-md bg-background/85 p-1 shadow-sm">
+                            <Checkbox
+                              checked={selectedItems.includes(item.id)}
+                              onCheckedChange={() => toggleSelection(item.id)}
+                            />
                           </div>
-                        )}
-                        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          <CardContent
+                            className="p-6 pt-7"
+                            onClick={() => navigate(getItemRoute(item))}
+                          >
+                            <div className="flex items-start justify-between mb-4">
+                              <div className={cn('p-2 rounded-lg', typeMeta.iconClass)}>
+                                <TypeIcon className="h-5 w-5" />
+                              </div>
+                              <Badge variant="outline" className={cn('text-[11px] font-medium', typeMeta.badgeClass)}>
+                                {typeMeta.label}
+                              </Badge>
+                            </div>
+                            <h3 className="font-semibold text-lg mb-2 line-clamp-1 group-hover:text-primary transition-colors">
+                              {item.title}
+                            </h3>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4 rounded-md bg-secondary/40 px-2 py-1 w-fit">
+                              <Calendar className="h-3 w-3" />
+                              <span>{item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</span>
+                            </div>
+                            {item.type !== 'summary' && (item.tags || []).length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {(item.tags || []).slice(0, 4).map((tag: string) => (
+                                  <Badge key={tag} variant="secondary" className="text-xs font-normal">{tag}</Badge>
+                                ))}
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {displayItems.map((item: any) => {
+                      const typeMeta = getTypeMeta(item.type)
+                      const TypeIcon = typeMeta.icon
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={cn(
+                            'flex items-center gap-4 p-4 rounded-xl border bg-card shadow-sm hover:bg-secondary/20 transition-colors cursor-pointer group',
+                            selectedItems.includes(item.id) ? 'bg-secondary/30 border-primary shadow' : 'border-border/70',
+                          )}
+                        >
                           <Checkbox
                             checked={selectedItems.includes(item.id)}
                             onCheckedChange={() => toggleSelection(item.id)}
                           />
-                        </div>
-                        <CardContent
-                          className="p-6 pt-8"
-                          onClick={() => navigate(getItemRoute(item))}
-                        >
-                          <div className="flex items-start justify-between mb-4">
-                            <div className={cn(
-                              'p-2 rounded-lg',
-                              item.type === 'summary' ? 'bg-blue-100 text-blue-700'
-                                : item.type === 'quiz' ? 'bg-green-100 text-green-700'
-                                  : 'bg-amber-100 text-amber-700',
-                            )}>
-                              {item.type === 'summary' ? <FileText className="h-5 w-5" />
-                                : item.type === 'quiz' ? <BrainCircuit className="h-5 w-5" />
-                                  : <Layers className="h-5 w-5" />}
-                            </div>
+                          <div className={cn('p-2 rounded-lg shrink-0', typeMeta.iconClass)}>
+                            <TypeIcon className="h-4 w-4" />
                           </div>
-                          <h3 className="font-semibold text-lg mb-2 line-clamp-1 group-hover:text-primary transition-colors">
-                            {item.title}
-                          </h3>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
-                            <Calendar className="h-3 w-3" />
-                            <span>{item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</span>
+                          <div className="flex-1 min-w-0" onClick={() => navigate(getItemRoute(item))}>
+                            <h3 className="font-medium truncate group-hover:text-primary transition-colors">
+                              {item.title}
+                            </h3>
                           </div>
                           {item.type !== 'summary' && (item.tags || []).length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {(item.tags || []).map((tag: string) => (
+                            <div className="hidden md:flex items-center gap-2">
+                              {(item.tags || []).slice(0, 3).map((tag: string) => (
                                 <Badge key={tag} variant="secondary" className="text-xs font-normal">{tag}</Badge>
                               ))}
                             </div>
                           )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {displayItems.map((item: any) => (
-                      <div
-                        key={item.id}
-                        className={cn(
-                          'flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-secondary/20 transition-colors cursor-pointer group',
-                          selectedItems.includes(item.id) ? 'bg-secondary/30 border-primary' : '',
-                        )}
-                      >
-                        <Checkbox
-                          checked={selectedItems.includes(item.id)}
-                          onCheckedChange={() => toggleSelection(item.id)}
-                        />
-                        <div className={cn(
-                          'p-2 rounded-lg shrink-0',
-                          item.type === 'summary' ? 'bg-blue-100 text-blue-700'
-                            : item.type === 'quiz' ? 'bg-green-100 text-green-700'
-                              : 'bg-amber-100 text-amber-700',
-                        )}>
-                          {item.type === 'summary' ? <FileText className="h-4 w-4" />
-                            : item.type === 'quiz' ? <BrainCircuit className="h-4 w-4" />
-                              : <Layers className="h-4 w-4" />}
-                        </div>
-                        <div className="flex-1 min-w-0" onClick={() => navigate(getItemRoute(item))}>
-                          <h3 className="font-medium truncate group-hover:text-primary transition-colors">
-                            {item.title}
-                          </h3>
-                        </div>
-                        {item.type !== 'summary' && (item.tags || []).length > 0 && (
-                          <div className="hidden md:flex items-center gap-2">
-                            {(item.tags || []).map((tag: string) => (
-                              <Badge key={tag} variant="secondary" className="text-xs font-normal">{tag}</Badge>
-                            ))}
+                          <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground w-24 justify-end rounded-md bg-secondary/40 px-2 py-1">
+                            {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
                           </div>
-                        )}
-                        <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground w-24 justify-end">
-                          {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                          <div className="w-8 flex justify-end">
+                            {item.is_favorite && (
+                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                            )}
+                          </div>
                         </div>
-                        <div className="w-8 flex justify-end">
-                          {item.is_favorite && (
-                            <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </TabsContent>
