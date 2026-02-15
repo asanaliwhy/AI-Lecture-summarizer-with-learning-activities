@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError, type SummaryListItemResponse } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
@@ -38,6 +38,7 @@ export function SummariesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [favoritePendingIds, setFavoritePendingIds] = useState<string[]>([])
+  const loadRequestIdRef = useRef(0)
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -46,31 +47,49 @@ export function SummariesPage() {
     return () => window.clearTimeout(timeout)
   }, [searchQuery])
 
-  useEffect(() => {
-    async function load() {
-      setIsLoading(true)
-      setLoadError(null)
-      try {
-        const data = await api.summaries.list({
-          search: debouncedSearchQuery,
-          sort: sortOrder === 'az' ? 'title' : sortOrder === 'oldest' ? 'oldest' : 'newest',
-        })
-        setSummaries(data.summaries || [])
-      } catch (err: unknown) {
-        setSummaries([])
-        const message = err instanceof ApiError
+  const loadSummaries = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current
+
+    setIsLoading(true)
+    setLoadError(null)
+    try {
+      const data = await api.summaries.list({
+        search: debouncedSearchQuery,
+        sort: sortOrder === 'az' ? 'title' : sortOrder === 'oldest' ? 'oldest' : 'newest',
+      })
+
+      if (requestId !== loadRequestIdRef.current) {
+        return
+      }
+
+      setSummaries(data.summaries || [])
+    } catch (err: unknown) {
+      if (requestId !== loadRequestIdRef.current) {
+        return
+      }
+
+      setSummaries([])
+      const message = err instanceof ApiError
+        ? err.message
+        : err instanceof Error
           ? err.message
-          : err instanceof Error
-            ? err.message
-            : 'Failed to load summaries'
-        setLoadError(message)
-        toast.error(message)
-      } finally {
+          : 'Failed to load summaries'
+      setLoadError(message)
+      toast.error(message)
+    } finally {
+      if (requestId === loadRequestIdRef.current) {
         setIsLoading(false)
       }
     }
-    load()
   }, [debouncedSearchQuery, sortOrder, toast])
+
+  useEffect(() => {
+    loadSummaries()
+
+    return () => {
+      loadRequestIdRef.current += 1
+    }
+  }, [loadSummaries])
 
   const isFavoritePending = (summaryId: string) => favoritePendingIds.includes(summaryId)
 
@@ -371,7 +390,7 @@ export function SummariesPage() {
           <div className="text-center py-16 border rounded-xl bg-secondary/10">
             <h3 className="text-lg font-semibold mb-2">Failed to load summaries</h3>
             <p className="text-muted-foreground mb-4">{loadError}</p>
-            <Button onClick={() => window.location.reload()}>Retry</Button>
+            <Button onClick={loadSummaries}>Retry</Button>
           </div>
         ) : summaries.length === 0 ? (
           <div className="text-center py-16">
