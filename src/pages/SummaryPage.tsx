@@ -242,7 +242,6 @@ function normalizeSmartSummaryMarkdown(value: string): string {
   }
 
   let i = 0
-  let currentSmartSection = ''
   while (i < lines.length) {
     const raw = lines[i].trim()
     if (!raw) {
@@ -256,7 +255,6 @@ function normalizeSmartSummaryMarkdown(value: string): string {
       if (out.length > 0 && out[out.length - 1] !== '') out.push('')
       out.push(`## ${cleanInlineMarkdown(smartTitle[1])}`)
       out.push('')
-      currentSmartSection = cleanInlineMarkdown(smartTitle[1]).toLowerCase()
       i += 1
       continue
     }
@@ -266,7 +264,6 @@ function normalizeSmartSummaryMarkdown(value: string): string {
       if (out.length > 0 && out[out.length - 1] !== '') out.push('')
       out.push(`## ${cleanInlineMarkdown(numberedHeading[1])}`)
       out.push('')
-      currentSmartSection = cleanInlineMarkdown(numberedHeading[1]).toLowerCase()
       i += 1
       continue
     }
@@ -276,7 +273,6 @@ function normalizeSmartSummaryMarkdown(value: string): string {
       if (out.length > 0 && out[out.length - 1] !== '') out.push('')
       out.push(`## ${cleanInlineMarkdown(knownSectionHeading[1])}`)
       out.push('')
-      currentSmartSection = cleanInlineMarkdown(knownSectionHeading[1]).toLowerCase()
       i += 1
       continue
     }
@@ -289,12 +285,6 @@ function normalizeSmartSummaryMarkdown(value: string): string {
 
     if (/^[-*+]\s+/.test(raw)) {
       out.push(`- ${cleanInlineMarkdown(raw.replace(/^[-*+]\s+/, ''))}`)
-      i += 1
-      continue
-    }
-
-    if (currentSmartSection.includes('additional interesting facts')) {
-      out.push(`- ${cleanInlineMarkdown(raw)}`)
       i += 1
       continue
     }
