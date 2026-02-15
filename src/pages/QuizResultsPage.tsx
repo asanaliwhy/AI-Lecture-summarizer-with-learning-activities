@@ -128,6 +128,7 @@ export function QuizResultsPage() {
   const timeTaken = attemptMeta?.time_taken_seconds ?? attemptMeta?.time_taken ?? attemptMeta?.duration ?? ''
   const quizTitle = quizMeta?.title ?? attemptMeta?.quiz_title ?? 'Quiz'
   const quizId = attemptMeta?.quiz_id ?? quizMeta?.id ?? null
+  const summaryId = quizMeta?.summary_id ?? attemptMeta?.summary_id ?? null
   const isPass = score >= 70
 
   // Questions with answers for detailed review
@@ -481,7 +482,13 @@ export function QuizResultsPage() {
                 variant="secondary"
                 size="lg"
                 className="whitespace-nowrap"
-                onClick={() => navigate(`/flashcards/create/${quizId}`)}
+                onClick={() => {
+                  if (summaryId) {
+                    navigate(`/flashcards/create/${summaryId}`)
+                    return
+                  }
+                  toast.error('Summary is not available for this quiz')
+                }}
               >
                 Create Flashcards
                 <ArrowRight className="ml-2 h-4 w-4" />
