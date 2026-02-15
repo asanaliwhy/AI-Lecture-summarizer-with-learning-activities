@@ -745,6 +745,17 @@ export function SummaryPage() {
   const smartSummaryHtml = summary.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
   const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
   const isSmartSummary = summary.format === 'smart'
+  const summaryFormatRaw = String(summary.format || summary.config?.format || '').toLowerCase()
+  const summaryTypeLabel =
+    summaryFormatRaw === 'cornell'
+      ? 'Cornell'
+      : summaryFormatRaw === 'bullets'
+        ? 'Bullet Points'
+        : summaryFormatRaw === 'paragraph'
+          ? 'Paragraph'
+          : summaryFormatRaw === 'smart'
+            ? 'Smart Summary'
+            : 'Summary'
   const leftColumnClass = isSmartSummary
     ? 'lg:col-span-2 space-y-6 lg:-ml-8 xl:-ml-12'
     : 'lg:col-span-3 space-y-6 lg:-ml-8 xl:-ml-12'
@@ -766,7 +777,7 @@ export function SummaryPage() {
                 variant="secondary"
                 className="bg-blue-100/90 text-blue-700 hover:bg-blue-100 border-blue-200/80"
               >
-                Summary
+                {summaryTypeLabel}
               </Badge>
               <span className="text-xs text-muted-foreground">
                 Generated {createdAt}
