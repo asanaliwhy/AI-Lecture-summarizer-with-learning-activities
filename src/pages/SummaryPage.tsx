@@ -368,6 +368,7 @@ function enhanceSmartSummaryHtml(html: string): string {
   }
 
   let currentSection: HTMLElement | null = null
+  const keyLabelRegex = /^(Key Concept|Definition|Example|Figure)\s*:\s*/i
 
   for (const node of nodes) {
     if (node.nodeType === Node.TEXT_NODE && !node.textContent?.trim()) {
@@ -387,6 +388,29 @@ function enhanceSmartSummaryHtml(html: string): string {
     if (!currentSection) {
       currentSection = createSection()
       body.appendChild(currentSection)
+    }
+
+    if (tag === 'p') {
+      const text = element.textContent?.trim() || ''
+      const match = text.match(keyLabelRegex)
+      if (match) {
+        const label = match[1]
+        const rest = text.slice(match[0].length)
+        const p = doc.createElement('p')
+        p.className = 'smart-key-row'
+
+        const badge = doc.createElement('span')
+        badge.className = 'smart-key-label'
+        badge.textContent = `${label}:`
+        p.appendChild(badge)
+
+        if (rest) {
+          p.appendChild(doc.createTextNode(` ${rest}`))
+        }
+
+        currentSection.appendChild(p)
+        continue
+      }
     }
 
     currentSection.appendChild(node)
@@ -767,7 +791,7 @@ export function SummaryPage() {
             <Card className="min-h-[620px] shadow-sm border-border/70">
               <CardContent className={isSmartSummary ? 'p-4 md:p-5 lg:p-6' : 'p-6 md:p-10 lg:p-12'}>
                 {isSmartSummary ? (
-                  <article className="smart-summary-content smart-summary-modern smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-bold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:text-[1.42rem] prose-h2:leading-tight prose-h2:border-l-4 prose-h2:border-blue-500 prose-h2:pl-3 prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-[1.14rem] prose-h3:mt-5 prose-h3:mb-3 prose-p:my-2.5 prose-p:leading-[1.78] prose-strong:text-slate-900 prose-li:leading-[1.75] prose-ul:my-3 prose-ol:my-3 prose-hr:my-6 prose-a:text-blue-700 hover:prose-a:text-blue-800">
+                  <article className="smart-summary-content smart-summary-modern smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-extrabold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:text-[1.62rem] prose-h2:leading-tight prose-h2:border-l-4 prose-h2:border-blue-500 prose-h2:pl-3 prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-[1.2rem] prose-h3:font-bold prose-h3:mt-5 prose-h3:mb-3 prose-p:my-2.5 prose-p:leading-[1.78] prose-strong:text-slate-900 prose-li:leading-[1.75] prose-ul:my-3 prose-ol:my-3 prose-hr:my-6 prose-a:text-blue-700 hover:prose-a:text-blue-800">
                     <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
                   </article>
                 ) : hasSections ? (
