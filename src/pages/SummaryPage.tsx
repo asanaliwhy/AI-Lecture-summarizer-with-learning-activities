@@ -461,32 +461,46 @@ function enhanceSmartSummaryHtml(html: string): string {
     const existingList = section.querySelector('ul, ol')
     if (existingList) return
 
-    const paragraphs = Array.from(section.querySelectorAll('p'))
-    if (paragraphs.length === 0) return
-
     const ul = doc.createElement('ul')
     ul.className = 'smart-facts-list'
 
-    paragraphs.forEach((p) => {
-      const htmlParts = p.innerHTML.split(/<br\s*\/?>/i)
+    const collectLine = (value: string) => {
+      const txt = value.trim()
+      if (!txt) return
+      const li = doc.createElement('li')
+      li.textContent = txt
+      ul.appendChild(li)
+    }
+
+    const candidateNodes = Array.from(section.childNodes).filter((node) => {
+      if (node === heading) return false
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement
+        const tag = el.tagName.toLowerCase()
+        if (tag === 'h1' || tag === 'h2' || tag === 'ul' || tag === 'ol' || tag === 'table') return false
+      }
+      return true
+    })
+
+    candidateNodes.forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        node.textContent?.split(/\n+/).forEach(collectLine)
+        node.remove()
+        return
+      }
+
+      const el = node as HTMLElement
+      const htmlParts = (el.innerHTML || '').split(/<br\s*\/?>/i)
       if (htmlParts.length > 1) {
         htmlParts.forEach((part) => {
           const temp = doc.createElement('div')
           temp.innerHTML = part
-          const txt = temp.textContent?.trim() || ''
-          if (!txt) return
-          const li = doc.createElement('li')
-          li.textContent = txt
-          ul.appendChild(li)
+          temp.textContent?.split(/\n+/).forEach(collectLine)
         })
       } else {
-        const txt = p.textContent?.trim() || ''
-        if (!txt) return
-        const li = doc.createElement('li')
-        li.textContent = txt
-        ul.appendChild(li)
+        el.textContent?.split(/\n+/).forEach(collectLine)
       }
-      p.remove()
+      el.remove()
     })
 
     if (ul.children.length > 0) {
