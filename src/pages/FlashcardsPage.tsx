@@ -14,6 +14,9 @@ import {
     Loader2,
     BrainCircuit,
     Search,
+    LayoutGrid,
+    Library,
+    BarChart3,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
@@ -109,21 +112,36 @@ export function FlashcardsPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Card className="border-none shadow-sm bg-secondary/30">
-                        <CardContent className="p-4">
-                            <p className="text-2xl font-bold">{decks.length}</p>
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total Decks</p>
+                        <CardContent className="p-4 flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
+                                <LayoutGrid className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold">{decks.length}</p>
+                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total Decks</p>
+                            </div>
                         </CardContent>
                     </Card>
                     <Card className="border-none shadow-sm bg-secondary/30">
-                        <CardContent className="p-4">
-                            <p className="text-2xl font-bold">{totalCards}</p>
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total Cards</p>
+                        <CardContent className="p-4 flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                <Library className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold">{totalCards}</p>
+                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total Cards</p>
+                            </div>
                         </CardContent>
                     </Card>
                     <Card className="border-none shadow-sm bg-secondary/30">
-                        <CardContent className="p-4">
-                            <p className="text-2xl font-bold">{decks.length > 0 ? Math.round(totalCards / decks.length) : 0}</p>
-                            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Avg Cards / Deck</p>
+                        <CardContent className="p-4 flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
+                                <BarChart3 className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <p className="text-2xl font-bold">{decks.length > 0 ? Math.round(totalCards / decks.length) : 0}</p>
+                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Avg Cards / Deck</p>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
