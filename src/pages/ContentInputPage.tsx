@@ -600,11 +600,11 @@ export function ContentInputPage() {
                           value={language}
                           onChange={(e) => setLanguage(e.target.value)}
                         >
-                          <option value="en">English (US)</option>
-                          <option value="es">Spanish</option>
+                          <option value="en">English</option>
+                          <option value="kk">Kazakh</option>
+                          <option value="ru">Russian</option>
                           <option value="fr">French</option>
-                          <option value="de">German</option>
-                          <option value="zh">Chinese (Simplified)</option>
+                          <option value="es">Spanish</option>
                         </select>
                       </div>
                     </div>
