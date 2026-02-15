@@ -462,7 +462,12 @@ function enhanceSmartSummaryHtml(html: string): string {
     if (!normalizedTitle.includes('additional interesting facts')) return
 
     const existingList = section.querySelector('ul, ol')
-    if (existingList) return
+    if (existingList) {
+      // Tailwind preflight removes default list markers globally.
+      // Ensure markdown-generated lists in this section keep explicit list styling.
+      existingList.classList.add('smart-facts-list')
+      return
+    }
 
     if (paragraphs.length === 0) return
 
