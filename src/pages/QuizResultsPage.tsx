@@ -5,6 +5,7 @@ import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { useToast } from '../components/ui/Toast'
 import {
   CheckCircle2,
   XCircle,
@@ -21,9 +22,11 @@ import { cn } from '../lib/utils'
 
 export function QuizResultsPage() {
   const navigate = useNavigate()
+  const toast = useToast()
   const { attemptId } = useParams()
   const [attempt, setAttempt] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [expandedQuestion, setExpandedQuestion] = useState<number | null>(null)
 
   const safeParseJSON = (value: any) => {
@@ -138,6 +141,130 @@ export function QuizResultsPage() {
     return s === 0 ? `${m}m` : `${m}m ${s}s`
   }
 
+  const sanitizeFileName = (value: string) => {
+    return value
+      .replace(/[\\/:*?"<>|]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120) || 'quiz-results'
+  }
+
+  const handleDownloadPdf = async () => {
+    if (isExportingPdf) return
+
+    try {
+      setIsExportingPdf(true)
+      const { jsPDF } = await import('jspdf')
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      const margin = 42
+      const contentWidth = pageWidth - margin * 2
+      let y = margin
+
+      const ensureSpace = (heightNeeded: number) => {
+        if (y + heightNeeded > pageHeight - margin) {
+          doc.addPage()
+          y = margin
+        }
+      }
+
+      const writeWrapped = (text: string, size = 11, bold = false, gap = 6) => {
+        doc.setFont('helvetica', bold ? 'bold' : 'normal')
+        doc.setFontSize(size)
+        const lines = doc.splitTextToSize(text, contentWidth) as string[]
+        lines.forEach((line) => {
+          ensureSpace(size + 6)
+          doc.text(line, margin, y)
+          y += size + 4
+        })
+        y += gap
+      }
+
+      const fileTitle = sanitizeFileName(`${quizTitle} quiz results`)
+
+      writeWrapped(`${quizTitle} — Quiz Results`, 18, true, 4)
+      writeWrapped(`Score: ${score}% (${correctCount}/${totalQuestions})`, 12, true, 2)
+      writeWrapped(`Result: ${isPass ? 'Pass' : 'Fail'}   Time: ${timeTaken ? formatTime(timeTaken) : '-'}`, 11, false, 10)
+
+      if (questions.length > 0) {
+        writeWrapped('Detailed Review', 14, true, 6)
+      }
+
+      questions.forEach((q: any, index: number) => {
+        const options = Array.isArray(q.options)
+          ? q.options
+          : Array.isArray(q.answers)
+            ? q.answers
+            : []
+
+        const selectedIdx = toNumber(
+          q.user_answer_index ??
+          q.answer_index ??
+          q.selected_index ??
+          q.user_answer ??
+          answerMap.get(index),
+        )
+
+        const correctIdx = toNumber(q.correct_index ?? q.correctIndex)
+
+        const selectedLabel =
+          selectedIdx !== null && options[selectedIdx] !== undefined
+            ? options[selectedIdx]
+            : null
+        const correctLabel =
+          correctIdx !== null && options[correctIdx] !== undefined
+            ? options[correctIdx]
+            : q.correct_answer ?? q.correctAnswer
+
+        const fallbackUserAnswer =
+          (typeof q.user_answer === 'string' && q.user_answer) ||
+          (typeof q.userAnswer === 'string' && q.userAnswer) ||
+          ''
+
+        const fallbackCorrectAnswer =
+          (typeof q.correct_answer === 'string' && q.correct_answer) ||
+          (typeof q.correctAnswer === 'string' && q.correctAnswer) ||
+          ''
+
+        const userAnswerText = selectedLabel || fallbackUserAnswer || 'No answer'
+        const correctAnswerText = correctLabel || fallbackCorrectAnswer || 'N/A'
+
+        const explicitIsCorrect =
+          typeof q.is_correct === 'boolean'
+            ? q.is_correct
+            : typeof q.isCorrect === 'boolean'
+              ? q.isCorrect
+              : null
+
+        const isCorrectAnswer =
+          explicitIsCorrect ??
+          (selectedIdx !== null && correctIdx !== null
+            ? selectedIdx === correctIdx
+            : userAnswerText !== 'No answer' && correctAnswerText !== 'N/A' && userAnswerText === correctAnswerText)
+
+        writeWrapped(`${index + 1}. ${q.question || q.text || `Question ${index + 1}`}`, 12, true, 2)
+        writeWrapped(`Your answer: ${userAnswerText}`, 11, false, 2)
+        writeWrapped(`Correct answer: ${correctAnswerText}`, 11, false, 2)
+        writeWrapped(`Result: ${isCorrectAnswer ? 'Correct' : 'Incorrect'}`, 11, false, 4)
+
+        if (q.explanation) {
+          writeWrapped(`Explanation: ${q.explanation}`, 10, false, 8)
+        } else {
+          y += 6
+        }
+      })
+
+      doc.save(`${fileTitle}.pdf`)
+      toast.success('PDF downloaded')
+    } catch {
+      toast.error('Failed to download PDF')
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
+
   return (
     <AppLayout>
       <div className="max-w-5xl mx-auto py-8">
@@ -189,9 +316,13 @@ export function QuizResultsPage() {
             <RotateCcw className="mr-2 h-4 w-4" />
             Retake Quiz
           </Button>
-          <Button variant="outline" size="lg">
-            <Download className="mr-2 h-4 w-4" />
-            Download PDF
+          <Button variant="outline" size="lg" onClick={handleDownloadPdf} disabled={isExportingPdf}>
+            {isExportingPdf ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            {isExportingPdf ? 'Preparing PDF...' : 'Download PDF'}
           </Button>
         </div>
 
