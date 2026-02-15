@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
@@ -24,12 +24,90 @@ export function QuizResultsPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { attemptId } = useParams()
-  const [attempt, setAttempt] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isExportingPdf, setIsExportingPdf] = useState(false)
-  const [expandedQuestion, setExpandedQuestion] = useState<number | null>(null)
 
-  const safeParseJSON = (value: any) => {
+  type QuizAttemptAnswerEntry = {
+    question_index?: number | string
+    questionIndex?: number | string
+    answer_index?: number | string
+    answerIndex?: number | string
+    selected_index?: number | string
+  }
+
+  type QuizReviewQuestion = {
+    id?: string | number
+    question?: string
+    text?: string
+    options?: string[]
+    answers?: string[]
+    user_answer_index?: number | string
+    answer_index?: number | string
+    selected_index?: number | string
+    user_answer?: number | string
+    userAnswer?: string
+    correct_index?: number | string
+    correctIndex?: number | string
+    correct_answer?: string
+    correctAnswer?: string
+    is_correct?: boolean
+    isCorrect?: boolean
+    explanation?: string
+  }
+
+  type QuizAttemptMeta = {
+    score_percent?: number | string
+    score?: number | string
+    total_questions?: number | string
+    correct_count?: number | string
+    time_taken_seconds?: number | string
+    time_taken?: number | string
+    duration?: number | string
+    quiz_id?: string
+    summary_id?: string
+    quiz_title?: string
+    answers?: unknown
+    answers_json?: unknown
+  }
+
+  type QuizMeta = {
+    id?: string
+    title?: string
+    question_count?: number | string
+    last_score?: number | string
+    summary_id?: string
+    questions?: unknown
+  }
+
+  type QuizAttemptResponse = {
+    attempt?: QuizAttemptMeta
+    quiz?: QuizMeta
+    id?: string
+    questions?: unknown
+    review?: unknown
+    answers?: unknown
+    answers_json?: unknown
+    score_percent?: number | string
+    score?: number | string
+    total_questions?: number | string
+    correct_count?: number | string
+    time_taken_seconds?: number | string
+    time_taken?: number | string
+    duration?: number | string
+    quiz_id?: string
+    summary_id?: string
+    quiz_title?: string
+    title?: string
+    question_count?: number | string
+    last_score?: number | string
+  }
+
+  const [attempt, setAttempt] = useState<QuizAttemptResponse | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
+  const [expandedQuestion, setExpandedQuestion] = useState<string | number | null>(null)
+  const loadRequestIdRef = useRef(0)
+
+  const safeParseJSON = (value: unknown): unknown => {
     if (typeof value !== 'string') return value
     try {
       return JSON.parse(value)
@@ -38,7 +116,7 @@ export function QuizResultsPage() {
     }
   }
 
-  const toNumber = (value: any): number | null => {
+  const toNumber = (value: unknown): number | null => {
     if (typeof value === 'number' && Number.isFinite(value)) return value
     if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) {
       return Number(value)
@@ -46,26 +124,59 @@ export function QuizResultsPage() {
     return null
   }
 
-  useEffect(() => {
-    if (!attemptId) return
-    async function load() {
+  const loadAttempt = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current
+
+    if (!attemptId) {
+      setAttempt(null)
+      setLoadError('Quiz attempt ID is missing.')
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    setLoadError(null)
+
+    let attemptLoadError: unknown = null
+    let loadedData: QuizAttemptResponse | null = null
+
+    try {
       try {
-        const data = await api.quizzes.getAttempt(attemptId!)
-        setAttempt(data)
-      } catch {
-        // If getAttempt fails, try fetching as quiz ID (for viewing latest results)
-        try {
-          const quizData = await api.quizzes.get(attemptId!)
-          setAttempt(quizData)
-        } catch {
-          setAttempt(null)
+        const data = await api.quizzes.getAttempt(attemptId)
+        loadedData = data as QuizAttemptResponse
+      } catch (err: unknown) {
+        attemptLoadError = err
+
+        // Fallback: If getAttempt fails, try fetching as quiz ID (for latest results view)
+        const quizData = await api.quizzes.get(attemptId)
+        loadedData = quizData as QuizAttemptResponse
+      }
+    } catch (err: unknown) {
+      if (requestId !== loadRequestIdRef.current) {
+        return
+      }
+
+      setAttempt(null)
+      const fallbackMessage = err instanceof Error ? err.message : ''
+      const primaryMessage = attemptLoadError instanceof Error ? attemptLoadError.message : ''
+      setLoadError(fallbackMessage || primaryMessage || 'Failed to load quiz results')
+    } finally {
+      if (requestId === loadRequestIdRef.current) {
+        if (loadedData) {
+          setAttempt(loadedData)
         }
-      } finally {
         setIsLoading(false)
       }
     }
-    load()
   }, [attemptId])
+
+  useEffect(() => {
+    loadAttempt()
+
+    return () => {
+      loadRequestIdRef.current += 1
+    }
+  }, [loadAttempt])
 
   const attemptMeta = attempt?.attempt || attempt
   const quizMeta = attempt?.quiz || attempt
@@ -110,21 +221,39 @@ export function QuizResultsPage() {
   }
 
   if (!attempt) {
+    if (loadError) {
+      return (
+        <AppLayout>
+          <div className="flex flex-col items-center justify-center h-96 text-center">
+            <h2 className="text-2xl font-bold mb-2">Failed to load quiz results</h2>
+            <p className="text-muted-foreground mb-6">{loadError}</p>
+            <div className="flex items-center gap-3">
+              <Button onClick={loadAttempt}>Retry</Button>
+              <Button variant="outline" onClick={() => navigate('/quizzes')}>Back to Quizzes</Button>
+            </div>
+          </div>
+        </AppLayout>
+      )
+    }
+
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center h-96 text-center">
           <h2 className="text-2xl font-bold mb-2">Results Not Found</h2>
           <p className="text-muted-foreground mb-6">This quiz attempt may not exist or hasn't been completed yet.</p>
-          <Button onClick={() => navigate('/quizzes')}>Back to Quizzes</Button>
+          <div className="flex items-center gap-3">
+            <Button onClick={loadAttempt}>Retry</Button>
+            <Button variant="outline" onClick={() => navigate('/quizzes')}>Back to Quizzes</Button>
+          </div>
         </div>
       </AppLayout>
     )
   }
 
-  const score = attemptMeta?.score_percent ?? attemptMeta?.score ?? quizMeta?.last_score ?? 0
-  const totalQuestions = quizMeta?.question_count ?? attemptMeta?.total_questions ?? reviewQuestions.length ?? 0
-  const correctCount = attemptMeta?.correct_count ?? Math.round((score / 100) * totalQuestions)
-  const incorrectCount = totalQuestions - correctCount
+  const score = toNumber(attemptMeta?.score_percent ?? attemptMeta?.score ?? quizMeta?.last_score) ?? 0
+  const totalQuestions = toNumber(quizMeta?.question_count ?? attemptMeta?.total_questions) ?? reviewQuestions.length ?? 0
+  const correctCount = toNumber(attemptMeta?.correct_count) ?? Math.round((score / 100) * totalQuestions)
+  const incorrectCount = Math.max(0, totalQuestions - correctCount)
   const timeTaken = attemptMeta?.time_taken_seconds ?? attemptMeta?.time_taken ?? attemptMeta?.duration ?? ''
   const quizTitle = quizMeta?.title ?? attemptMeta?.quiz_title ?? 'Quiz'
   const quizId = attemptMeta?.quiz_id ?? quizMeta?.id ?? null
@@ -193,7 +322,8 @@ export function QuizResultsPage() {
         writeWrapped('Detailed Review', 14, true, 6)
       }
 
-      questions.forEach((q: any, index: number) => {
+      questions.forEach((questionItem, index: number) => {
+        const q = questionItem as QuizReviewQuestion
         const options = Array.isArray(q.options)
           ? q.options
           : Array.isArray(q.answers)
@@ -343,7 +473,8 @@ export function QuizResultsPage() {
             </div>
 
             <div className="space-y-4">
-              {questions.map((q: any, index: number) => {
+              {questions.map((questionItem, index: number) => {
+                const q = questionItem as QuizReviewQuestion
                 const qId = q.id || index
                 const options = Array.isArray(q.options)
                   ? q.options
@@ -396,6 +527,10 @@ export function QuizResultsPage() {
                     ? selectedIdx === correctIdx
                     : userAnswerText !== 'No answer' && correctAnswerText !== 'N/A' && userAnswerText === correctAnswerText)
 
+                const toggleQuestion = () => {
+                  setExpandedQuestion(expandedQuestion === qId ? null : qId)
+                }
+
                 return (
                   <Card
                     key={qId}
@@ -406,7 +541,15 @@ export function QuizResultsPage() {
                   >
                     <div
                       className="p-6 cursor-pointer hover:bg-secondary/20 transition-colors flex items-start gap-4"
-                      onClick={() => setExpandedQuestion(expandedQuestion === qId ? null : qId)}
+                      onClick={toggleQuestion}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleQuestion()
+                        }
+                      }}
                     >
                       <div className="mt-1">
                         {isCorrect ? (
