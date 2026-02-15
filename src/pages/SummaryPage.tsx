@@ -715,8 +715,8 @@ export function SummaryPage() {
   const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
   const isSmartSummary = summary.format === 'smart'
   const leftColumnClass = isSmartSummary
-    ? 'lg:col-span-2 space-y-6 lg:-ml-6 xl:-ml-8'
-    : 'lg:col-span-3 space-y-6 lg:-ml-6 xl:-ml-8'
+    ? 'lg:col-span-2 space-y-6 lg:-ml-8 xl:-ml-12'
+    : 'lg:col-span-3 space-y-6 lg:-ml-8 xl:-ml-12'
   const centerColumnClass = isSmartSummary ? 'lg:col-span-8' : 'lg:col-span-7'
   const rightColumnClass = isSmartSummary ? 'lg:col-span-2 space-y-6' : 'lg:col-span-2 space-y-6'
 
@@ -841,7 +841,7 @@ export function SummaryPage() {
                   Generate Quiz
                 </Button>
                 <Button
-                  className="w-full justify-start bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800 h-11 text-base"
+                  className="w-full justify-center bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800 h-11 text-base"
                   variant="outline"
                   onClick={() => navigate(`/flashcards/create/${id}`)}
                 >
