@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { useToast } from '../components/ui/Toast'
 import {
   BrainCircuit,
   Trophy,
@@ -22,9 +23,11 @@ import { cn } from '../lib/utils'
 
 export function QuizzesPage() {
   const navigate = useNavigate()
+  const toast = useToast()
   const [quizzes, setQuizzes] = useState<QuizListItemResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [favoritePendingIds, setFavoritePendingIds] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
   const [quickFilter, setQuickFilter] = useState<'all' | 'starred' | 'new' | 'completed' | 'easy' | 'medium' | 'hard'>('all')
@@ -72,8 +75,13 @@ export function QuizzesPage() {
     return Boolean(quiz?.is_favorite)
   }
 
+  const isFavoritePending = (quizId: string) => favoritePendingIds.includes(quizId)
+
   const toggleFavorite = async (quizId: string) => {
+    if (isFavoritePending(quizId)) return
+
     const current = isQuizStarred(quizId)
+    setFavoritePendingIds((prev) => [...prev, quizId])
 
     setQuizzes((prev) =>
       prev.map((q) =>
@@ -85,7 +93,7 @@ export function QuizzesPage() {
 
     try {
       await api.quizzes.toggleFavorite(quizId)
-    } catch {
+    } catch (err: unknown) {
       setQuizzes((prev) =>
         prev.map((q) =>
           q.id === quizId
@@ -93,6 +101,17 @@ export function QuizzesPage() {
             : q,
         ),
       )
+
+      const message = err instanceof ApiError
+        ? err.status === 404
+          ? 'Favorites endpoint is unavailable. Please update/restart backend and try again.'
+          : err.message
+        : err instanceof Error
+          ? err.message
+          : 'Failed to update favorite'
+      toast.error(message)
+    } finally {
+      setFavoritePendingIds((prev) => prev.filter((id) => id !== quizId))
     }
   }
 
@@ -458,6 +477,8 @@ export function QuizzesPage() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        disabled={isFavoritePending(quiz.id)}
+                        title={starred ? 'Remove from favorites' : 'Add to favorites'}
                         className={cn(
                           'h-9 px-3 text-xs font-medium border',
                           starred
@@ -469,7 +490,11 @@ export function QuizzesPage() {
                           toggleFavorite(quiz.id)
                         }}
                       >
-                        <Star className={cn('h-3.5 w-3.5', starred ? 'fill-amber-500 text-amber-500' : '')} />
+                        {isFavoritePending(quiz.id) ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Star className={cn('h-3.5 w-3.5', starred ? 'fill-amber-500 text-amber-500' : '')} />
+                        )}
                       </Button>
                     </div>
                   </CardContent>
