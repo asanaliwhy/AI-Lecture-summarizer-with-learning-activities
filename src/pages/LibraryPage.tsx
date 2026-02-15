@@ -34,6 +34,7 @@ export function LibraryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [activeTab, setActiveTab] = useState<'all' | 'favorites'>('all')
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
@@ -97,6 +98,10 @@ export function LibraryPage() {
     if (item.type === 'flashcard' || item.type === 'flashcards') return `/flashcards/study/${item.id}`
     return '/library'
   }
+
+  const displayItems = activeTab === 'favorites'
+    ? items.filter((item) => Boolean(item?.is_favorite))
+    : items
 
   return (
     <AppLayout>
@@ -182,29 +187,37 @@ export function LibraryPage() {
 
           {/* Content Grid */}
           <div className="lg:col-span-9">
-            <Tabs defaultValue="all" className="w-full">
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'all' | 'favorites')} className="w-full">
               <TabsList className="mb-6">
                 <TabsTrigger value="all">All Items</TabsTrigger>
                 <TabsTrigger value="favorites">Favorites</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="all" className="mt-0">
+              <TabsContent value={activeTab} className="mt-0">
                 {isLoading ? (
                   <div className="flex justify-center py-16">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
-                ) : items.length === 0 ? (
+                ) : displayItems.length === 0 ? (
                   <div className="text-center py-16">
                     <div className="h-16 w-16 bg-secondary/50 rounded-full flex items-center justify-center mb-4 mx-auto">
                       <Search className="h-8 w-8 text-muted-foreground" />
                     </div>
-                    <h3 className="text-lg font-semibold">No items found</h3>
-                    <p className="text-muted-foreground mt-2">Create your first summary to get started.</p>
-                    <Button className="mt-4" onClick={() => navigate('/create')}>Create Content</Button>
+                    <h3 className="text-lg font-semibold">
+                      {activeTab === 'favorites' ? 'No favorites yet' : 'No items found'}
+                    </h3>
+                    <p className="text-muted-foreground mt-2">
+                      {activeTab === 'favorites'
+                        ? 'Star content to see it in Favorites.'
+                        : 'Create your first summary to get started.'}
+                    </p>
+                    {activeTab !== 'favorites' && (
+                      <Button className="mt-4" onClick={() => navigate('/create')}>Create Content</Button>
+                    )}
                   </div>
                 ) : viewMode === 'grid' ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {items.map((item: any) => (
+                    {displayItems.map((item: any) => (
                       <Card
                         key={item.id}
                         className={cn(
@@ -249,18 +262,20 @@ export function LibraryPage() {
                             <Calendar className="h-3 w-3" />
                             <span>{item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</span>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {(item.tags || []).map((tag: string) => (
-                              <Badge key={tag} variant="secondary" className="text-xs font-normal">{tag}</Badge>
-                            ))}
-                          </div>
+                          {item.type !== 'summary' && (item.tags || []).length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {(item.tags || []).map((tag: string) => (
+                                <Badge key={tag} variant="secondary" className="text-xs font-normal">{tag}</Badge>
+                              ))}
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     ))}
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {items.map((item: any) => (
+                    {displayItems.map((item: any) => (
                       <div
                         key={item.id}
                         className={cn(
@@ -287,11 +302,13 @@ export function LibraryPage() {
                             {item.title}
                           </h3>
                         </div>
-                        <div className="hidden md:flex items-center gap-2">
-                          {(item.tags || []).map((tag: string) => (
-                            <Badge key={tag} variant="secondary" className="text-xs font-normal">{tag}</Badge>
-                          ))}
-                        </div>
+                        {item.type !== 'summary' && (item.tags || []).length > 0 && (
+                          <div className="hidden md:flex items-center gap-2">
+                            {(item.tags || []).map((tag: string) => (
+                              <Badge key={tag} variant="secondary" className="text-xs font-normal">{tag}</Badge>
+                            ))}
+                          </div>
+                        )}
                         <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground w-24 justify-end">
                           {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
                         </div>

@@ -33,6 +33,7 @@ export function SummariesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
+  const [quickFilter, setQuickFilter] = useState<'all' | 'starred' | 'youtube' | 'document' | 'smart' | 'cornell' | 'bullets' | 'paragraph'>('all')
   const [summaries, setSummaries] = useState<SummaryListItemResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [starredItems, setStarredItems] = useState<string[]>([])
@@ -131,7 +132,30 @@ export function SummariesPage() {
     return 'bg-secondary/80 text-secondary-foreground'
   }
 
-  const filteredSummaries = summaries
+  const getSummaryFormatValue = (summary: SummaryListItemResponse) =>
+    String(summary?.format || summary?.config?.format || '').toLowerCase()
+
+  const filterOptions: Array<{ key: typeof quickFilter; label: string }> = [
+    { key: 'all', label: 'All' },
+    { key: 'starred', label: 'Starred' },
+    { key: 'youtube', label: 'YouTube' },
+    { key: 'document', label: 'Document' },
+    { key: 'smart', label: 'Smart' },
+    { key: 'cornell', label: 'Cornell' },
+    { key: 'bullets', label: 'Bullets' },
+    { key: 'paragraph', label: 'Paragraph' },
+  ]
+
+  const filteredSummaries = summaries.filter((summary) => {
+    if (quickFilter === 'all') return true
+    if (quickFilter === 'starred') return starredItems.includes(summary.id)
+    if (quickFilter === 'youtube') return getSummarySource(summary).isYouTube
+    if (quickFilter === 'document') return !getSummarySource(summary).isYouTube
+    return getSummaryFormatValue(summary) === quickFilter
+  })
+
+  const hasActiveSearch = debouncedSearchQuery.trim().length > 0
+  const hasActiveFilters = quickFilter !== 'all' || hasActiveSearch
   return (
     <AppLayout>
       <div className="space-y-8 animate-in fade-in duration-500">
@@ -214,6 +238,24 @@ export function SummariesPage() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          {filterOptions.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setQuickFilter(option.key)}
+              className={cn(
+                'px-3 py-1.5 text-xs rounded-full border transition-colors',
+                quickFilter === option.key
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground hover:text-foreground border-border',
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
         {/* Grid */}
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -226,11 +268,14 @@ export function SummariesPage() {
                 const source = getSummarySource(summary)
                 const readTime = getReadTime(summary)
                 const progress = getProgress(summary)
+                const tags = summary.tags || []
+                const visibleTags = tags.slice(0, 3)
+                const hiddenTagsCount = Math.max(0, tags.length - visibleTags.length)
 
                 return (
                   <Card
                     key={summary.id}
-                    className="group cursor-pointer hover:shadow-lg transition-all duration-300 border-l-4 border-l-transparent hover:border-l-primary relative overflow-hidden"
+                    className="group cursor-pointer hover:shadow-lg transition-all duration-300 border-l-4 border-l-transparent hover:border-l-primary relative overflow-hidden min-h-[290px]"
                     onClick={() => navigate(`/summary/${summary.id}`)}
                     role="button"
                     tabIndex={0}
@@ -276,18 +321,10 @@ export function SummariesPage() {
                           >
                             {getFormatLabel(summary)}
                           </Badge>
-                          {summary.is_quality_fallback && (
-                            <Badge
-                              variant="outline"
-                              className="font-medium text-[11px] px-2.5 py-1 border-amber-300 text-amber-700 bg-amber-50"
-                            >
-                              Estimated Content
-                            </Badge>
-                          )}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2 mb-4">
-                        {(summary.tags || []).map((tag: string) => (
+                        {visibleTags.map((tag: string) => (
                           <Badge
                             key={tag}
                             variant="secondary"
@@ -296,6 +333,14 @@ export function SummariesPage() {
                             {tag}
                           </Badge>
                         ))}
+                        {hiddenTagsCount > 0 && (
+                          <Badge
+                            variant="secondary"
+                            className="font-normal text-xs bg-secondary/80"
+                          >
+                            +{hiddenTagsCount}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         <div
@@ -349,18 +394,35 @@ export function SummariesPage() {
             <div className="h-16 w-16 bg-secondary/50 rounded-full flex items-center justify-center mb-4">
               <Search className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-semibold">No summaries found</h3>
+            <h3 className="text-lg font-semibold">
+              {!hasActiveFilters && summaries.length === 0
+                ? 'No summaries yet'
+                : 'No summaries found'}
+            </h3>
             <p className="text-muted-foreground max-w-sm mt-2">
-              We couldn't find any summaries matching "{searchQuery}". Try a
-              different search term or create a new summary.
+              {!hasActiveFilters && summaries.length === 0
+                ? 'Create your first summary to start building your study library.'
+                : 'Try changing search terms or filters to find matching summaries.'}
             </p>
-            <Button
-              variant="outline"
-              className="mt-6"
-              onClick={() => setSearchQuery('')}
-            >
-              Clear Search
-            </Button>
+            {!hasActiveFilters && summaries.length === 0 ? (
+              <Button
+                className="mt-6"
+                onClick={() => navigate('/create')}
+              >
+                <Plus className="mr-2 h-4 w-4" /> New Summary
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="mt-6"
+                onClick={() => {
+                  setSearchQuery('')
+                  setQuickFilter('all')
+                }}
+              >
+                Clear Filters
+              </Button>
+            )}
           </div>
         )}
       </div>

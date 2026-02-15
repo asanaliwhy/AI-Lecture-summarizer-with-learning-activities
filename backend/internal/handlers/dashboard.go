@@ -402,17 +402,18 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 	searchLike := "%" + strings.ToLower(searchQuery) + "%"
 
 	type LibraryItem struct {
-		ID        uuid.UUID `json:"id"`
-		Type      string    `json:"type"`
-		Title     string    `json:"title"`
-		Tags      []string  `json:"tags,omitempty"`
-		CreatedAt time.Time `json:"created_at"`
+		ID         uuid.UUID `json:"id"`
+		Type       string    `json:"type"`
+		Title      string    `json:"title"`
+		Tags       []string  `json:"tags,omitempty"`
+		IsFavorite bool      `json:"is_favorite"`
+		CreatedAt  time.Time `json:"created_at"`
 	}
 
 	var items []LibraryItem
 
 	if typeFilter == "" || typeFilter == "summary" {
-		query := "SELECT id, title, tags, created_at FROM summaries WHERE user_id = $1 AND is_archived = FALSE"
+		query := "SELECT id, title, tags, is_favorite, created_at FROM summaries WHERE user_id = $1 AND is_archived = FALSE"
 		args := []interface{}{userID}
 		if searchQuery != "" {
 			query += " AND LOWER(title) LIKE $2"
@@ -423,7 +424,7 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		rows, _ := h.pool.Query(ctx, query, args...)
 		for rows.Next() {
 			item := LibraryItem{Type: "summary"}
-			rows.Scan(&item.ID, &item.Title, &item.Tags, &item.CreatedAt)
+			rows.Scan(&item.ID, &item.Title, &item.Tags, &item.IsFavorite, &item.CreatedAt)
 			items = append(items, item)
 		}
 		rows.Close()

@@ -1054,24 +1054,10 @@ export function SummaryPage() {
               >
                 {summaryTypeLabel}
               </Badge>
-              {summary.is_quality_fallback && (
-                <Badge
-                  variant="outline"
-                  className="border-amber-300 text-amber-700 bg-amber-50"
-                >
-                  Estimated Content
-                </Badge>
-              )}
               <span className="text-xs text-muted-foreground">
                 Generated {createdAt}
               </span>
             </div>
-            {summary.is_quality_fallback && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-2 max-w-2xl">
-                This summary was generated with limited source data and may contain assumptions.
-                {summary.quality_fallback_reason ? ` (${summary.quality_fallback_reason.replace(/_/g, ' ')})` : ''}
-              </p>
-            )}
             {isEditingTitle ? (
               <input
                 type="text"
