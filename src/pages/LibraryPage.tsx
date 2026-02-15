@@ -11,7 +11,6 @@ import { Checkbox } from '../components/ui/Checkbox'
 import {
   Search,
   Filter,
-  MoreHorizontal,
   FileText,
   BrainCircuit,
   Layers,
@@ -225,11 +224,6 @@ export function LibraryPage() {
                           selectedItems.includes(item.id) ? 'ring-2 ring-primary border-primary' : 'border-l-transparent',
                         )}
                       >
-                        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </div>
                         <div className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                           <Checkbox
                             checked={selectedItems.includes(item.id)}
