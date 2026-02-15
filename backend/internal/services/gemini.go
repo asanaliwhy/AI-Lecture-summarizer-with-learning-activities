@@ -172,6 +172,10 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		}
 	}
 
+	if config.Format == "bullets" {
+		rawText = normalizeBulletsSummary(rawText)
+	}
+
 	// Parse Cornell if applicable
 	var cues, notes, summaryText *string
 	if config.Format == "cornell" {
@@ -746,6 +750,48 @@ func splitSentenceLikeChunks(text string) []string {
 	return parts
 }
 
+func normalizeBulletsSummary(text string) string {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+	out := make([]string, 0, len(lines))
+
+	for _, line := range lines {
+		t := strings.TrimSpace(line)
+		if t == "" {
+			out = append(out, "")
+			continue
+		}
+
+		lower := strings.ToLower(t)
+		if strings.HasPrefix(lower, "executive summary:") {
+			t = strings.TrimSpace(t[len("Executive Summary:"):])
+			if t == "" {
+				continue
+			}
+		}
+
+		t = strings.ReplaceAll(t, "Case Study/Observation:", "Fact:")
+		t = strings.ReplaceAll(t, "Case study/observation:", "Fact:")
+		t = strings.ReplaceAll(t, "Case Study:", "Fact:")
+		t = strings.ReplaceAll(t, "Observation:", "Fact:")
+		t = strings.ReplaceAll(t, "Figure:", "Size:")
+
+		// Trim redundant overview bullets after wrapper headings.
+		lt := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(t, "- "), "• ")))
+		if strings.HasPrefix(lt, "overview of ") {
+			continue
+		}
+
+		out = append(out, t)
+	}
+
+	cleaned := strings.Join(out, "\n")
+	for strings.Contains(cleaned, "\n\n\n") {
+		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+	}
+	return strings.TrimSpace(cleaned)
+}
+
 func containsMarkdownTable(text string) bool {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	for i := 0; i < len(lines)-1; i++ {
@@ -930,7 +976,18 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Format: Use the Cornell Method. Provide three clearly labeled sections with these exact headers and order:\n[CUES]\n[NOTES]\n[SUMMARY]\n")
 		b.WriteString("Output rules for Cornell: plain text only; DO NOT use markdown tables; DO NOT use pipes (|); DO NOT use HTML tags; keep CUES as short prompt lines and NOTES as readable bullet paragraphs.\n\n")
 	case "bullets":
-		b.WriteString("Format: Use structured bullet points with hierarchical numbering and sub-bullets.\n\n")
+		b.WriteString("Format: Use structured bullet points with clear headings and concise bullets.\n")
+		b.WriteString("Bullets output rules:\n")
+		b.WriteString("1) Do NOT include redundant wrapper titles like 'Executive Summary:' or duplicate overview headings.\n")
+		b.WriteString("2) Keep wording plain and concrete; avoid unnecessarily academic jargon when simpler wording is possible.\n")
+		b.WriteString("3) For each major item (e.g., a brain part), use a consistent micro-structure in this order:\n")
+		b.WriteString("   - Definition: <what it is>\n")
+		b.WriteString("   - Function: <what it does>\n")
+		b.WriteString("   - Examples: <brief, specific examples>\n")
+		b.WriteString("4) Keep labels consistent. Prefer Definition, Function, Examples, Size, and Fact. Avoid mixed labels like Figure or Case Study/Observation unless explicitly requested.\n")
+		b.WriteString("5) Keep bullets non-redundant and compact; one idea per bullet.\n")
+		b.WriteString("6) Group related bullets under clear headings with logical flow: Overview -> Core Structures -> Interesting Facts.\n")
+		b.WriteString("7) Return plain text bullets only (no markdown tables, no HTML).\n\n")
 	case "paragraph":
 		b.WriteString("Format: Write in flowing academic prose with clear subheadings.\n\n")
 	case "smart":
