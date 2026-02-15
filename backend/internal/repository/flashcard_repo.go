@@ -39,11 +39,11 @@ func (r *FlashcardRepo) CreateDeck(ctx context.Context, d *models.FlashcardDeck)
 
 func (r *FlashcardRepo) GetDeckByID(ctx context.Context, id uuid.UUID) (*models.FlashcardDeck, error) {
 	d := &models.FlashcardDeck{}
-	query := `SELECT id, user_id, summary_id, title, config_json, card_count, created_at
+	query := `SELECT id, user_id, summary_id, title, config_json, card_count, is_favorite, created_at
 		FROM flashcard_decks WHERE id = $1`
 
 	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&d.ID, &d.UserID, &d.SummaryID, &d.Title, &d.ConfigJSON, &d.CardCount, &d.CreatedAt,
+		&d.ID, &d.UserID, &d.SummaryID, &d.Title, &d.ConfigJSON, &d.CardCount, &d.IsFavorite, &d.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ func (r *FlashcardRepo) GetDeckByID(ctx context.Context, id uuid.UUID) (*models.
 }
 
 func (r *FlashcardRepo) ListDecksByUser(ctx context.Context, userID uuid.UUID) ([]*models.FlashcardDeck, error) {
-	query := `SELECT id, user_id, summary_id, title, config_json, card_count, created_at
+	query := `SELECT id, user_id, summary_id, title, config_json, card_count, is_favorite, created_at
 		FROM flashcard_decks WHERE user_id = $1 ORDER BY created_at DESC`
 
 	rows, err := r.pool.Query(ctx, query, userID)
@@ -64,7 +64,7 @@ func (r *FlashcardRepo) ListDecksByUser(ctx context.Context, userID uuid.UUID) (
 	var decks []*models.FlashcardDeck
 	for rows.Next() {
 		d := &models.FlashcardDeck{}
-		err := rows.Scan(&d.ID, &d.UserID, &d.SummaryID, &d.Title, &d.ConfigJSON, &d.CardCount, &d.CreatedAt)
+		err := rows.Scan(&d.ID, &d.UserID, &d.SummaryID, &d.Title, &d.ConfigJSON, &d.CardCount, &d.IsFavorite, &d.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -75,6 +75,11 @@ func (r *FlashcardRepo) ListDecksByUser(ctx context.Context, userID uuid.UUID) (
 
 func (r *FlashcardRepo) DeleteDeck(ctx context.Context, id uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, "DELETE FROM flashcard_decks WHERE id = $1", id)
+	return err
+}
+
+func (r *FlashcardRepo) ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, "UPDATE flashcard_decks SET is_favorite = NOT is_favorite WHERE id = $1 AND user_id = $2", id, userID)
 	return err
 }
 

@@ -286,6 +286,28 @@ export interface GenerateQuizPayload {
     topics: string[]
 }
 
+export interface FlashcardDeckListItemResponse {
+    id: string
+    user_id?: string
+    summary_id?: string | null
+    title?: string
+    config?: Record<string, unknown> | string
+    card_count?: number
+    is_favorite?: boolean
+    created_at?: string
+}
+
+export interface GenerateFlashcardsPayload {
+    summary_id: string
+    title: string
+    num_cards: number
+    strategy: 'term_definition' | 'question_answer'
+    topics: string[]
+    enable_spaced_repetition: boolean
+    include_mnemonics: boolean
+    include_examples: boolean
+}
+
 // ─── API Methods ───
 export const api = {
     // Auth
@@ -409,17 +431,20 @@ export const api = {
 
     // Flashcards
     flashcards: {
-        generate: (data: any) =>
-            apiFetch<{ deck_id?: string; job_id?: string; deck?: any; job?: any }>('/flashcards/generate', {
+        generate: (data: GenerateFlashcardsPayload) =>
+            apiFetch<{ deck_id?: string; job_id?: string; deck?: { id?: string }; job?: { id?: string } }>('/flashcards/generate', {
                 method: 'POST',
                 body: JSON.stringify(data),
             }),
 
-        listDecks: () => apiFetch<{ decks: any[] }>('/flashcards/decks'),
+        listDecks: () => apiFetch<{ decks: FlashcardDeckListItemResponse[] }>('/flashcards/decks'),
 
-        getDeck: (id: string) => apiFetch<any>(`/flashcards/decks/${id}`),
+        getDeck: (id: string) => apiFetch<{ deck?: FlashcardDeckListItemResponse; cards?: unknown[] }>(`/flashcards/decks/${id}`),
 
         getDeckStats: (id: string) => apiFetch<any>(`/flashcards/decks/${id}/stats`),
+
+        toggleFavorite: (id: string) =>
+            apiFetch<{ message: string }>(`/flashcards/decks/${id}/favorite`, { method: 'PUT' }),
 
         rateCard: (cardId: string, rating: number) =>
             apiFetch(`/flashcards/cards/${cardId}/rating`, {

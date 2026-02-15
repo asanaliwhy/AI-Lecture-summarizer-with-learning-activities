@@ -113,6 +113,7 @@ func New(
 				r.Get("/", flashcardHandler.ListDecks)
 				r.Get("/{id}", flashcardHandler.GetDeck)
 				r.Get("/{id}/stats", flashcardHandler.GetDeckStats)
+				r.Put("/{id}/favorite", flashcardHandler.ToggleFavorite)
 			})
 
 			r.Route("/cards", func(r chi.Router) {

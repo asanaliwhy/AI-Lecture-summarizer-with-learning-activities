@@ -14,6 +14,7 @@ type FlashcardDeck struct {
 	Title      string          `json:"title"`
 	ConfigJSON json.RawMessage `json:"config"`
 	CardCount  int             `json:"card_count"`
+	IsFavorite bool            `json:"is_favorite"`
 	CreatedAt  time.Time       `json:"created_at"`
 }
 
@@ -34,14 +35,14 @@ type FlashcardCard struct {
 }
 
 type GenerateFlashcardsRequest struct {
-	SummaryID               uuid.UUID `json:"summary_id"`
-	Title                   string    `json:"title"`
-	NumCards                int       `json:"num_cards"`
-	Strategy                string    `json:"strategy"` // "term_definition" | "question_answer"
-	Topics                  []string  `json:"topics"`
-	EnableSpacedRepetition  bool      `json:"enable_spaced_repetition"`
-	IncludeMnemonics        bool      `json:"include_mnemonics"`
-	IncludeExamples         bool      `json:"include_examples"`
+	SummaryID              uuid.UUID `json:"summary_id"`
+	Title                  string    `json:"title"`
+	NumCards               int       `json:"num_cards"`
+	Strategy               string    `json:"strategy"` // "term_definition" | "question_answer"
+	Topics                 []string  `json:"topics"`
+	EnableSpacedRepetition bool      `json:"enable_spaced_repetition"`
+	IncludeMnemonics       bool      `json:"include_mnemonics"`
+	IncludeExamples        bool      `json:"include_examples"`
 }
 
 type CardRatingRequest struct {

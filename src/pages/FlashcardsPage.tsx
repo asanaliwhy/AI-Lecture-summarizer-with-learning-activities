@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, ApiError, type FlashcardDeckListItemResponse } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -22,22 +22,29 @@ import {
 import { cn } from '../lib/utils'
 
 export function FlashcardsPage() {
-    const FLASHCARD_FAVORITES_STORAGE_KEY = 'flashcard_favorite_ids'
     const navigate = useNavigate()
-    const [decks, setDecks] = useState<any[]>([])
+    const [decks, setDecks] = useState<FlashcardDeckListItemResponse[]>([])
     const [isLoading, setIsLoading] = useState(true)
+    const [loadError, setLoadError] = useState<string | null>(null)
     const [searchQuery, setSearchQuery] = useState('')
     const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
     const [quickFilter, setQuickFilter] = useState<'all' | 'starred' | 'new' | 'small' | 'medium' | 'large'>('all')
-    const [starredDeckIds, setStarredDeckIds] = useState<string[]>([])
+    const [favoritePendingIds, setFavoritePendingIds] = useState<string[]>([])
 
     useEffect(() => {
         async function load() {
+            setLoadError(null)
             try {
                 const data = await api.flashcards.listDecks()
                 setDecks(data.decks || [])
-            } catch {
+            } catch (err: unknown) {
                 setDecks([])
+                const message = err instanceof ApiError
+                    ? err.message
+                    : err instanceof Error
+                        ? err.message
+                        : 'Failed to load flashcard decks'
+                setLoadError(message)
             } finally {
                 setIsLoading(false)
             }
@@ -46,39 +53,55 @@ export function FlashcardsPage() {
         load()
     }, [])
 
-    useEffect(() => {
-        try {
-            const raw = localStorage.getItem(FLASHCARD_FAVORITES_STORAGE_KEY)
-            if (!raw) return
-            const parsed = JSON.parse(raw)
-            if (Array.isArray(parsed)) {
-                const normalized = parsed
-                    .filter((id) => typeof id === 'string' && id.trim().length > 0)
-                    .map((id) => id.trim())
-                setStarredDeckIds(Array.from(new Set(normalized)))
-            }
-        } catch {
-            setStarredDeckIds([])
-        }
-    }, [])
-
-    useEffect(() => {
-        localStorage.setItem(FLASHCARD_FAVORITES_STORAGE_KEY, JSON.stringify(starredDeckIds))
-    }, [starredDeckIds])
-
     const totalCards = useMemo(
         () => decks.reduce((sum, d) => sum + (Number(d.card_count) || 0), 0),
         [decks],
     )
 
-    const getCardCount = (deck: any): number => {
+    const getCardCount = (deck: FlashcardDeckListItemResponse): number => {
         const value = Number(deck?.card_count)
         return Number.isFinite(value) ? value : 0
     }
 
+    const isDeckStarred = (deckId: string) => {
+        const deck = decks.find((d) => d.id === deckId)
+        return Boolean(deck?.is_favorite)
+    }
+
+    const isFavoritePending = (deckId: string) => favoritePendingIds.includes(deckId)
+
+    const toggleDeckFavorite = async (deckId: string) => {
+        if (isFavoritePending(deckId)) return
+
+        const current = isDeckStarred(deckId)
+        setFavoritePendingIds((prev) => [...prev, deckId])
+
+        setDecks((prev) =>
+            prev.map((d) =>
+                d.id === deckId
+                    ? { ...d, is_favorite: !current }
+                    : d,
+            ),
+        )
+
+        try {
+            await api.flashcards.toggleFavorite(deckId)
+        } catch {
+            setDecks((prev) =>
+                prev.map((d) =>
+                    d.id === deckId
+                        ? { ...d, is_favorite: current }
+                        : d,
+                ),
+            )
+        } finally {
+            setFavoritePendingIds((prev) => prev.filter((id) => id !== deckId))
+        }
+    }
+
     const filteredDecks = useMemo(() => {
         return decks
-            .filter((deck: any) => {
+            .filter((deck) => {
                 const title = String(deck?.title || '').toLowerCase()
                 const query = searchQuery.trim().toLowerCase()
 
@@ -86,7 +109,7 @@ export function FlashcardsPage() {
                 if (!matchesSearch) return false
 
                 if (quickFilter === 'all') return true
-                if (quickFilter === 'starred') return starredDeckIds.includes(String(deck?.id))
+                if (quickFilter === 'starred') return Boolean(deck.is_favorite)
 
                 const cardCount = getCardCount(deck)
                 const createdAt = deck?.created_at ? new Date(deck.created_at).getTime() : 0
@@ -97,7 +120,7 @@ export function FlashcardsPage() {
                 if (quickFilter === 'medium') return cardCount >= 16 && cardCount <= 30
                 return cardCount > 30
             })
-            .sort((a: any, b: any) => {
+            .sort((a, b) => {
                 if (sortOrder === 'az') {
                     return String(a?.title || '').localeCompare(String(b?.title || ''))
                 }
@@ -108,7 +131,7 @@ export function FlashcardsPage() {
                 if (sortOrder === 'oldest') return aDate - bDate
                 return bDate - aDate
             })
-    }, [decks, searchQuery, quickFilter, sortOrder, starredDeckIds])
+    }, [decks, searchQuery, quickFilter, sortOrder])
 
     const filterOptions: Array<{ key: typeof quickFilter; label: string }> = [
         { key: 'all', label: 'All' },
@@ -118,17 +141,6 @@ export function FlashcardsPage() {
         { key: 'medium', label: 'Medium' },
         { key: 'large', label: 'Large' },
     ]
-
-    const isDeckStarred = (deckId: string | number) => starredDeckIds.includes(String(deckId))
-
-    const toggleDeckFavorite = (deckId: string | number) => {
-        const normalized = String(deckId)
-        setStarredDeckIds((prev) =>
-            prev.includes(normalized)
-                ? prev.filter((id) => id !== normalized)
-                : [...prev, normalized],
-        )
-    }
 
     return (
         <AppLayout>
@@ -255,6 +267,12 @@ export function FlashcardsPage() {
                     <div className="flex justify-center py-16">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
+                ) : loadError ? (
+                    <div className="text-center py-16 border rounded-xl bg-secondary/10">
+                        <h3 className="text-lg font-semibold mb-2">Failed to load flashcard decks</h3>
+                        <p className="text-muted-foreground mb-4">{loadError}</p>
+                        <Button onClick={() => window.location.reload()}>Retry</Button>
+                    </div>
                 ) : decks.length === 0 ? (
                     <div className="text-center py-16">
                         <div className="h-16 w-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -266,7 +284,7 @@ export function FlashcardsPage() {
                     </div>
                 ) : filteredDecks.length > 0 ? (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {filteredDecks.map((deck: any) => (
+                        {filteredDecks.map((deck) => (
                             <Card
                                 key={deck.id}
                                 className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-l-4 border-l-transparent hover:border-l-primary relative overflow-hidden"
@@ -323,9 +341,10 @@ export function FlashcardsPage() {
                                         <Button
                                             variant="ghost"
                                             size="sm"
+                                            disabled={isFavoritePending(deck.id)}
                                             className={cn(
                                                 'h-9 px-3 text-xs font-medium border',
-                                                isDeckStarred(deck.id)
+                                                Boolean(deck.is_favorite)
                                                     ? 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100'
                                                     : 'text-muted-foreground border-border hover:bg-secondary',
                                             )}
@@ -334,7 +353,7 @@ export function FlashcardsPage() {
                                                 toggleDeckFavorite(deck.id)
                                             }}
                                         >
-                                            <Star className={cn('h-3.5 w-3.5', isDeckStarred(deck.id) ? 'fill-amber-500 text-amber-500' : '')} />
+                                            <Star className={cn('h-3.5 w-3.5', deck.is_favorite ? 'fill-amber-500 text-amber-500' : '')} />
                                         </Button>
                                     </div>
                                 </CardContent>
