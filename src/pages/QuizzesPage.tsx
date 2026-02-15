@@ -377,11 +377,11 @@ export function QuizzesPage() {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                   <CardContent className="p-6 relative z-10">
                     <div className="flex justify-between items-start gap-4">
-                      <div className="flex gap-4">
+                      <div className="flex gap-4 min-w-0">
                         <div className="h-12 w-12 rounded-xl bg-green-100 text-green-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                           <BrainCircuit className="h-6 w-6" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <h3 className="font-semibold text-lg leading-tight group-hover:text-primary transition-colors mb-1">
                             {quiz.title}
                           </h3>
@@ -405,29 +405,6 @@ export function QuizzesPage() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <button
-                          type="button"
-                          className={cn(
-                            'h-8 w-8 rounded-full border flex items-center justify-center transition-colors',
-                            starred
-                              ? 'border-amber-300 bg-amber-50 hover:bg-amber-100'
-                              : 'border-border bg-background hover:bg-secondary',
-                          )}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            toggleFavorite(quiz.id)
-                          }}
-                          aria-label={starred ? 'Remove from favorites' : 'Add to favorites'}
-                        >
-                          <Star
-                            className={cn(
-                              'h-4 w-4',
-                              starred
-                                ? 'text-amber-500 fill-amber-500'
-                                : 'text-muted-foreground',
-                            )}
-                          />
-                        </button>
                         {quiz.last_score !== undefined && quiz.last_score !== null ? (
                           <ScoreRing score={toNumber(quiz.last_score) ?? 0} />
                         ) : (
@@ -452,6 +429,22 @@ export function QuizzesPage() {
                         onClick={(e) => { e.stopPropagation(); navigate(`/quiz/results/${quiz.last_attempt_id || quiz.id}`) }}
                       >
                         <Eye className="mr-2 h-3 w-3" /> View Results
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                          'h-9 px-3 text-xs font-medium border',
+                          starred
+                            ? 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100'
+                            : 'text-muted-foreground border-border hover:bg-secondary',
+                        )}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleFavorite(quiz.id)
+                        }}
+                      >
+                        <Star className={cn('h-3.5 w-3.5', starred ? 'fill-amber-500 text-amber-500' : '')} />
                       </Button>
                     </div>
                   </CardContent>
