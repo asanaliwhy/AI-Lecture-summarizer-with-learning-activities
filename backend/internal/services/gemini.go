@@ -163,6 +163,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 			rawText = refined
 		}
 		rawText = normalizeSmartLabels(rawText)
+		rawText = removeWeakExampleLines(rawText)
 		rawText = pruneSmartRedundantSections(rawText)
 	}
 
@@ -595,6 +596,26 @@ func pruneSmartRedundantSections(text string) string {
 	return strings.TrimSpace(cleaned)
 }
 
+func removeWeakExampleLines(text string) string {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+	out := make([]string, 0, len(lines))
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(strings.ToLower(line))
+		if strings.HasPrefix(trimmed, "example:") && strings.Contains(trimmed, "not explicitly stated in transcript") {
+			continue
+		}
+		out = append(out, line)
+	}
+
+	cleaned := strings.Join(out, "\n")
+	for strings.Contains(cleaned, "\n\n\n") {
+		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+	}
+	return strings.TrimSpace(cleaned)
+}
+
 func (s *GeminiService) rewriteSmartSummaryForFidelity(ctx context.Context, summaryText, transcript string) string {
 	snippet := transcript[:min(len(transcript), 6000)]
 	prompt := fmt.Sprintf(`You are revising a Smart Summary for strict factual fidelity.
@@ -603,15 +624,16 @@ Rules:
 1) Preserve terminology from the transcript; prefer exact source terms.
 2) Do NOT invent renamed concepts or neologisms.
 3) Keep facts grounded in transcript evidence only.
-4) For the section "Key Insights and Core Concepts", use consistent repeated triples:
-   - Key Concept: <term from transcript>
-   - Definition: <meaning grounded in transcript>
-   - Example: <explicitly stated example, or "Not explicitly stated in transcript">
+4) For the section "Key Insights and Core Concepts", write 3-5 mini-paragraph insights with this shape:
+   - **Key Concept: <specific concept from transcript>**
+   - 1-2 sentence insight explaining implication/connection (not dictionary-style definition).
+   - Include an Example line ONLY when there is an explicit transcript example; otherwise omit Example line entirely.
 5) Ensure each triple is genuinely distinct and non-redundant.
 6) Keep brain-part descriptions ONLY in "Brain Structure and Functions" table; avoid repeating those details in Key Insights.
 7) Remove redundant sections; do NOT include "Conclusions" or "Summary Highlights".
-8) Keep markdown format and keep at least one markdown table.
-9) Return markdown only.
+8) Additional Interesting Facts must exclude trivial/silly statements and focus on substantial facts with concrete value.
+9) Keep markdown format and keep at least one markdown table.
+10) Return markdown only.
 
 Transcript excerpt:
 %s
@@ -657,11 +679,13 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Section-specific rules:\n")
 		b.WriteString("- Summary of Video Content: one concise narrative paragraph only.\n")
 		b.WriteString("- Key Insights and Core Concepts: 3-5 deeper insights (implications/connections), not dictionary-like repetition.\n")
+		b.WriteString("  Format each insight as a mini-paragraph with a bold concept header, e.g. '**Key Concept: Neuro-Computational Superiority**' followed by 1-2 explanatory sentences.\n")
+		b.WriteString("  Do NOT output repetitive 'Definition' lines for every item.\n")
+		b.WriteString("  Include 'Example:' ONLY if explicitly present in transcript; otherwise omit the Example line entirely.\n")
 		b.WriteString("- Brain Structure and Functions: this is the ONLY place for brain-part functional descriptions.\n")
-		b.WriteString("- Additional Interesting Facts: only non-duplicated noteworthy facts, with numbers/evidence when present.\n")
+		b.WriteString("- Additional Interesting Facts: only non-duplicated noteworthy facts, with numbers/evidence when present; avoid trivial or playful statements.\n")
 		b.WriteString("Forbidden sections: DO NOT output 'Conclusions' or 'Summary Highlights'.\n")
-		b.WriteString("For section 'Key Insights and Core Concepts', keep a consistent item schema per point:\n")
-		b.WriteString("- Key Concept: <term from transcript>\n- Definition: <concise meaning grounded in transcript>\n- Example: <example explicitly stated in transcript, or 'Not explicitly stated in transcript'>\n")
+		b.WriteString("For section 'Key Insights and Core Concepts', keep concept names faithful to transcript terminology and avoid invented terms.\n")
 		b.WriteString("If transcript evidence is weak, explicitly mark uncertainty instead of fabricating details.\n\n")
 	}
 
