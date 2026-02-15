@@ -886,7 +886,7 @@ export function SummaryPage() {
           {/* Center - Content (60%) */}
           <div className={centerColumnClass}>
             <Card className="min-h-[620px] shadow-sm border-border/70">
-              <CardContent className={isSmartSummary ? 'p-4 md:p-5 lg:p-6' : 'p-6 md:p-10 lg:p-12'}>
+              <CardContent className={isSmartSummary || hasCornellSections ? 'p-4 md:p-5 lg:p-6' : 'p-6 md:p-10 lg:p-12'}>
                 {isSmartSummary ? (
                   <article className="smart-summary-content smart-summary-modern smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-extrabold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:text-[1.62rem] prose-h2:leading-tight prose-h2:border-l-4 prose-h2:border-blue-500 prose-h2:pl-3 prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-[1.2rem] prose-h3:font-bold prose-h3:mt-5 prose-h3:mb-3 prose-p:my-2.5 prose-p:leading-[1.78] prose-strong:text-slate-900 prose-li:leading-[1.75] prose-ul:my-3 prose-ol:my-3 prose-hr:my-6 prose-a:text-blue-700 hover:prose-a:text-blue-800">
                     <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
