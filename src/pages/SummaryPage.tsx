@@ -931,25 +931,34 @@ export function SummaryPage() {
                     )}
                   </div>
                 ) : hasCornellSections ? (
-                  <div className="space-y-6">
-                    <div className="border border-border/70 rounded-xl p-5 bg-slate-50/60">
-                      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">Cues</h3>
-                      <div className="whitespace-pre-wrap leading-8 text-slate-800 max-w-[75ch]">
+                  <div className="space-y-4">
+                    <section className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-4 md:px-5 md:py-5">
+                      <h3 className="flex items-center gap-2 pb-2 mb-3 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.05rem] tracking-tight">
+                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
+                        Cues
+                      </h3>
+                      <div className="whitespace-pre-wrap leading-[1.78] text-slate-800 max-w-[75ch]">
                         {renderedCornellCues || 'No cues available.'}
                       </div>
-                    </div>
-                    <div className="border border-border/70 rounded-xl p-5 bg-white">
-                      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">Notes</h3>
-                      <div className="whitespace-pre-wrap leading-8 text-slate-800 max-w-[75ch]">
+                    </section>
+                    <section className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-4 md:px-5 md:py-5">
+                      <h3 className="flex items-center gap-2 pb-2 mb-3 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.05rem] tracking-tight">
+                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
+                        Notes
+                      </h3>
+                      <div className="whitespace-pre-wrap leading-[1.78] text-slate-800 max-w-[75ch]">
                         {renderedCornellNotes || 'No notes available.'}
                       </div>
-                    </div>
-                    <div className="border rounded-xl p-5 bg-blue-50/70 border-blue-100">
-                      <h3 className="text-sm font-semibold uppercase tracking-wide text-blue-700 mb-3">Summary</h3>
-                      <div className="whitespace-pre-wrap leading-8 text-slate-800 max-w-[75ch]">
+                    </section>
+                    <section className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-4 md:px-5 md:py-5">
+                      <h3 className="flex items-center gap-2 pb-2 mb-3 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.05rem] tracking-tight">
+                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
+                        Summary
+                      </h3>
+                      <div className="whitespace-pre-wrap leading-[1.78] text-slate-800 max-w-[75ch]">
                         {renderedCornellSummary || 'No summary available.'}
                       </div>
-                    </div>
+                    </section>
                   </div>
                 ) : (
                   <div className="space-y-6">
