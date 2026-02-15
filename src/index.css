@@ -103,7 +103,7 @@
   }
 
   .smart-summary-content {
-    @apply p-4 md:p-6;
+    @apply p-3 md:p-4;
   }
 
   .smart-summary-content.smart-summary-scroll {
