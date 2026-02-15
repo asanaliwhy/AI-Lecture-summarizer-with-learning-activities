@@ -18,6 +18,9 @@ import {
     LayoutGrid,
     Library,
     BarChart3,
+    Sparkles,
+    SlidersHorizontal,
+    Plus,
     Star,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -153,126 +156,151 @@ export function FlashcardsPage() {
         { key: 'large', label: 'Large' },
     ]
 
+    const starredDecksCount = decks.filter((d) => Boolean(d.is_favorite)).length
+    const newDecksCount = decks.filter((d) => {
+        const createdAt = d?.created_at ? new Date(d.created_at).getTime() : 0
+        const ageDays = createdAt > 0 ? (Date.now() - createdAt) / (1000 * 60 * 60 * 24) : Number.POSITIVE_INFINITY
+        return ageDays <= 7
+    }).length
+
+    const getQuickFilterCount = (key: typeof quickFilter) => {
+        if (key === 'all') return decks.length
+        if (key === 'starred') return starredDecksCount
+        if (key === 'new') return newDecksCount
+        if (key === 'small') return decks.filter((d) => getCardCount(d) <= 15).length
+        if (key === 'medium') return decks.filter((d) => {
+            const c = getCardCount(d)
+            return c >= 16 && c <= 30
+        }).length
+        return decks.filter((d) => getCardCount(d) > 30).length
+    }
+
     return (
         <AppLayout>
             <div className="space-y-8 animate-in fade-in duration-500">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <div className="flex items-center gap-3 mb-1">
-                            <h1 className="text-3xl font-bold tracking-tight">My Flashcards</h1>
-                            <Badge variant="secondary" className="rounded-full px-3">{decks.length}</Badge>
+                <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background via-background to-secondary/25 p-6 shadow-sm">
+                    <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+                    <div className="pointer-events-none absolute -left-16 -bottom-20 h-44 w-44 rounded-full bg-amber-400/10 blur-3xl" />
+
+                    <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <div className="flex items-center gap-3 mb-1">
+                                <h1 className="text-3xl font-bold tracking-tight">My Flashcards</h1>
+                                <Badge variant="secondary" className="rounded-full px-3">{decks.length}</Badge>
+                            </div>
+                            <p className="text-muted-foreground">Review your generated flashcard decks and continue studying.</p>
                         </div>
-                        <p className="text-muted-foreground">Review your generated flashcard decks and continue studying.</p>
+
+                        <Button variant="outline" className="bg-background/80 backdrop-blur" onClick={() => navigate('/summaries')}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Deck
+                        </Button>
                     </div>
-                    <Button variant="outline" onClick={() => navigate('/summaries')}>
-                        Create Deck (Select Summary First)
-                    </Button>
+
+                    <div className="relative mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        {[
+                            { label: 'Total', value: decks.length, icon: LayoutGrid },
+                            { label: 'Starred', value: starredDecksCount, icon: Star },
+                            { label: 'New', value: newDecksCount, icon: Sparkles },
+                            { label: 'Total Cards', value: totalCards, icon: Library },
+                        ].map((stat) => {
+                            const Icon = stat.icon
+                            return (
+                                <div key={stat.label} className="rounded-xl border bg-card/90 p-3 shadow-sm">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
+                                        <Icon className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                    <p className="mt-2 text-2xl font-semibold tracking-tight">{stat.value}</p>
+                                </div>
+                            )
+                        })}
+                    </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Card className="border-none shadow-sm bg-secondary/30">
-                        <CardContent className="p-4 flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
-                                <LayoutGrid className="h-5 w-5" />
+                <Card className="border shadow-sm">
+                    <CardContent className="p-4 md:p-5 space-y-4">
+                        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search decks..."
+                                    className="pl-9 transition-all focus-visible:ring-primary"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
                             </div>
-                            <div>
-                                <p className="text-2xl font-bold">{decks.length}</p>
-                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total Decks</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className="border-none shadow-sm bg-secondary/30">
-                        <CardContent className="p-4 flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                                <Library className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold">{totalCards}</p>
-                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Total Cards</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className="border-none shadow-sm bg-secondary/30">
-                        <CardContent className="p-4 flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
-                                <BarChart3 className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold">{decks.length > 0 ? Math.round(totalCards / decks.length) : 0}</p>
-                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Avg Cards / Deck</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
 
-                {/* Controls */}
-                <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="relative flex-1 max-w-md">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search decks..."
-                            className="pl-9 transition-all focus-visible:ring-primary"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground whitespace-nowrap hidden sm:inline">Sort by:</span>
-                        <div className="flex bg-secondary/50 rounded-lg p-1">
-                            <button
-                                onClick={() => setSortOrder('newest')}
-                                className={cn(
-                                    'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
-                                    sortOrder === 'newest'
-                                        ? 'bg-background shadow-sm text-foreground'
-                                        : 'text-muted-foreground hover:text-foreground',
-                                )}
-                            >
-                                Newest
-                            </button>
-                            <button
-                                onClick={() => setSortOrder('oldest')}
-                                className={cn(
-                                    'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
-                                    sortOrder === 'oldest'
-                                        ? 'bg-background shadow-sm text-foreground'
-                                        : 'text-muted-foreground hover:text-foreground',
-                                )}
-                            >
-                                Oldest
-                            </button>
-                            <button
-                                onClick={() => setSortOrder('az')}
-                                className={cn(
-                                    'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
-                                    sortOrder === 'az'
-                                        ? 'bg-background shadow-sm text-foreground'
-                                        : 'text-muted-foreground hover:text-foreground',
-                                )}
-                            >
-                                A-Z
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground whitespace-nowrap hidden md:inline">
+                                    <SlidersHorizontal className="h-4 w-4 inline mr-1" />
+                                    Sort:
+                                </span>
+                                <div className="flex bg-secondary/50 rounded-lg p-1 border">
+                                    <button
+                                        onClick={() => setSortOrder('newest')}
+                                        className={cn(
+                                            'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
+                                            sortOrder === 'newest'
+                                                ? 'bg-background shadow-sm text-foreground'
+                                                : 'text-muted-foreground hover:text-foreground',
+                                        )}
+                                    >
+                                        Newest
+                                    </button>
+                                    <button
+                                        onClick={() => setSortOrder('oldest')}
+                                        className={cn(
+                                            'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
+                                            sortOrder === 'oldest'
+                                                ? 'bg-background shadow-sm text-foreground'
+                                                : 'text-muted-foreground hover:text-foreground',
+                                        )}
+                                    >
+                                        Oldest
+                                    </button>
+                                    <button
+                                        onClick={() => setSortOrder('az')}
+                                        className={cn(
+                                            'px-3 py-1.5 text-xs font-medium rounded-md transition-all',
+                                            sortOrder === 'az'
+                                                ? 'bg-background shadow-sm text-foreground'
+                                                : 'text-muted-foreground hover:text-foreground',
+                                        )}
+                                    >
+                                        A-Z
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                    {filterOptions.map((option) => (
-                        <button
-                            key={option.key}
-                            type="button"
-                            onClick={() => setQuickFilter(option.key)}
-                            className={cn(
-                                'px-3 py-1.5 text-xs rounded-full border transition-colors',
-                                quickFilter === option.key
-                                    ? 'bg-primary text-primary-foreground border-primary'
-                                    : 'bg-background text-muted-foreground hover:text-foreground border-border',
-                            )}
-                        >
-                            {option.label}
-                        </button>
-                    ))}
-                </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {filterOptions.map((option) => (
+                                <button
+                                    key={option.key}
+                                    type="button"
+                                    onClick={() => setQuickFilter(option.key)}
+                                    className={cn(
+                                        'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-colors',
+                                        quickFilter === option.key
+                                            ? 'bg-primary text-primary-foreground border-primary'
+                                            : 'bg-background text-muted-foreground hover:text-foreground border-border',
+                                    )}
+                                >
+                                    <span>{option.label}</span>
+                                    <span className={cn(
+                                        'rounded-full px-1.5 py-0.5 text-[10px] leading-none',
+                                        quickFilter === option.key
+                                            ? 'bg-primary-foreground/20 text-primary-foreground'
+                                            : 'bg-secondary text-secondary-foreground',
+                                    )}>
+                                        {getQuickFilterCount(option.key)}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
 
                 {isLoading ? (
                     <div className="flex justify-center py-16">
@@ -298,9 +326,10 @@ export function FlashcardsPage() {
                         {filteredDecks.map((deck) => (
                             <Card
                                 key={deck.id}
-                                className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-l-4 border-l-transparent hover:border-l-primary relative overflow-hidden"
+                                className="group hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer border relative overflow-hidden"
                                 onClick={() => navigate(`/flashcards/study/${deck.id}`)}
                             >
+                                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500/60 via-orange-500/40 to-yellow-500/30" />
                                 <CardContent className="p-6 relative z-10">
                                     <div className="flex justify-between items-start gap-4">
                                         <div className="flex gap-4">
@@ -312,7 +341,7 @@ export function FlashcardsPage() {
                                                     {deck.title}
                                                 </h3>
                                                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                                    <div className="flex items-center gap-1">
+                                                    <div className="flex items-center gap-1 rounded-md bg-secondary/40 px-2 py-1">
                                                         <Calendar className="h-3 w-3" />
                                                         {deck.created_at ? new Date(deck.created_at).toLocaleDateString() : ''}
                                                     </div>
