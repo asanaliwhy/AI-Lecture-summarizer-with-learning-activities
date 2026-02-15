@@ -17,16 +17,19 @@ import {
     LayoutGrid,
     Library,
     BarChart3,
+    Star,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 export function FlashcardsPage() {
+    const FLASHCARD_FAVORITES_STORAGE_KEY = 'flashcard_favorite_ids'
     const navigate = useNavigate()
     const [decks, setDecks] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
     const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
-    const [quickFilter, setQuickFilter] = useState<'all' | 'new' | 'small' | 'medium' | 'large'>('all')
+    const [quickFilter, setQuickFilter] = useState<'all' | 'starred' | 'new' | 'small' | 'medium' | 'large'>('all')
+    const [starredDeckIds, setStarredDeckIds] = useState<string[]>([])
 
     useEffect(() => {
         async function load() {
@@ -42,6 +45,26 @@ export function FlashcardsPage() {
 
         load()
     }, [])
+
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(FLASHCARD_FAVORITES_STORAGE_KEY)
+            if (!raw) return
+            const parsed = JSON.parse(raw)
+            if (Array.isArray(parsed)) {
+                const normalized = parsed
+                    .filter((id) => typeof id === 'string' && id.trim().length > 0)
+                    .map((id) => id.trim())
+                setStarredDeckIds(Array.from(new Set(normalized)))
+            }
+        } catch {
+            setStarredDeckIds([])
+        }
+    }, [])
+
+    useEffect(() => {
+        localStorage.setItem(FLASHCARD_FAVORITES_STORAGE_KEY, JSON.stringify(starredDeckIds))
+    }, [starredDeckIds])
 
     const totalCards = useMemo(
         () => decks.reduce((sum, d) => sum + (Number(d.card_count) || 0), 0),
@@ -63,6 +86,7 @@ export function FlashcardsPage() {
                 if (!matchesSearch) return false
 
                 if (quickFilter === 'all') return true
+                if (quickFilter === 'starred') return starredDeckIds.includes(String(deck?.id))
 
                 const cardCount = getCardCount(deck)
                 const createdAt = deck?.created_at ? new Date(deck.created_at).getTime() : 0
@@ -84,15 +108,27 @@ export function FlashcardsPage() {
                 if (sortOrder === 'oldest') return aDate - bDate
                 return bDate - aDate
             })
-    }, [decks, searchQuery, quickFilter, sortOrder])
+    }, [decks, searchQuery, quickFilter, sortOrder, starredDeckIds])
 
     const filterOptions: Array<{ key: typeof quickFilter; label: string }> = [
         { key: 'all', label: 'All' },
+        { key: 'starred', label: 'Starred' },
         { key: 'new', label: 'New' },
         { key: 'small', label: 'Small' },
         { key: 'medium', label: 'Medium' },
         { key: 'large', label: 'Large' },
     ]
+
+    const isDeckStarred = (deckId: string | number) => starredDeckIds.includes(String(deckId))
+
+    const toggleDeckFavorite = (deckId: string | number) => {
+        const normalized = String(deckId)
+        setStarredDeckIds((prev) =>
+            prev.includes(normalized)
+                ? prev.filter((id) => id !== normalized)
+                : [...prev, normalized],
+        )
+    }
 
     return (
         <AppLayout>
@@ -283,6 +319,22 @@ export function FlashcardsPage() {
                                             }}
                                         >
                                             <Eye className="mr-2 h-3 w-3" /> View Deck
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className={cn(
+                                                'h-9 px-3 text-xs font-medium border',
+                                                isDeckStarred(deck.id)
+                                                    ? 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100'
+                                                    : 'text-muted-foreground border-border hover:bg-secondary',
+                                            )}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                toggleDeckFavorite(deck.id)
+                                            }}
+                                        >
+                                            <Star className={cn('h-3.5 w-3.5', isDeckStarred(deck.id) ? 'fill-amber-500 text-amber-500' : '')} />
                                         </Button>
                                     </div>
                                 </CardContent>
