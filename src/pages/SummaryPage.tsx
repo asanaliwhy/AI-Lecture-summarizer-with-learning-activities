@@ -744,6 +744,7 @@ export function SummaryPage() {
   const renderedSections = splitIntoSections(renderedContentRaw)
   const smartSummaryHtml = summary.format === 'smart' ? renderSmartSummaryHtml(contentRaw) : ''
   const hasCornellSections = summary.format === 'cornell' && (cornellCues || cornellNotes || cornellSummary)
+  const isBulletSummary = summary.format === 'bullets'
   const isSmartSummary = summary.format === 'smart'
   const summaryFormatRaw = String(summary.format || summary.config?.format || '').toLowerCase()
   const summaryTypeLabel =
@@ -876,7 +877,7 @@ export function SummaryPage() {
               </p>
               <div className="space-y-2">
                 <Button
-                  className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white h-11 text-base"
+                  className="w-full justify-center bg-blue-600 hover:bg-blue-700 text-white h-11 text-base"
                   onClick={() => navigate(`/quiz/create/${id}`)}
                 >
                   <BrainCircuit className="h-4 w-4 mr-2" />
@@ -972,16 +973,28 @@ export function SummaryPage() {
                     </section>
                   </div>
                 ) : (
-                  <div className="space-y-6">
+                  <div className={isBulletSummary ? 'space-y-3' : 'space-y-6'}>
                     {(renderedSections.length > 0 ? renderedSections : [{ title: 'Summary', body: renderedContentRaw || 'No content available yet.' }]).map((section, idx) => (
-                      <div key={idx} className="border border-border/70 rounded-xl p-6 bg-muted/20">
-                        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
+                      <section
+                        key={idx}
+                        className={isBulletSummary
+                          ? 'rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4'
+                          : 'border border-border/70 rounded-xl p-6 bg-muted/20'}
+                      >
+                        <h3 className={isBulletSummary
+                          ? 'flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.02rem] tracking-tight'
+                          : 'text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3'}>
+                          {isBulletSummary && (
+                            <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
+                          )}
                           {section.title}
                         </h3>
-                        <div className="whitespace-pre-wrap leading-8 text-slate-800 text-[15px] max-w-[75ch]">
+                        <div className={isBulletSummary
+                          ? 'whitespace-pre-wrap leading-[1.72] text-slate-800 text-[15px] max-w-[75ch]'
+                          : 'whitespace-pre-wrap leading-8 text-slate-800 text-[15px] max-w-[75ch]'}>
                           {section.body}
                         </div>
-                      </div>
+                      </section>
                     ))}
                   </div>
                 )}
