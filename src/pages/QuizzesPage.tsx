@@ -30,6 +30,15 @@ export function QuizzesPage() {
     return null
   }
 
+  const safeParseJSON = (value: any) => {
+    if (typeof value !== 'string') return value
+    try {
+      return JSON.parse(value)
+    } catch {
+      return value
+    }
+  }
+
   useEffect(() => {
     async function load() {
       try {
@@ -95,6 +104,29 @@ export function QuizzesPage() {
     if (diff === 2 || diff === 'medium') return 'Medium'
     if (diff === 3 || diff === 'hard') return 'Hard'
     return diff || 'Medium'
+  }
+
+  const resolveQuizDifficulty = (quiz: any) => {
+    const direct = quiz?.difficulty
+    if (direct !== undefined && direct !== null && String(direct).trim() !== '') {
+      return direct
+    }
+
+    const config = safeParseJSON(quiz?.config)
+    const fromConfig = config?.difficulty
+    if (fromConfig !== undefined && fromConfig !== null && String(fromConfig).trim() !== '') {
+      return fromConfig
+    }
+
+    const questions = safeParseJSON(quiz?.questions)
+    if (Array.isArray(questions) && questions.length > 0) {
+      const fromQuestion = questions[0]?.difficulty
+      if (fromQuestion !== undefined && fromQuestion !== null && String(fromQuestion).trim() !== '') {
+        return fromQuestion
+      }
+    }
+
+    return 'medium'
   }
 
   const ScoreRing = ({ score }: { score: number }) => {
@@ -167,72 +199,75 @@ export function QuizzesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {quizzes.map((quiz: any) => (
-              <Card
-                key={quiz.id}
-                className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-l-4 border-l-transparent hover:border-l-primary relative overflow-hidden"
-                onClick={() => navigate(`/quiz/results/${quiz.last_attempt_id || quiz.id}`)}
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <CardContent className="p-6 relative z-10">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="flex gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-green-100 text-green-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                        <BrainCircuit className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg leading-tight group-hover:text-primary transition-colors mb-1">
-                          {quiz.title}
-                        </h3>
-                        {quiz.source_summary && (
-                          <p className="text-sm text-muted-foreground mb-2">
-                            Based on: {quiz.source_summary}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {quiz.created_at ? new Date(quiz.created_at).toLocaleDateString() : ''}
+            {quizzes.map((quiz: any) => {
+              const difficultyValue = resolveQuizDifficulty(quiz)
+              return (
+                <Card
+                  key={quiz.id}
+                  className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-l-4 border-l-transparent hover:border-l-primary relative overflow-hidden"
+                  onClick={() => navigate(`/quiz/results/${quiz.last_attempt_id || quiz.id}`)}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <CardContent className="p-6 relative z-10">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex gap-4">
+                        <div className="h-12 w-12 rounded-xl bg-green-100 text-green-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                          <BrainCircuit className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-lg leading-tight group-hover:text-primary transition-colors mb-1">
+                            {quiz.title}
+                          </h3>
+                          {quiz.source_summary && (
+                            <p className="text-sm text-muted-foreground mb-2">
+                              Based on: {quiz.source_summary}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {quiz.created_at ? new Date(quiz.created_at).toLocaleDateString() : ''}
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className={cn('font-normal text-xs h-5 border', getDifficultyColor(String(difficultyValue)))}
+                            >
+                              {getDifficultyLabel(difficultyValue)}
+                            </Badge>
                           </div>
-                          <Badge
-                            variant="outline"
-                            className={cn('font-normal text-xs h-5 border', getDifficultyColor(String(quiz.difficulty)))}
-                          >
-                            {getDifficultyLabel(quiz.difficulty)}
-                          </Badge>
                         </div>
                       </div>
+                      <div className="flex flex-col items-end gap-1">
+                        {quiz.last_score !== undefined && quiz.last_score !== null ? (
+                          <ScoreRing score={toNumber(quiz.last_score) ?? 0} />
+                        ) : (
+                          <div className="h-16 w-16 rounded-full border-2 border-dashed border-muted flex items-center justify-center">
+                            <span className="text-xs text-muted-foreground">New</span>
+                          </div>
+                        )}
+                        <span className="text-xs text-muted-foreground whitespace-nowrap font-medium">
+                          {quiz.question_count || quiz.questions?.length || '?'} Questions
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      {quiz.last_score !== undefined && quiz.last_score !== null ? (
-                        <ScoreRing score={toNumber(quiz.last_score) ?? 0} />
-                      ) : (
-                        <div className="h-16 w-16 rounded-full border-2 border-dashed border-muted flex items-center justify-center">
-                          <span className="text-xs text-muted-foreground">New</span>
-                        </div>
-                      )}
-                      <span className="text-xs text-muted-foreground whitespace-nowrap font-medium">
-                        {quiz.question_count || quiz.questions?.length || '?'} Questions
-                      </span>
+                    <div className="flex gap-3 mt-6 pt-4 border-t opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+                      <Button variant="outline" size="sm"
+                        className="flex-1 h-9 text-xs font-medium hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/quiz/take/${quiz.id}`) }}
+                      >
+                        <RotateCcw className="mr-2 h-3 w-3" /> {quiz.last_score !== undefined ? 'Retake' : 'Take Quiz'}
+                      </Button>
+                      <Button variant="ghost" size="sm"
+                        className="flex-1 h-9 text-xs font-medium hover:bg-secondary"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/quiz/results/${quiz.last_attempt_id || quiz.id}`) }}
+                      >
+                        <Eye className="mr-2 h-3 w-3" /> View Results
+                      </Button>
                     </div>
-                  </div>
-                  <div className="flex gap-3 mt-6 pt-4 border-t opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
-                    <Button variant="outline" size="sm"
-                      className="flex-1 h-9 text-xs font-medium hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
-                      onClick={(e) => { e.stopPropagation(); navigate(`/quiz/take/${quiz.id}`) }}
-                    >
-                      <RotateCcw className="mr-2 h-3 w-3" /> {quiz.last_score !== undefined ? 'Retake' : 'Take Quiz'}
-                    </Button>
-                    <Button variant="ghost" size="sm"
-                      className="flex-1 h-9 text-xs font-medium hover:bg-secondary"
-                      onClick={(e) => { e.stopPropagation(); navigate(`/quiz/results/${quiz.last_attempt_id || quiz.id}`) }}
-                    >
-                      <Eye className="mr-2 h-3 w-3" /> View Results
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         )}
       </div>
