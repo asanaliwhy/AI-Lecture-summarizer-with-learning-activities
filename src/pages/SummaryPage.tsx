@@ -454,20 +454,30 @@ function enhanceSmartSummaryHtml(html: string): string {
   // Ensure Additional Interesting Facts renders as bullet points for faster scanning.
   const sectionNodes = body.querySelectorAll('.smart-summary-section')
   sectionNodes.forEach((section) => {
-    const heading = section.querySelector('h1, h2')
-    const headingText = heading?.textContent?.trim().toLowerCase() || ''
-    if (!headingText.includes('additional interesting facts')) return
+    const heading = section.querySelector('h1, h2, h3, h4, h5, h6')
+    const paragraphs = Array.from(section.querySelectorAll('p'))
+    const firstParagraphText = paragraphs[0]?.textContent?.trim() || ''
+    const titleCandidate = (heading?.textContent?.trim() || firstParagraphText).toLowerCase()
+    const normalizedTitle = titleCandidate.replace(/[:\-\s]+$/g, '')
+    if (!normalizedTitle.includes('additional interesting facts')) return
 
     const existingList = section.querySelector('ul, ol')
     if (existingList) return
 
-    const paragraphs = Array.from(section.querySelectorAll('p'))
     if (paragraphs.length === 0) return
+
+    const contentParagraphs = paragraphs.filter((p, index) => {
+      if (heading) return true
+      if (index !== 0) return true
+      const text = p.textContent?.trim().toLowerCase() || ''
+      return !/^additional\s+interesting\s+facts\b/.test(text)
+    })
+    if (contentParagraphs.length === 0) return
 
     const ul = doc.createElement('ul')
     ul.className = 'smart-facts-list'
 
-    paragraphs.forEach((p) => {
+    contentParagraphs.forEach((p) => {
       const htmlParts = p.innerHTML.split(/<br\s*\/?>/i)
       if (htmlParts.length > 1) {
         htmlParts.forEach((part) => {
@@ -488,6 +498,13 @@ function enhanceSmartSummaryHtml(html: string): string {
       }
       p.remove()
     })
+
+    if (!heading && paragraphs.length > 0) {
+      const firstText = paragraphs[0].textContent?.trim().toLowerCase() || ''
+      if (/^additional\s+interesting\s+facts\b/.test(firstText)) {
+        paragraphs[0].remove()
+      }
+    }
 
     if (ul.children.length > 0) {
       section.appendChild(ul)

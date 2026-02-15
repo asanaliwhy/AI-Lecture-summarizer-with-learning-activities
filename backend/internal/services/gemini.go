@@ -144,7 +144,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	}
 
 	if config.Format == "smart" && !containsMarkdownTable(rawText) {
-		restructurePrompt := "Rewrite this Smart Summary in clean Markdown. Preserve all key information, preserve source terminology, and include at least one markdown table with 2+ columns and 3+ data rows. If entities are not obvious, create a table with columns: Concept | Explanation. In the section 'Additional Interesting Facts', output 3-6 markdown bullet points (each line must start with '- '). Do NOT invent new coined terms that are not present in the source transcript. If a claim is uncertain, say: Not explicitly stated in transcript. Return markdown only:\n\n" + rawText
+		restructurePrompt := "Rewrite this Smart Summary in clean Markdown. Preserve all key information, preserve source terminology, and include at least one markdown table with 2+ columns and 3+ data rows. If entities are not obvious, create a table with columns: Concept | Explanation.\n\nCRITICAL FORMATTING REQUIREMENT:\nThe 'Additional Interesting Facts' section MUST be markdown bullet points only.\n\nCORRECT FORMAT:\n## Additional Interesting Facts\n- First fact here\n- Second fact here\n- Third fact here\n\nWRONG FORMAT (DO NOT USE):\n## Additional Interesting Facts\nFirst fact here.\nSecond fact here.\nThird fact here.\n\nGenerate 3-6 facts. Each line MUST start with '- ' (dash + space).\nDo NOT invent new coined terms that are not present in the source transcript. If a claim is uncertain, say: Not explicitly stated in transcript. Return markdown only:\n\n" + rawText
 		resp2, err := s.model.GenerateContent(ctx, genai.Text(restructurePrompt))
 		if err == nil {
 			rawText2 := extractText(resp2)
@@ -633,8 +633,15 @@ Rules:
 7) Remove redundant sections; do NOT include "Conclusions" or "Summary Highlights".
 8) Additional Interesting Facts must exclude trivial/silly statements and focus on substantial facts with concrete value.
 9) For "Additional Interesting Facts", output 3-6 markdown bullets (each line starts with '- '). Do NOT output that section as a paragraph.
-10) Keep markdown format and keep at least one markdown table.
-11) Return markdown only.
+10) CRITICAL FORMATTING REQUIREMENT:
+   CORRECT FORMAT:
+   ## Additional Interesting Facts
+   - Fact one
+   - Fact two
+   - Fact three
+   WRONG FORMAT (DO NOT USE): paragraph lines without '- '.
+11) Keep markdown format and keep at least one markdown table.
+12) Return markdown only.
 
 Transcript excerpt:
 %s
@@ -675,6 +682,10 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Required sections (in this order):\n")
 		b.WriteString("1) Summary of Video Content\n2) Key Insights and Core Concepts\n3) Brain Structure and Functions (markdown table)\n4) Additional Interesting Facts\n\n")
 		b.WriteString("Output rules for Smart Summary: Use markdown headings and bullets. ALWAYS include at least one markdown table with at least 2 columns and 3 data rows. If the transcript has no obvious entities, create a table with columns: Concept | Explanation. Keep statements factual and avoid unsupported claims.\n")
+		b.WriteString("CRITICAL FORMATTING REQUIREMENT for 'Additional Interesting Facts': this section MUST be markdown bullet points only.\n")
+		b.WriteString("CORRECT FORMAT:\n## Additional Interesting Facts\n- First fact here\n- Second fact here\n- Third fact here\n")
+		b.WriteString("WRONG FORMAT (DO NOT USE):\n## Additional Interesting Facts\nFirst fact here.\nSecond fact here.\nThird fact here.\n")
+		b.WriteString("Generate 3-6 facts. Each line MUST start with '- ' (dash + space).\n")
 		b.WriteString("Terminology fidelity rules: reuse exact source terms from the transcript whenever possible (prefer direct phrasing over paraphrased/neologism terms). Do NOT invent renamed concepts.\n")
 		b.WriteString("Anti-redundancy rules: each fact appears once in the most appropriate section. Do NOT repeat the same fact across Summary, Insights, Table, and Facts.\n")
 		b.WriteString("Section-specific rules:\n")
