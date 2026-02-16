@@ -328,7 +328,8 @@ func (h *DashboardHandler) Activity(w http.ResponseWriter, r *http.Request) {
 			COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0 AS hours
 		FROM study_sessions
 		WHERE user_id = $1
-		  AND started_at >= CURRENT_DATE - INTERVAL '7 days'
+		  AND started_at >= date_trunc('week', CURRENT_DATE::timestamp)
+		  AND started_at < date_trunc('week', CURRENT_DATE::timestamp) + INTERVAL '7 days'
 		GROUP BY dow
 	`, userID)
 	if err != nil {
@@ -362,7 +363,8 @@ func (h *DashboardHandler) Activity(w http.ResponseWriter, r *http.Request) {
 			SELECT EXTRACT(DOW FROM created_at)::int AS dow, COUNT(*)
 			FROM summaries
 			WHERE user_id = $1
-			  AND created_at >= CURRENT_DATE - INTERVAL '7 days'
+			  AND created_at >= date_trunc('week', CURRENT_DATE::timestamp)
+			  AND created_at < date_trunc('week', CURRENT_DATE::timestamp) + INTERVAL '7 days'
 			GROUP BY dow
 		`, userID)
 		if fallbackErr == nil {
