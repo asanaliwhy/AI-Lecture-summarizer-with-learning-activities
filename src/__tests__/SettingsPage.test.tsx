@@ -27,6 +27,7 @@ const mocked = vi.hoisted(() => ({
         email: 'test@example.com',
         full_name: 'Alice Noor',
         avatar_url: '',
+        bio: 'Lifelong learner',
         is_verified: true,
         plan: 'free',
     },
@@ -173,6 +174,16 @@ describe('SettingsPage avatar persistence', () => {
         act(() => {
             valueSetter.call(input, value)
             input.dispatchEvent(new Event('input', { bubbles: true }))
+        })
+    }
+
+    const typeIntoTextarea = (textarea: HTMLTextAreaElement, value: string) => {
+        const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
+        if (!valueSetter) throw new Error('Unable to resolve textarea value setter')
+
+        act(() => {
+            valueSetter.call(textarea, value)
+            textarea.dispatchEvent(new Event('input', { bubbles: true }))
         })
     }
 
@@ -323,6 +334,28 @@ describe('SettingsPage avatar persistence', () => {
             expect.objectContaining({
                 full_name: 'Aruzhan Nurmukhan',
                 email: 'test@example.com',
+            }),
+        )
+    })
+
+    it('persists bio/about text on save', async () => {
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        const bioTextarea = container.querySelector('#bio') as HTMLTextAreaElement | null
+        expect(bioTextarea).toBeTruthy()
+
+        typeIntoTextarea(bioTextarea!, 'Focused on AI, backend engineering, and spaced repetition workflows.')
+        await flush()
+
+        clickButton('Save Changes')
+        await flush()
+
+        expect(mocked.userApi.updateMe).toHaveBeenCalledWith(
+            expect.objectContaining({
+                bio: 'Focused on AI, backend engineering, and spaced repetition workflows.',
             }),
         )
     })

@@ -552,6 +552,7 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		FullName string  `json:"full_name"`
 		Email    string  `json:"email"`
 		Avatar   *string `json:"avatar_url"`
+		Bio      *string `json:"bio"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -568,6 +569,16 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if update.Avatar != nil {
 		user.AvatarURL = update.Avatar
+	}
+	if update.Bio != nil {
+		trimmedBio := strings.TrimSpace(*update.Bio)
+		if len(trimmedBio) > 300 {
+			writeJSON(w, http.StatusBadRequest, errorRespWithFields("VALIDATION_ERROR", "Validation failed", map[string]string{
+				"bio": "Bio must be 300 characters or fewer",
+			}, r))
+			return
+		}
+		user.Bio = &trimmedBio
 	}
 
 	if err := h.userRepo.Update(r.Context(), user); err != nil {

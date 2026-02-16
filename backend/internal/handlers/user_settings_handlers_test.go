@@ -106,6 +106,30 @@ func TestUserHandler_UpdateMe_RepoFailure(t *testing.T) {
 	}
 }
 
+func TestUserHandler_UpdateMe_RejectsTooLongBio(t *testing.T) {
+	userID := uuid.New()
+	repo := &stubUserRepoForSettingsHandlers{
+		user: &models.User{ID: userID, FullName: "Alice", Email: "alice@example.com"},
+	}
+	h := &UserHandler{userRepo: repo}
+
+	longBio := strings.Repeat("a", 301)
+	body := `{"bio":"` + longBio + `"}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/user/me", strings.NewReader(body))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	h.UpdateMe(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+	if repo.updatedUser {
+		t.Fatalf("user should not be updated for invalid bio")
+	}
+}
+
 func TestUserHandler_UpdateSettings_InvalidRequestBody(t *testing.T) {
 	userID := uuid.New()
 	repo := &stubUserRepoForSettingsHandlers{user: &models.User{ID: userID}}

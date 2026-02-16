@@ -12,6 +12,7 @@ type User struct {
 	PasswordHash    string     `json:"-"`
 	FullName        string     `json:"full_name"`
 	AvatarURL       *string    `json:"avatar_url"`
+	Bio             *string    `json:"bio"`
 	IsVerified      bool       `json:"is_verified"`
 	IsActive        bool       `json:"is_active"`
 	Plan            string     `json:"plan"`

@@ -18,6 +18,7 @@ import { Label } from '../components/ui/Label'
 import { Switch } from '../components/ui/Switch'
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/Avatar'
 import { Badge } from '../components/ui/Badge'
+import { Textarea } from '../components/ui/Textarea'
 import {
   Select,
   SelectContent,
@@ -58,6 +59,7 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferencesResponse = {
 }
 
 const PASSWORD_MIN_LENGTH = 8
+const MAX_BIO_LENGTH = 300
 
 function validateNewPassword(value: string): string | null {
   if (value.length < PASSWORD_MIN_LENGTH) {
@@ -77,6 +79,7 @@ export function SettingsPage() {
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
+  const [bio, setBio] = useState('')
   const [isAvatarProcessing, setIsAvatarProcessing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -110,6 +113,7 @@ export function SettingsPage() {
       setLastName(derivedLastName)
       setEmail(user.email || '')
       setAvatarUrl(user.avatar_url || '')
+      setBio(user.bio || '')
     }
   }, [user])
 
@@ -211,15 +215,26 @@ export function SettingsPage() {
     try {
       const normalizedFirstName = firstName.trim()
       const normalizedLastName = lastName.trim()
+      const normalizedBio = bio.trim()
 
       if (!normalizedFirstName || !normalizedLastName) {
         toast.error('First name and last name are required.')
         return
       }
 
+      if (normalizedBio.length > MAX_BIO_LENGTH) {
+        toast.error(`Bio must be ${MAX_BIO_LENGTH} characters or fewer.`)
+        return
+      }
+
       const fullName = `${normalizedFirstName} ${normalizedLastName}`.trim()
 
-      await api.user.updateMe({ full_name: fullName, email, avatar_url: avatarUrl || '' })
+      await api.user.updateMe({
+        full_name: fullName,
+        email,
+        avatar_url: avatarUrl || '',
+        bio: normalizedBio,
+      })
       await refreshUser()
       setSaveSuccess(true)
       toast.success('Profile updated successfully!')
@@ -358,8 +373,9 @@ export function SettingsPage() {
     lastName.trim().length > 0,
     email.trim().length > 0,
     avatarUrl.trim().length > 0,
+    bio.trim().length > 0,
   ].filter(Boolean).length
-  const profileCompletionPercent = Math.round((profileCompletionSteps / 4) * 100)
+  const profileCompletionPercent = Math.round((profileCompletionSteps / 5) * 100)
   const currentPlan = user?.plan ? `${user.plan.charAt(0).toUpperCase()}${user.plan.slice(1)}` : 'Free'
 
   return (
@@ -519,6 +535,23 @@ export function SettingsPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="bio">Bio / About</Label>
+                      <span className="text-xs text-muted-foreground">{bio.length}/{MAX_BIO_LENGTH}</span>
+                    </div>
+                    <Textarea
+                      id="bio"
+                      placeholder="Tell others a little about yourself, your goals, or your learning focus"
+                      value={bio}
+                      maxLength={MAX_BIO_LENGTH}
+                      onChange={(e) => setBio(e.target.value)}
+                      className="min-h-[110px]"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This appears on your profile and helps personalize your learning space.
+                    </p>
                   </div>
                 </div>
               </CardContent>

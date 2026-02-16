@@ -6,6 +6,7 @@ interface User {
     email: string
     full_name: string
     avatar_url?: string
+    bio?: string | null
     is_verified: boolean
     plan: string
 }

@@ -44,11 +44,11 @@ func (r *UserRepo) Create(ctx context.Context, user *models.User) error {
 
 func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	user := &models.User{}
-	query := `SELECT id, email, password_hash, full_name, avatar_url, is_verified, is_active, plan, created_at, last_login_at
+	query := `SELECT id, email, password_hash, full_name, avatar_url, bio, is_verified, is_active, plan, created_at, last_login_at
 		FROM users WHERE email = $1`
 
 	err := r.pool.QueryRow(ctx, query, email).Scan(
-		&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.AvatarURL,
+		&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.AvatarURL, &user.Bio,
 		&user.IsVerified, &user.IsActive, &user.Plan, &user.CreatedAt, &user.LastLoginAt,
 	)
 	if err != nil {
@@ -59,11 +59,11 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, 
 
 func (r *UserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	user := &models.User{}
-	query := `SELECT id, email, password_hash, full_name, avatar_url, is_verified, is_active, plan, created_at, last_login_at
+	query := `SELECT id, email, password_hash, full_name, avatar_url, bio, is_verified, is_active, plan, created_at, last_login_at
 		FROM users WHERE id = $1`
 
 	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.AvatarURL,
+		&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.AvatarURL, &user.Bio,
 		&user.IsVerified, &user.IsActive, &user.Plan, &user.CreatedAt, &user.LastLoginAt,
 	)
 	if err != nil {
@@ -84,8 +84,8 @@ func (r *UserRepo) UpdateLastLogin(ctx context.Context, userID uuid.UUID) error 
 
 func (r *UserRepo) Update(ctx context.Context, user *models.User) error {
 	_, err := r.pool.Exec(ctx,
-		"UPDATE users SET full_name = $1, email = $2, avatar_url = $3 WHERE id = $4",
-		user.FullName, user.Email, user.AvatarURL, user.ID,
+		"UPDATE users SET full_name = $1, email = $2, avatar_url = $3, bio = $4 WHERE id = $5",
+		user.FullName, user.Email, user.AvatarURL, user.Bio, user.ID,
 	)
 	return err
 }

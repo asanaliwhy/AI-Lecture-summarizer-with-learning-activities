@@ -318,6 +318,7 @@ export interface UserProfileResponse {
     email: string
     full_name: string
     avatar_url?: string
+    bio?: string | null
     is_verified: boolean
     is_active: boolean
     plan: string
@@ -333,6 +334,7 @@ export interface UpdateMePayload {
     full_name?: string
     email?: string
     avatar_url?: string
+    bio?: string
 }
 
 export interface NotificationPreferencesResponse {
