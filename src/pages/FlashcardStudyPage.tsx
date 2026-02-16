@@ -245,7 +245,7 @@ export function FlashcardStudyPage() {
                 {currentCard?.front || currentCard?.term || 'Loading...'}
               </h2>
               {currentCard?.mnemonic && (
-                <div className="mt-6 p-4 bg-indigo-500/10 dark:bg-indigo-400/15 rounded-lg text-sm text-indigo-700 dark:text-indigo-100 border border-indigo-400/20 dark:border-indigo-300/25 max-w-2xl">
+                <div className="mt-10 md:mt-12 p-4 bg-indigo-500/10 dark:bg-indigo-400/15 rounded-lg text-sm text-indigo-700 dark:text-indigo-100 border border-indigo-400/20 dark:border-indigo-300/25 max-w-2xl">
                   <span className="font-semibold text-indigo-800 dark:text-indigo-50">Mnemonic: </span>
                   {currentCard.mnemonic}
                 </div>
