@@ -639,6 +639,7 @@ export function LibraryPage() {
                     {displayItems.map((item) => {
                       const typeMeta = getTypeMeta(item.type)
                       const TypeIcon = typeMeta.icon
+                      const itemRoute = getItemRoute(item)
 
                       return (
                         <Card
@@ -647,6 +648,16 @@ export function LibraryPage() {
                             'group relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer border',
                             selectedItems.includes(item.id) ? 'ring-2 ring-primary border-primary shadow-md' : 'border-border/70',
                           )}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Open ${item.title}`}
+                          onClick={() => navigate(itemRoute)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              navigate(itemRoute)
+                            }
+                          }}
                         >
                           <div className={cn('absolute inset-x-0 top-0 h-1 bg-gradient-to-r', typeMeta.railClass)} />
                           {item.is_favorite && (
@@ -663,7 +674,7 @@ export function LibraryPage() {
                           </div>
                           <CardContent
                             className="p-6 pt-7"
-                            onClick={() => navigate(getItemRoute(item))}
+                            onClick={(e) => e.stopPropagation()}
                           >
                             <div className="flex items-start justify-between mb-4">
                               <div className={cn('p-2 rounded-lg', typeMeta.iconClass)}>
@@ -697,6 +708,7 @@ export function LibraryPage() {
                     {displayItems.map((item) => {
                       const typeMeta = getTypeMeta(item.type)
                       const TypeIcon = typeMeta.icon
+                      const itemRoute = getItemRoute(item)
 
                       return (
                         <div
@@ -705,6 +717,16 @@ export function LibraryPage() {
                             'flex items-center gap-4 p-4 rounded-xl border bg-card shadow-sm hover:bg-secondary/20 transition-colors cursor-pointer group',
                             selectedItems.includes(item.id) ? 'bg-secondary/30 border-primary shadow' : 'border-border/70',
                           )}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Open ${item.title}`}
+                          onClick={() => navigate(itemRoute)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              navigate(itemRoute)
+                            }
+                          }}
                         >
                           <Checkbox
                             checked={selectedItems.includes(item.id)}
@@ -714,7 +736,7 @@ export function LibraryPage() {
                           <div className={cn('p-2 rounded-lg shrink-0', typeMeta.iconClass)}>
                             <TypeIcon className="h-4 w-4" />
                           </div>
-                          <div className="flex-1 min-w-0" onClick={() => navigate(getItemRoute(item))}>
+                          <div className="flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
                             <h3 className="font-medium truncate group-hover:text-primary transition-colors">
                               {item.title}
                             </h3>

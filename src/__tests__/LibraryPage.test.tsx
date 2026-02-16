@@ -1,6 +1,6 @@
 import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { act } from 'react-dom/test-utils'
+import { act } from 'react'
 
 const mocked = vi.hoisted(() => ({
     navigate: vi.fn(),
@@ -310,6 +310,41 @@ describe('LibraryPage production behaviors', () => {
 
         expect(mocked.toast.warning).toHaveBeenCalledWith('Exported 1 item, 1 failed')
         expect(mocked.pdfSave).toHaveBeenCalledTimes(1)
+    })
+
+    it('supports keyboard navigation for grid and list items', async () => {
+        mocked.libraryApi.list.mockResolvedValue({
+            items: [
+                { id: 's1', type: 'summary', title: 'Keyboard Summary', created_at: '2026-01-01T00:00:00Z' },
+            ],
+            total: 1,
+        })
+
+        await act(async () => {
+            root.render(<LibraryPage />)
+        })
+        await flush()
+
+        const gridItem = container.querySelector('div[role="button"][aria-label="Open Keyboard Summary"]') as HTMLDivElement | null
+        expect(gridItem).toBeTruthy()
+
+        act(() => {
+            gridItem!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        })
+
+        expect(mocked.navigate).toHaveBeenCalledWith('/summary/s1')
+
+        clickByAriaLabel('List view')
+        await flush()
+
+        const listItem = container.querySelector('div[role="button"][aria-label="Open Keyboard Summary"]') as HTMLDivElement | null
+        expect(listItem).toBeTruthy()
+
+        act(() => {
+            listItem!.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+        })
+
+        expect(mocked.navigate).toHaveBeenCalledWith('/summary/s1')
     })
 })
 
