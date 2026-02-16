@@ -10,9 +10,6 @@ import {
   RotateCw,
   Shuffle,
   Loader2,
-  Sparkles,
-  ArrowLeftRight,
-  Layers,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
@@ -208,10 +205,6 @@ export function FlashcardStudyPage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="outline" className="hidden sm:inline-flex rounded-full px-3 py-1">
-            <Layers className="mr-1.5 h-3.5 w-3.5" />
-            {cards.length} cards
-          </Badge>
           <Button variant="ghost" size="icon" onClick={shuffleCards}>
             <Shuffle className="h-4 w-4 text-muted-foreground" />
           </Button>
@@ -224,21 +217,6 @@ export function FlashcardStudyPage() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 w-full max-w-3xl mx-auto">
-        <div className="mb-4 w-full flex items-center justify-between text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            {enableSpacedRepetition ? 'Spaced repetition mode' : 'Linear mode'}
-          </span>
-          <button
-            type="button"
-            onClick={handleFlip}
-            className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
-          >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-            Flip
-          </button>
-        </div>
-
         <div
           className="w-full aspect-[3/2] perspective-1000 cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-2xl"
           onClick={handleFlip}
