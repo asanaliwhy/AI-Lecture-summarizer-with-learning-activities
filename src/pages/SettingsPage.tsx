@@ -45,7 +45,7 @@ import {
   type NotificationPreferencesResponse,
   type UpdateNotificationPreferencePayload,
 } from '../lib/api'
-import { User, Bell, Key, CreditCard, Shield, LogOut, Loader2 } from 'lucide-react'
+import { User, Bell, Key, CreditCard, Shield, LogOut, Loader2, Sparkles } from 'lucide-react'
 import { useToast } from '../components/ui/Toast'
 
 const MAX_AVATAR_BYTES = 800 * 1024
@@ -333,33 +333,106 @@ export function SettingsPage() {
     ? displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
     : 'U'
 
+  const enabledNotificationsCount = Object.values(notificationPreferences).filter(Boolean).length
+  const profileCompletionSteps = [
+    displayName.trim().length > 0,
+    email.trim().length > 0,
+    avatarUrl.trim().length > 0,
+  ].filter(Boolean).length
+  const profileCompletionPercent = Math.round((profileCompletionSteps / 3) * 100)
+  const currentPlan = user?.plan ? `${user.plan.charAt(0).toUpperCase()}${user.plan.slice(1)}` : 'Free'
+
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your account preferences and subscription.
-          </p>
+      <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background via-background to-secondary/20 p-6 shadow-sm">
+          <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+          <div className="pointer-events-none absolute -left-16 -bottom-20 h-44 w-44 rounded-full bg-amber-400/10 blur-3xl" />
+
+          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+                <Badge variant="secondary" className="rounded-full px-3">{currentPlan} plan</Badge>
+              </div>
+              <p className="text-muted-foreground">
+                Manage your account, security, and learning preferences in one place.
+              </p>
+            </div>
+
+            <Badge variant="outline" className="rounded-full px-3 py-1.5 text-xs w-fit">
+              <Shield className="h-3.5 w-3.5 mr-1.5" />
+              Security enabled
+            </Badge>
+          </div>
+
+          <div className="relative mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="rounded-xl border bg-card/90 p-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground">Profile completion</p>
+                <User className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">{profileCompletionPercent}%</p>
+            </div>
+
+            <div className="rounded-xl border bg-card/90 p-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground">Notifications</p>
+                <Bell className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">{enabledNotificationsCount}/3</p>
+            </div>
+
+            <div className="rounded-xl border bg-card/90 p-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground">Theme</p>
+                <Sparkles className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold tracking-tight capitalize">{themePreference}</p>
+            </div>
+
+            <div className="rounded-xl border bg-card/90 p-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground">Password status</p>
+                <Key className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="mt-2 text-lg font-semibold tracking-tight text-green-600">Protected</p>
+            </div>
+          </div>
         </div>
 
         <Tabs defaultValue="account" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 lg:w-[400px] mb-8">
-            <TabsTrigger value="account">Account</TabsTrigger>
-            <TabsTrigger value="preferences">Preferences</TabsTrigger>
-            <TabsTrigger value="security">Security</TabsTrigger>
-            <TabsTrigger value="billing">Billing</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-8 rounded-xl border bg-secondary/40 p-1 h-auto gap-1">
+            <TabsTrigger value="account" className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 data-[state=active]:shadow-sm">
+              <User className="h-4 w-4" />
+              Account
+            </TabsTrigger>
+            <TabsTrigger value="preferences" className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 data-[state=active]:shadow-sm">
+              <Bell className="h-4 w-4" />
+              Preferences
+            </TabsTrigger>
+            <TabsTrigger value="security" className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 data-[state=active]:shadow-sm">
+              <Key className="h-4 w-4" />
+              Security
+            </TabsTrigger>
+            <TabsTrigger value="billing" className="flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 data-[state=active]:shadow-sm">
+              <CreditCard className="h-4 w-4" />
+              Billing
+            </TabsTrigger>
           </TabsList>
 
           {/* Account Tab */}
           <TabsContent value="account" className="space-y-6">
-            <Card>
+            <Card className="border shadow-sm rounded-2xl overflow-hidden">
               <CardHeader>
-                <CardTitle>Profile</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5 text-primary" />
+                  Profile
+                </CardTitle>
                 <CardDescription>Update your personal information.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex items-center gap-6">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl border bg-muted/20 p-4">
                   <Avatar className="h-20 w-20">
                     <AvatarImage src={avatarUrl || ''} alt={displayName || 'User avatar'} />
                     <AvatarFallback>{initials}</AvatarFallback>
@@ -404,6 +477,7 @@ export function SettingsPage() {
                     <Label htmlFor="name">Display Name</Label>
                     <Input
                       id="name"
+                      placeholder="Enter your display name"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                     />
@@ -412,13 +486,14 @@ export function SettingsPage() {
                     <Label htmlFor="email">Email Address</Label>
                     <Input
                       id="email"
+                      placeholder="Enter your email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="border-t px-6 py-4 flex items-center gap-4">
+              <CardFooter className="border-t px-6 py-4 flex items-center justify-between gap-4">
                 <Button onClick={handleSaveProfile} disabled={isSaving}>
                   {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Save Changes
@@ -429,13 +504,16 @@ export function SettingsPage() {
               </CardFooter>
             </Card>
 
-            <Card className="border-red-200">
+            <Card className="border-red-200/80 bg-red-50/40 dark:bg-red-950/20 shadow-sm rounded-2xl overflow-hidden">
               <CardHeader>
-                <CardTitle className="text-red-600">Danger Zone</CardTitle>
+                <CardTitle className="text-red-600 flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Danger Zone
+                </CardTitle>
                 <CardDescription>Irreversible account actions.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-red-200/70 bg-background/80 p-4">
                   <div>
                     <h4 className="font-medium">Delete Account</h4>
                     <p className="text-sm text-muted-foreground">
@@ -456,13 +534,16 @@ export function SettingsPage() {
 
           {/* Preferences Tab */}
           <TabsContent value="preferences" className="space-y-6">
-            <Card>
+            <Card className="border shadow-sm rounded-2xl overflow-hidden">
               <CardHeader>
-                <CardTitle>General Preferences</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  General Preferences
+                </CardTitle>
                 <CardDescription>Customize your experience.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between rounded-xl border p-4 bg-muted/10">
                   <div className="space-y-0.5">
                     <Label className="text-base">Dark Mode</Label>
                     <p className="text-sm text-muted-foreground">Toggle dark mode theme.</p>
@@ -479,7 +560,7 @@ export function SettingsPage() {
                     value={defaultSummaryLength}
                     onValueChange={handleDefaultSummaryLengthChange}
                   >
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full sm:w-[220px]">
                       <SelectValue placeholder="Select length" />
                     </SelectTrigger>
                     <SelectContent>
@@ -497,7 +578,7 @@ export function SettingsPage() {
                     value={defaultSummaryFormat}
                     onValueChange={handleDefaultSummaryFormatChange}
                   >
-                    <SelectTrigger className="w-[220px]">
+                    <SelectTrigger className="w-full sm:w-[260px]">
                       <SelectValue placeholder="Select format" />
                     </SelectTrigger>
                     <SelectContent>
@@ -511,13 +592,16 @@ export function SettingsPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border shadow-sm rounded-2xl overflow-hidden">
               <CardHeader>
-                <CardTitle>Email Notifications</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-primary" />
+                  Email Notifications
+                </CardTitle>
                 <CardDescription>Manage how we communicate with you.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between rounded-xl border p-4 bg-muted/10">
                   <div className="space-y-0.5">
                     <Label className="text-base">Processing Complete</Label>
                     <p className="text-sm text-muted-foreground">Email when your summaries are ready.</p>
@@ -529,7 +613,7 @@ export function SettingsPage() {
                     disabled={isNotificationsLoading || savingNotificationKey !== null}
                   />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between rounded-xl border p-4 bg-muted/10">
                   <div className="space-y-0.5">
                     <Label className="text-base">Weekly Digest</Label>
                     <p className="text-sm text-muted-foreground">Summary of your learning activity.</p>
@@ -541,7 +625,7 @@ export function SettingsPage() {
                     disabled={isNotificationsLoading || savingNotificationKey !== null}
                   />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between rounded-xl border p-4 bg-muted/10">
                   <div className="space-y-0.5">
                     <Label className="text-base">Study Reminders</Label>
                     <p className="text-sm text-muted-foreground">
@@ -561,9 +645,12 @@ export function SettingsPage() {
 
           {/* Security Tab */}
           <TabsContent value="security" className="space-y-6">
-            <Card>
+            <Card className="border shadow-sm rounded-2xl overflow-hidden">
               <CardHeader>
-                <CardTitle>Change Password</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Key className="h-5 w-5 text-primary" />
+                  Change Password
+                </CardTitle>
                 <CardDescription>Update your account password.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -572,6 +659,7 @@ export function SettingsPage() {
                   <Input
                     id="current-password"
                     type="password"
+                    placeholder="Enter current password"
                     autoComplete="current-password"
                     value={currentPassword}
                     onChange={(e) => {
@@ -585,6 +673,7 @@ export function SettingsPage() {
                   <Input
                     id="new-password"
                     type="password"
+                    placeholder="Create a new password"
                     autoComplete="new-password"
                     value={newPassword}
                     onChange={(e) => {
@@ -623,14 +712,17 @@ export function SettingsPage() {
 
           {/* Billing Tab */}
           <TabsContent value="billing" className="space-y-6">
-            <Card>
+            <Card className="border shadow-sm rounded-2xl overflow-hidden">
               <CardHeader>
-                <CardTitle>Subscription Plan</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-primary" />
+                  Subscription Plan
+                </CardTitle>
                 <CardDescription>You are currently on the Free plan.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-6 md:grid-cols-2">
-                  <div className="rounded-lg border p-4">
+                  <div className="rounded-xl border p-4 bg-card/60">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-semibold">Free Plan</h3>
                       <Badge>Current</Badge>
@@ -648,7 +740,7 @@ export function SettingsPage() {
                     </ul>
                     <Button variant="outline" className="w-full" disabled>Current Plan</Button>
                   </div>
-                  <div className="rounded-lg border p-4 bg-primary/5 border-primary/20">
+                  <div className="rounded-xl border p-4 bg-primary/5 border-primary/20">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-semibold">Pro Plan</h3>
                       <span className="font-bold text-lg">
@@ -666,13 +758,13 @@ export function SettingsPage() {
                         <Check className="h-4 w-4 text-green-500" /> Priority Support
                       </li>
                     </ul>
-                    <Button className="w-full">Upgrade to Pro</Button>
+                    <Button className="w-full" variant="outline">Upgrade to Pro</Button>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border shadow-sm rounded-2xl overflow-hidden">
               <CardHeader>
                 <CardTitle>Payment Method</CardTitle>
                 <CardDescription>Manage your payment details.</CardDescription>
