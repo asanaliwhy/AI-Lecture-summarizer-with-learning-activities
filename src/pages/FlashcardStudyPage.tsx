@@ -244,6 +244,12 @@ export function FlashcardStudyPage() {
               <h2 className="text-3xl md:text-5xl font-bold text-foreground">
                 {currentCard?.front || currentCard?.term || 'Loading...'}
               </h2>
+              {currentCard?.mnemonic && (
+                <div className="mt-6 p-4 bg-indigo-500/10 dark:bg-indigo-400/15 rounded-lg text-sm text-indigo-700 dark:text-indigo-100 border border-indigo-400/20 dark:border-indigo-300/25 max-w-2xl">
+                  <span className="font-semibold text-indigo-800 dark:text-indigo-50">Mnemonic: </span>
+                  {currentCard.mnemonic}
+                </div>
+              )}
               <p className="text-sm text-muted-foreground mt-8 opacity-50">
                 (Click or Space to flip)
               </p>
@@ -257,12 +263,6 @@ export function FlashcardStudyPage() {
               <p className="text-xl md:text-2xl font-medium leading-relaxed">
                 {currentCard?.back || currentCard?.definition || ''}
               </p>
-              {currentCard?.mnemonic && (
-                <div className="mt-6 p-4 bg-indigo-500/10 dark:bg-indigo-400/15 rounded-lg text-sm text-indigo-200 dark:text-indigo-100 border border-indigo-400/20 dark:border-indigo-300/25">
-                  <span className="font-semibold text-indigo-100 dark:text-indigo-50">Mnemonic: </span>
-                  {currentCard.mnemonic}
-                </div>
-              )}
               {currentCard?.example && (
                 <div className="mt-8 p-4 bg-slate-800/90 dark:bg-slate-700/80 rounded-lg text-sm text-slate-300 dark:text-slate-200">
                   <span className="font-semibold text-slate-200 dark:text-slate-100">Example: </span>
