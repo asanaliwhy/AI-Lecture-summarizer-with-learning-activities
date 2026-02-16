@@ -174,8 +174,8 @@ export function DashboardPage() {
       change: formatTrend(summariesTrend),
       trend: getTrend(summariesTrend),
       icon: FileText,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
+      color: 'text-blue-600 dark:text-blue-300',
+      bgColor: 'bg-blue-100 dark:bg-blue-500/15',
       hoverGradientTo: 'group-hover:to-blue-500',
       link: '/summaries',
       clickable: true,
@@ -186,8 +186,8 @@ export function DashboardPage() {
       change: formatTrend(quizzesTrend),
       trend: getTrend(quizzesTrend),
       icon: BrainCircuit,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
+      color: 'text-purple-600 dark:text-purple-300',
+      bgColor: 'bg-purple-100 dark:bg-purple-500/15',
       hoverGradientTo: 'group-hover:to-purple-500',
       link: '/quizzes',
       clickable: true,
@@ -198,8 +198,8 @@ export function DashboardPage() {
       change: formatTrend(flashcardsTrend),
       trend: getTrend(flashcardsTrend),
       icon: Play,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100',
+      color: 'text-orange-600 dark:text-orange-300',
+      bgColor: 'bg-orange-100 dark:bg-orange-500/15',
       hoverGradientTo: 'group-hover:to-orange-500',
       link: '/flashcards',
       clickable: true,
@@ -210,8 +210,8 @@ export function DashboardPage() {
       change: formatTrend(studyHoursTrend),
       trend: getTrend(studyHoursTrend),
       icon: Clock,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
+      color: 'text-green-600 dark:text-green-300',
+      bgColor: 'bg-green-100 dark:bg-green-500/15',
       hoverGradientTo: 'group-hover:to-green-500',
       link: null,
       clickable: false,
@@ -504,8 +504,8 @@ export function DashboardPage() {
                         className={cn(
                           'flex items-center text-xs font-medium px-2 py-0.5 rounded-full',
                           stat.trend === 'up'
-                            ? 'text-green-700 bg-green-50'
-                            : 'text-red-700 bg-red-50',
+                            ? 'text-green-700 bg-green-50 dark:text-green-300 dark:bg-green-500/15'
+                            : 'text-red-700 bg-red-50 dark:text-red-300 dark:bg-red-500/15',
                         )}
                       >
                         {stat.trend === 'up' ? (
@@ -711,7 +711,7 @@ export function DashboardPage() {
                 <Link to="/create">
                   <Card className="hover:bg-secondary/50 transition-all duration-300 cursor-pointer border-dashed hover:border-solid hover:shadow-md group">
                     <CardContent className="p-4 flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                      <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-500/15 flex items-center justify-center text-blue-600 dark:text-blue-300 group-hover:scale-110 transition-transform">
                         <Plus className="h-5 w-5" />
                       </div>
                       <div>
@@ -728,7 +728,7 @@ export function DashboardPage() {
                 <Link to="/quizzes">
                   <Card className="hover:bg-secondary/50 transition-all duration-300 cursor-pointer border-dashed hover:border-solid hover:shadow-md group">
                     <CardContent className="p-4 flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform">
+                      <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-500/15 flex items-center justify-center text-purple-600 dark:text-purple-300 group-hover:scale-110 transition-transform">
                         <BrainCircuit className="h-5 w-5" />
                       </div>
                       <div>
@@ -745,7 +745,7 @@ export function DashboardPage() {
                 <Link to="/flashcards">
                   <Card className="hover:bg-secondary/50 transition-all duration-300 cursor-pointer border-dashed hover:border-solid hover:shadow-md group">
                     <CardContent className="p-4 flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 group-hover:scale-110 transition-transform">
+                      <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-500/15 flex items-center justify-center text-orange-600 dark:text-orange-300 group-hover:scale-110 transition-transform">
                         <Play className="h-5 w-5 ml-0.5 group-hover:translate-x-0.5 transition-transform" />
                       </div>
                       <div>
@@ -922,7 +922,7 @@ export function DashboardPage() {
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                        <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 flex items-center justify-center">
                           <FileText className="h-5 w-5" />
                         </div>
                         <div>
@@ -962,7 +962,7 @@ export function DashboardPage() {
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                        <div className="h-10 w-10 rounded-lg bg-purple-100 dark:bg-purple-500/15 text-purple-600 dark:text-purple-300 flex items-center justify-center">
                           <BrainCircuit className="h-5 w-5" />
                         </div>
                         <div>
@@ -996,7 +996,7 @@ export function DashboardPage() {
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
+                        <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-500/15 text-green-600 dark:text-green-300 flex items-center justify-center">
                           <BookOpen className="h-5 w-5" />
                         </div>
                         <div>

@@ -162,7 +162,7 @@ export function FlashcardConfigPage() {
                           id="definitions"
                           checked={strategy === 'definitions'}
                           onChange={() => setStrategy('definitions')}
-                          className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                          className="h-4 w-4 border-gray-300 dark:border-slate-600 text-primary focus:ring-primary"
                         />
                       </div>
                       <div className="grid gap-1">
@@ -186,7 +186,7 @@ export function FlashcardConfigPage() {
                           id="qa"
                           checked={strategy === 'qa'}
                           onChange={() => setStrategy('qa')}
-                          className="h-4 w-4 border-gray-300 text-primary focus:ring-primary"
+                          className="h-4 w-4 border-gray-300 dark:border-slate-600 text-primary focus:ring-primary"
                         />
                       </div>
                       <div className="grid gap-1">

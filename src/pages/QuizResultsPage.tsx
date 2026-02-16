@@ -403,9 +403,9 @@ export function QuizResultsPage() {
         <div className="text-center mb-12">
           <div className={cn(
             'inline-flex items-center justify-center p-3 rounded-full mb-4',
-            isPass ? 'bg-yellow-100' : 'bg-orange-100'
+            isPass ? 'bg-yellow-100 dark:bg-yellow-500/15' : 'bg-orange-100 dark:bg-orange-500/15'
           )}>
-            <Trophy className={cn('h-8 w-8', isPass ? 'text-yellow-600' : 'text-orange-600')} />
+            <Trophy className={cn('h-8 w-8', isPass ? 'text-yellow-600 dark:text-yellow-300' : 'text-orange-600 dark:text-orange-300')} />
           </div>
           <h1 className="text-4xl font-bold mb-2">
             {isPass ? 'Great Job!' : 'Keep Practicing!'}
@@ -424,7 +424,7 @@ export function QuizResultsPage() {
             <div className="text-sm font-medium text-muted-foreground">Total Score</div>
           </Card>
           <Card className="text-center py-6">
-            <div className="text-4xl font-bold text-green-600 mb-1">{correctCount}/{totalQuestions}</div>
+            <div className="text-4xl font-bold text-green-600 dark:text-green-300 mb-1">{correctCount}/{totalQuestions}</div>
             <div className="text-sm font-medium text-muted-foreground">Correct Answers</div>
           </Card>
           <Card className="text-center py-6">
@@ -463,10 +463,10 @@ export function QuizResultsPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">Detailed Review</h2>
               <div className="flex gap-2">
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-500/40">
                   {correctCount} Correct
                 </Badge>
-                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/40">
                   {incorrectCount} Incorrect
                 </Badge>
               </div>
@@ -570,7 +570,7 @@ export function QuizResultsPage() {
                           )}
                         </div>
                         {expandedQuestion !== qId && (
-                          <p className={cn('text-sm mt-2', isCorrect ? 'text-green-600' : 'text-red-600')}>
+                          <p className={cn('text-sm mt-2', isCorrect ? 'text-green-600 dark:text-green-300' : 'text-red-600 dark:text-red-300')}>
                             Your answer: {userAnswerText}
                           </p>
                         )}
@@ -582,17 +582,19 @@ export function QuizResultsPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                           <div className={cn(
                             'p-4 rounded-lg border',
-                            isCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200',
+                            isCorrect
+                              ? 'bg-green-50 border-green-200 dark:bg-green-500/10 dark:border-green-500/30'
+                              : 'bg-red-50 border-red-200 dark:bg-red-500/10 dark:border-red-500/30',
                           )}>
                             <div className="text-xs font-semibold uppercase tracking-wider mb-1 opacity-70">Your Answer</div>
                             <div className="font-medium">{userAnswerText}</div>
                           </div>
                           {!isCorrect && (
-                            <div className="p-4 rounded-lg border bg-green-50 border-green-200">
-                              <div className="text-xs font-semibold uppercase tracking-wider mb-1 opacity-70 text-green-800">
+                            <div className="p-4 rounded-lg border bg-green-50 border-green-200 dark:bg-green-500/10 dark:border-green-500/30">
+                              <div className="text-xs font-semibold uppercase tracking-wider mb-1 opacity-70 text-green-800 dark:text-green-300">
                                 Correct Answer
                               </div>
-                              <div className="font-medium text-green-900">{correctAnswerText}</div>
+                              <div className="font-medium text-green-900 dark:text-green-200">{correctAnswerText}</div>
                             </div>
                           )}
                         </div>
@@ -614,7 +616,7 @@ export function QuizResultsPage() {
               })}
             </div>
 
-            <div className="mt-12 bg-slate-900 rounded-xl p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="mt-12 bg-slate-900 dark:bg-slate-800 rounded-xl p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 border border-slate-800 dark:border-slate-700">
               <div>
                 <h3 className="text-xl font-bold mb-2">Master your mistakes</h3>
                 <p className="text-slate-300">

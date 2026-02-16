@@ -331,8 +331,8 @@ export function FlashcardsPage() {
                     </div>
                 ) : decks.length === 0 ? (
                     <div className="text-center py-16">
-                        <div className="h-16 w-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <BrainCircuit className="h-8 w-8 text-amber-700" />
+                        <div className="h-16 w-16 bg-amber-100 dark:bg-amber-500/15 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <BrainCircuit className="h-8 w-8 text-amber-700 dark:text-amber-300" />
                         </div>
                         <h3 className="text-lg font-semibold mb-2">No flashcard decks yet</h3>
                         <p className="text-muted-foreground mb-4">Generate flashcards from a summary to start spaced repetition study.</p>
@@ -358,7 +358,7 @@ export function FlashcardsPage() {
                                 <CardContent className="p-6 relative z-10">
                                     <div className="flex justify-between items-start gap-4">
                                         <div className="flex gap-4">
-                                            <div className="h-12 w-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0 shadow-sm">
+                                            <div className="h-12 w-12 rounded-xl bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center flex-shrink-0 shadow-sm">
                                                 <Layers className="h-6 w-6" />
                                             </div>
                                             <div>
@@ -411,7 +411,7 @@ export function FlashcardsPage() {
                                             className={cn(
                                                 'h-9 px-3 text-xs font-medium border',
                                                 Boolean(deck.is_favorite)
-                                                    ? 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100'
+                                                    ? 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:text-amber-300 dark:border-amber-500/40 dark:bg-amber-500/15 dark:hover:bg-amber-500/20'
                                                     : 'text-muted-foreground border-border hover:bg-secondary',
                                             )}
                                             onClick={(e) => {

@@ -1182,7 +1182,7 @@ export function SummaryPage() {
                   Generate Quiz
                 </Button>
                 <Button
-                  className="w-full justify-center bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800 h-11 text-base"
+                  className="w-full justify-center bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-200 h-11 text-base"
                   variant="outline"
                   onClick={() => navigate(`/flashcards/create/${id}`)}
                 >
@@ -1198,23 +1198,23 @@ export function SummaryPage() {
             <Card className="min-h-[620px] shadow-sm border-border/70">
               <CardContent className={isSmartSummary || hasCornellSections || isStyledSectionSummary ? 'p-4 md:p-5 lg:p-6' : 'p-6 md:p-10 lg:p-12'}>
                 {isSmartSummary ? (
-                  <article className="smart-summary-content smart-summary-modern smart-summary-scroll overflow-x-auto prose max-w-none prose-slate prose-headings:font-extrabold prose-headings:tracking-tight prose-headings:text-slate-900 prose-h2:text-[1.62rem] prose-h2:leading-tight prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-[1.2rem] prose-h3:font-bold prose-h3:mt-5 prose-h3:mb-3 prose-p:my-2.5 prose-p:leading-[1.78] prose-strong:text-slate-900 prose-li:leading-[1.75] prose-ul:my-3 prose-ol:my-3 prose-hr:my-6 prose-a:text-blue-700 hover:prose-a:text-blue-800">
+                  <article className="smart-summary-content smart-summary-modern smart-summary-scroll overflow-x-auto prose max-w-none prose-slate dark:prose-invert prose-headings:font-extrabold prose-headings:tracking-tight prose-headings:text-slate-900 dark:prose-headings:text-slate-100 prose-h2:text-[1.62rem] prose-h2:leading-tight prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-[1.2rem] prose-h3:font-bold prose-h3:mt-5 prose-h3:mb-3 prose-p:my-2.5 prose-p:leading-[1.78] prose-strong:text-slate-900 dark:prose-strong:text-slate-100 prose-li:leading-[1.75] prose-ul:my-3 prose-ol:my-3 prose-hr:my-6 prose-a:text-blue-700 hover:prose-a:text-blue-800 dark:prose-a:text-blue-300 dark:hover:prose-a:text-blue-200">
                     <div dangerouslySetInnerHTML={{ __html: smartSummaryHtml || '<p>No content available yet.</p>' }} />
                   </article>
                 ) : hasSections ? (
                   <div className="space-y-10">
                     {sections.map((section, idx: number) => (
                       <div key={idx} className="border-b border-border/60 pb-8 last:border-b-0">
-                        <h2 className="text-2xl md:text-[1.7rem] font-bold text-slate-900 mb-4">
+                        <h2 className="text-2xl md:text-[1.7rem] font-bold text-slate-900 dark:text-slate-100 mb-4">
                           {idx + 1}. {section.title}
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                           {section.key_concepts && (
                             <div className="md:col-span-1">
-                              <div className="text-sm font-semibold text-slate-500 uppercase tracking-wide sticky top-4">
+                              <div className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide sticky top-4">
                                 Key Concepts
                               </div>
-                              <ul className="mt-4 space-y-4 text-sm font-medium text-slate-700">
+                              <ul className="mt-4 space-y-4 text-sm font-medium text-slate-700 dark:text-slate-300">
                                 {(section.key_concepts as string[]).map((concept: string, i: number) => (
                                   <li key={i} className="flex items-start gap-2">
                                     <span className="h-1.5 w-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
@@ -1225,7 +1225,7 @@ export function SummaryPage() {
                             </div>
                           )}
                           <div className={section.key_concepts ? 'md:col-span-2' : 'md:col-span-3'}>
-                            <div className="text-slate-800 leading-8 space-y-4 prose prose-slate max-w-[72ch]"
+                            <div className="text-slate-800 dark:text-slate-200 leading-8 space-y-4 prose prose-slate dark:prose-invert max-w-[72ch]"
                               dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(section.content || section.body || '') }}
                             />
                           </div>
@@ -1234,38 +1234,38 @@ export function SummaryPage() {
                     ))}
 
                     {summary.summary_text && (
-                      <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 mt-8">
-                        <h3 className="text-lg font-bold text-slate-900 mb-2">Summary</h3>
-                        <p className="text-slate-700 leading-relaxed">{summary.summary_text}</p>
+                      <div className="bg-slate-50 dark:bg-slate-900/60 p-6 rounded-lg border border-slate-200 dark:border-slate-700 mt-8">
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">Summary</h3>
+                        <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{summary.summary_text}</p>
                       </div>
                     )}
                   </div>
                 ) : hasCornellSections ? (
                   <div className="space-y-3">
-                    <section className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4">
-                      <h3 className="flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.02rem] tracking-tight">
+                    <section className="rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-gradient-to-b from-white to-slate-50/70 dark:from-slate-900 dark:to-slate-800/70 px-4 py-3 md:px-5 md:py-4">
+                      <h3 className="flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 dark:border-slate-700/80 text-slate-900 dark:text-slate-100 font-extrabold text-[1.02rem] tracking-tight">
                         <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
                         Cues
                       </h3>
-                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-none">
+                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 dark:text-slate-200 max-w-none">
                         {renderedCornellCues || 'No cues available.'}
                       </div>
                     </section>
-                    <section className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4">
-                      <h3 className="flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.02rem] tracking-tight">
+                    <section className="rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-gradient-to-b from-white to-slate-50/70 dark:from-slate-900 dark:to-slate-800/70 px-4 py-3 md:px-5 md:py-4">
+                      <h3 className="flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 dark:border-slate-700/80 text-slate-900 dark:text-slate-100 font-extrabold text-[1.02rem] tracking-tight">
                         <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
                         Notes
                       </h3>
-                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-none">
+                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 dark:text-slate-200 max-w-none">
                         {renderedCornellNotes || 'No notes available.'}
                       </div>
                     </section>
-                    <section className="rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4">
-                      <h3 className="flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.02rem] tracking-tight">
+                    <section className="rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-gradient-to-b from-white to-slate-50/70 dark:from-slate-900 dark:to-slate-800/70 px-4 py-3 md:px-5 md:py-4">
+                      <h3 className="flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 dark:border-slate-700/80 text-slate-900 dark:text-slate-100 font-extrabold text-[1.02rem] tracking-tight">
                         <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
                         Summary
                       </h3>
-                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 max-w-none">
+                      <div className="whitespace-pre-wrap leading-[1.72] text-slate-800 dark:text-slate-200 max-w-none">
                         {renderedCornellSummary || 'No summary available.'}
                       </div>
                     </section>
@@ -1280,12 +1280,12 @@ export function SummaryPage() {
                         <section
                           key={idx}
                           className={isStyledSectionSummary
-                            ? 'rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-4 py-3 md:px-5 md:py-4'
+                            ? 'rounded-xl border border-slate-200/80 dark:border-slate-700/80 bg-gradient-to-b from-white to-slate-50/70 dark:from-slate-900 dark:to-slate-800/70 px-4 py-3 md:px-5 md:py-4'
                             : 'border border-border/70 rounded-xl p-6 bg-muted/20'}
                         >
                           <h3 className={isStyledSectionSummary
-                            ? 'flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 text-slate-900 font-extrabold text-[1.02rem] tracking-tight'
-                            : 'text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3'}>
+                            ? 'flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/80 dark:border-slate-700/80 text-slate-900 dark:text-slate-100 font-extrabold text-[1.02rem] tracking-tight'
+                            : 'text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3'}>
                             {isStyledSectionSummary && (
                               <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60" />
                             )}
@@ -1293,14 +1293,14 @@ export function SummaryPage() {
                           </h3>
 
                           {isBulletSummary && hasBulletHierarchy ? (
-                            <ul className="list-disc pl-5 space-y-2 leading-[1.72] text-slate-800 text-[15px] max-w-none marker:text-slate-500">
+                            <ul className="list-disc pl-5 space-y-2 leading-[1.72] text-slate-800 dark:text-slate-200 text-[15px] max-w-none marker:text-slate-500 dark:marker:text-slate-400">
                               {bulletHierarchy.map((item, itemIdx) => (
                                 <li key={itemIdx}>
-                                  <span className={item.children.length > 0 ? 'font-semibold text-slate-900' : ''}>{item.text}</span>
+                                  <span className={item.children.length > 0 ? 'font-semibold text-slate-900 dark:text-slate-100' : ''}>{item.text}</span>
                                   {item.children.length > 0 && (
-                                    <ul className="list-disc pl-6 mt-1.5 space-y-1 marker:text-slate-400">
+                                    <ul className="list-disc pl-6 mt-1.5 space-y-1 marker:text-slate-400 dark:marker:text-slate-500">
                                       {item.children.map((child, childIdx) => (
-                                        <li key={childIdx} className="font-normal text-slate-800">{child}</li>
+                                        <li key={childIdx} className="font-normal text-slate-800 dark:text-slate-200">{child}</li>
                                       ))}
                                     </ul>
                                   )}
@@ -1309,10 +1309,10 @@ export function SummaryPage() {
                             </ul>
                           ) : (
                             <div className={isBulletSummary
-                              ? 'whitespace-pre-wrap leading-[1.72] text-slate-800 text-[15px] max-w-none'
+                              ? 'whitespace-pre-wrap leading-[1.72] text-slate-800 dark:text-slate-200 text-[15px] max-w-none'
                               : isParagraphSummary
-                                ? 'whitespace-pre-wrap leading-8 text-slate-800 text-[15px] max-w-none'
-                                : 'whitespace-pre-wrap leading-8 text-slate-800 text-[15px] max-w-[75ch]'}>
+                                ? 'whitespace-pre-wrap leading-8 text-slate-800 dark:text-slate-200 text-[15px] max-w-none'
+                                : 'whitespace-pre-wrap leading-8 text-slate-800 dark:text-slate-200 text-[15px] max-w-[75ch]'}>
                               {section.body}
                             </div>
                           )}

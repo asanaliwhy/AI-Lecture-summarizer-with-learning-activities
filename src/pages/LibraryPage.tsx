@@ -449,8 +449,8 @@ export function LibraryPage() {
       return {
         label: 'Summary',
         icon: FileText,
-        iconClass: 'bg-blue-100 text-blue-700',
-        badgeClass: 'bg-blue-100 text-blue-700 border-blue-200',
+        iconClass: 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300',
+        badgeClass: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/40',
         railClass: 'from-blue-500/50 to-blue-300/20',
       }
     }
@@ -459,8 +459,8 @@ export function LibraryPage() {
       return {
         label: 'Quiz',
         icon: BrainCircuit,
-        iconClass: 'bg-emerald-100 text-emerald-700',
-        badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+        iconClass: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+        badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/40',
         railClass: 'from-emerald-500/50 to-emerald-300/20',
       }
     }
@@ -468,8 +468,8 @@ export function LibraryPage() {
     return {
       label: 'Flashcards',
       icon: Layers,
-      iconClass: 'bg-amber-100 text-amber-700',
-      badgeClass: 'bg-amber-100 text-amber-700 border-amber-200',
+      iconClass: 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300',
+      badgeClass: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40',
       railClass: 'from-amber-500/50 to-amber-300/20',
     }
   }

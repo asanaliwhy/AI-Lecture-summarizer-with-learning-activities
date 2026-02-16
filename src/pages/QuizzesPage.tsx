@@ -464,8 +464,8 @@ export function QuizzesPage() {
           </div>
         ) : quizzes.length === 0 ? (
           <div className="text-center py-16">
-            <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <BrainCircuit className="h-8 w-8 text-green-600" />
+            <div className="h-16 w-16 bg-green-100 dark:bg-green-500/15 rounded-full flex items-center justify-center mx-auto mb-4">
+              <BrainCircuit className="h-8 w-8 text-green-600 dark:text-green-300" />
             </div>
             <h3 className="text-lg font-semibold mb-2">No quizzes yet</h3>
             <p className="text-muted-foreground mb-4">Create a summary first, then generate a quiz from it.</p>
@@ -495,7 +495,7 @@ export function QuizzesPage() {
                   <CardContent className="p-6 relative z-10">
                     <div className="flex justify-between items-start gap-4">
                       <div className="flex gap-4 min-w-0">
-                        <div className="h-12 w-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                        <div className="h-12 w-12 rounded-xl bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                           <BrainCircuit className="h-6 w-6" />
                         </div>
                         <div className="min-w-0">
@@ -555,7 +555,7 @@ export function QuizzesPage() {
                         className={cn(
                           'h-9 px-3 text-xs font-medium border',
                           starred
-                            ? 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100'
+                            ? 'text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:text-amber-300 dark:border-amber-500/40 dark:bg-amber-500/15 dark:hover:bg-amber-500/20'
                             : 'text-muted-foreground border-border hover:bg-secondary',
                         )}
                         onClick={(e) => {

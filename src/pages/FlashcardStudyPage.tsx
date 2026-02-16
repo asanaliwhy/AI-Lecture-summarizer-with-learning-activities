@@ -155,16 +155,16 @@ export function FlashcardStudyPage() {
             </div>
 
             {/* Back */}
-            <div className="absolute inset-0 h-full w-full bg-slate-900 text-slate-50 rounded-2xl p-8 md:p-16 flex flex-col items-center justify-center text-center backface-hidden rotate-y-180 border border-slate-800">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-6">
+            <div className="absolute inset-0 h-full w-full bg-slate-900 text-slate-50 rounded-2xl p-8 md:p-16 flex flex-col items-center justify-center text-center backface-hidden rotate-y-180 border border-slate-800 dark:border-slate-700">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-300 mb-6">
                 {currentCard?.back_label || 'Definition'}
               </span>
               <p className="text-xl md:text-2xl font-medium leading-relaxed">
                 {currentCard?.back || currentCard?.definition || ''}
               </p>
               {currentCard?.example && (
-                <div className="mt-8 p-4 bg-slate-800 rounded-lg text-sm text-slate-300">
-                  <span className="font-semibold text-slate-200">Example: </span>
+                <div className="mt-8 p-4 bg-slate-800/90 dark:bg-slate-700/80 rounded-lg text-sm text-slate-300 dark:text-slate-200">
+                  <span className="font-semibold text-slate-200 dark:text-slate-100">Example: </span>
                   {currentCard.example}
                 </div>
               )}
@@ -184,7 +184,7 @@ export function FlashcardStudyPage() {
               <div className="flex flex-col gap-2">
                 <Button
                   variant="outline"
-                  className="h-14 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                  className="h-14 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 dark:border-red-500/40 dark:hover:bg-red-500/15 dark:hover:text-red-300 dark:hover:border-red-500/50"
                   onClick={() => handleRate(1)}
                 >
                   Again
@@ -194,7 +194,7 @@ export function FlashcardStudyPage() {
               <div className="flex flex-col gap-2">
                 <Button
                   variant="outline"
-                  className="h-14 border-orange-200 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-300"
+                  className="h-14 border-orange-200 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-300 dark:border-orange-500/40 dark:hover:bg-orange-500/15 dark:hover:text-orange-300 dark:hover:border-orange-500/50"
                   onClick={() => handleRate(2)}
                 >
                   Hard
@@ -204,7 +204,7 @@ export function FlashcardStudyPage() {
               <div className="flex flex-col gap-2">
                 <Button
                   variant="outline"
-                  className="h-14 border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300"
+                  className="h-14 border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 dark:border-blue-500/40 dark:hover:bg-blue-500/15 dark:hover:text-blue-300 dark:hover:border-blue-500/50"
                   onClick={() => handleRate(3)}
                 >
                   Good
@@ -214,7 +214,7 @@ export function FlashcardStudyPage() {
               <div className="flex flex-col gap-2">
                 <Button
                   variant="outline"
-                  className="h-14 border-green-200 hover:bg-green-50 hover:text-green-700 hover:border-green-300"
+                  className="h-14 border-green-200 hover:bg-green-50 hover:text-green-700 hover:border-green-300 dark:border-green-500/40 dark:hover:bg-green-500/15 dark:hover:text-green-300 dark:hover:border-green-500/50"
                   onClick={() => handleRate(4)}
                 >
                   Easy

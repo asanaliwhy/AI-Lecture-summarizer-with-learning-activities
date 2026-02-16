@@ -332,7 +332,7 @@ export function ContentInputPage() {
                     {isValid && (
                       <div className="mt-4 rounded-lg border bg-muted/30 p-4 animate-in fade-in slide-in-from-top-2">
                         <div
-                          className="w-full aspect-video bg-slate-200 rounded-md bg-cover bg-center"
+                          className="w-full aspect-video bg-slate-200 dark:bg-slate-800 rounded-md bg-cover bg-center"
                           style={{
                             backgroundImage: `url(${videoMeta?.thumbnail_url || defaultVideoThumbnail})`,
                           }}

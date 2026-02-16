@@ -179,10 +179,10 @@ export function SummariesPage() {
 
   const getFormatBadgeClass = (summary: SummaryListItemResponse) => {
     const raw = String(summary?.format || summary?.config?.format || '').toLowerCase()
-    if (raw === 'cornell') return 'bg-violet-50 text-violet-700'
-    if (raw === 'bullets') return 'bg-cyan-50 text-cyan-700'
-    if (raw === 'paragraph') return 'bg-amber-50 text-amber-700'
-    if (raw === 'smart') return 'bg-blue-50 text-blue-700'
+    if (raw === 'cornell') return 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300'
+    if (raw === 'bullets') return 'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300'
+    if (raw === 'paragraph') return 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+    if (raw === 'smart') return 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
     return 'bg-secondary/80 text-secondary-foreground'
   }
 
@@ -394,8 +394,8 @@ export function SummariesPage() {
           </div>
         ) : summaries.length === 0 ? (
           <div className="text-center py-16">
-            <div className="h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="h-8 w-8 text-blue-600" />
+            <div className="h-16 w-16 bg-blue-100 dark:bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="h-8 w-8 text-blue-600 dark:text-blue-300" />
             </div>
             <h3 className="text-lg font-semibold mb-2">No summaries yet</h3>
             <p className="text-muted-foreground mb-4 max-w-md mx-auto">
@@ -437,7 +437,7 @@ export function SummariesPage() {
 
                     <CardContent className="p-6 relative z-10">
                       <div className="flex items-start gap-4">
-                        <div className="h-12 w-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                        <div className="h-12 w-12 rounded-xl bg-blue-100 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                           <FileText className="h-6 w-6" />
                         </div>
                         <div className="min-w-0">
@@ -485,8 +485,8 @@ export function SummariesPage() {
                           className={cn(
                             'flex items-center gap-1 px-2 py-1 rounded-md',
                             source.isYouTube
-                              ? 'bg-red-50 text-red-600'
-                              : 'bg-blue-50 text-blue-600',
+                              ? 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-300'
+                              : 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300',
                           )}
                         >
                           {source.isYouTube ? (

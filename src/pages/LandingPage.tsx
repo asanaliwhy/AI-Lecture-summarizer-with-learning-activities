@@ -188,7 +188,7 @@ export function LandingPage() {
           <div className="grid md:grid-cols-3 gap-8">
             <Card className="group hover:shadow-xl transition-all duration-300 border-border/50 hover:border-primary/50 hover:-translate-y-1 cursor-default">
               <CardContent className="p-8 space-y-4">
-                <div className="h-14 w-14 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                <div className="h-14 w-14 rounded-2xl bg-blue-100 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
                   <FileText className="h-7 w-7" />
                 </div>
                 <h3 className="text-xl font-bold group-hover:text-blue-600 transition-colors">
@@ -204,7 +204,7 @@ export function LandingPage() {
 
             <Card className="group hover:shadow-xl transition-all duration-300 border-border/50 hover:border-primary/50 hover:-translate-y-1 cursor-default">
               <CardContent className="p-8 space-y-4">
-                <div className="h-14 w-14 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                <div className="h-14 w-14 rounded-2xl bg-purple-100 dark:bg-purple-500/15 text-purple-600 dark:text-purple-300 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
                   <BrainCircuit className="h-7 w-7" />
                 </div>
                 <h3 className="text-xl font-bold group-hover:text-purple-600 transition-colors">
@@ -219,7 +219,7 @@ export function LandingPage() {
 
             <Card className="group hover:shadow-xl transition-all duration-300 border-border/50 hover:border-primary/50 hover:-translate-y-1 cursor-default">
               <CardContent className="p-8 space-y-4">
-                <div className="h-14 w-14 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                <div className="h-14 w-14 rounded-2xl bg-orange-100 dark:bg-orange-500/15 text-orange-600 dark:text-orange-300 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-sm">
                   <Play className="h-7 w-7 ml-1" />
                 </div>
                 <h3 className="text-xl font-bold group-hover:text-orange-600 transition-colors">
@@ -335,7 +335,7 @@ export function LandingPage() {
                   '720p video support',
                 ].map((feature) => (
                   <li key={feature} className="flex items-center gap-3 text-sm">
-                    <div className="h-5 w-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center flex-shrink-0">
+                    <div className="h-5 w-5 rounded-full bg-green-100 dark:bg-green-500/15 text-green-600 dark:text-green-300 flex items-center justify-center flex-shrink-0">
                       <Check className="h-3 w-3" />
                     </div>
                     {feature}
