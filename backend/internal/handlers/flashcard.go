@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -43,6 +44,12 @@ func (h *FlashcardHandler) Generate(w http.ResponseWriter, r *http.Request) {
 
 	if req.NumCards <= 0 {
 		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "num_cards must be greater than 0", r))
+		return
+	}
+
+	req.Title = strings.TrimSpace(req.Title)
+	if req.Title == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "title is required", r))
 		return
 	}
 

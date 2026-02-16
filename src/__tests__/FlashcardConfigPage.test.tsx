@@ -19,6 +19,7 @@ vi.mock('../lib/api', () => ({
         summaries: mocked.summariesApi,
         flashcards: mocked.flashcardsApi,
     },
+    ApiError: class extends Error { },
 }))
 
 vi.mock('../components/layout/AppLayout', () => ({
@@ -111,6 +112,18 @@ describe('FlashcardConfigPage card strategy', () => {
         })
     }
 
+    const setInputValue = (input: HTMLInputElement, value: string) => {
+        const nativeSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype,
+            'value',
+        )?.set
+
+        act(() => {
+            nativeSetter?.call(input, value)
+            input.dispatchEvent(new Event('input', { bubbles: true }))
+        })
+    }
+
     beforeEach(() => {
         vi.clearAllMocks()
         mocked.summariesApi.get.mockResolvedValue({
@@ -175,6 +188,79 @@ describe('FlashcardConfigPage card strategy', () => {
             }),
         )
         expect(mocked.navigate).toHaveBeenCalledWith('/processing/job-42')
+    })
+
+    it('includes mnemonic and example flags in payload', async () => {
+        await act(async () => {
+            root.render(<FlashcardConfigPage />)
+        })
+        await flush()
+
+        const mnemonic = container.querySelector('#mnemonics') as HTMLInputElement | null
+        const examples = container.querySelector('#examples') as HTMLInputElement | null
+        expect(mnemonic).toBeTruthy()
+        expect(examples).toBeTruthy()
+
+        act(() => {
+            mnemonic!.click() // false -> true
+            examples!.click() // true -> false
+        })
+        await flush()
+
+        clickButton('Generate Flashcards')
+        await flush()
+
+        expect(mocked.flashcardsApi.generate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                include_mnemonics: true,
+                include_examples: false,
+            }),
+        )
+    })
+
+    it('blocks generate when all topics are deselected', async () => {
+        await act(async () => {
+            root.render(<FlashcardConfigPage />)
+        })
+        await flush()
+
+        clickButton('Clear')
+        await flush()
+
+        const generateButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
+            (btn.textContent || '').includes('Generate Flashcards'),
+        )
+        expect(generateButtons.length).toBeGreaterThan(0)
+        generateButtons.forEach((btn) => {
+            expect(btn).toHaveProperty('disabled', true)
+        })
+
+        expect(mocked.flashcardsApi.generate).not.toHaveBeenCalled()
+        expect(container.textContent).toContain('Select at least one topic before generating.')
+    })
+
+    it('blocks generate when deck name is empty/whitespace', async () => {
+        await act(async () => {
+            root.render(<FlashcardConfigPage />)
+        })
+        await flush()
+
+        const deckInput = container.querySelector('#deck-name') as HTMLInputElement | null
+        expect(deckInput).toBeTruthy()
+
+        setInputValue(deckInput!, '   ')
+        await flush()
+
+        const generateButtons = Array.from(container.querySelectorAll('button')).filter((btn) =>
+            (btn.textContent || '').includes('Generate Flashcards'),
+        )
+        expect(generateButtons.length).toBeGreaterThan(0)
+        generateButtons.forEach((btn) => {
+            expect(btn).toHaveProperty('disabled', true)
+        })
+
+        expect(mocked.flashcardsApi.generate).not.toHaveBeenCalled()
+        expect(container.textContent).toContain('Deck name is required.')
     })
 })
 

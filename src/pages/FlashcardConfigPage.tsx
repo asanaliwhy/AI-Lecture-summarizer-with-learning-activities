@@ -103,6 +103,12 @@ export function FlashcardConfigPage() {
   const quickCardCounts = [10, 20, 30, 40, 50]
   const hasTopicOptions = availableTopics.length > 0
   const selectedTopicCount = selectedTopics.length
+  const trimmedDeckName = deckName.trim()
+  const isDeckNameInvalid = trimmedDeckName.length === 0
+  const isGenerateDisabled =
+    isGenerating ||
+    isDeckNameInvalid ||
+    (hasTopicOptions && selectedTopicCount === 0)
   const strategyLabel = strategy === 'qa' ? 'Q&A' : 'Term'
   const estimatedMinutes = Math.max(5, Math.round(cardCount[0] * (strategy === 'qa' ? 0.9 : 0.7)))
 
@@ -135,6 +141,10 @@ export function FlashcardConfigPage() {
         throw new Error('Missing summary ID')
       }
 
+      if (trimmedDeckName.length === 0) {
+        throw new Error('Please enter a deck name')
+      }
+
       if (availableTopics.length > 0 && selectedTopics.length === 0) {
         throw new Error('Please select at least one topic for this deck')
       }
@@ -143,7 +153,7 @@ export function FlashcardConfigPage() {
 
       const result = await api.flashcards.generate({
         summary_id: summaryId,
-        title: deckName,
+        title: trimmedDeckName,
         num_cards: cardCount[0],
         strategy: strategyValue,
         topics: selectedTopics,
@@ -239,8 +249,15 @@ export function FlashcardConfigPage() {
                     id="deck-name"
                     value={deckName}
                     onChange={(e) => setDeckName(e.target.value)}
-                    className="h-11"
+                    aria-invalid={isDeckNameInvalid}
+                    className={cn(
+                      'h-11',
+                      isDeckNameInvalid && 'border-destructive focus-visible:ring-destructive',
+                    )}
                   />
+                  {isDeckNameInvalid && (
+                    <p className="text-xs text-destructive">Deck name is required.</p>
+                  )}
                 </div>
 
                 <div className="space-y-4 border-t pt-6">
@@ -442,7 +459,7 @@ export function FlashcardConfigPage() {
             )}
 
             <div className="lg:hidden">
-              <Button size="lg" className="w-full h-12 text-base shadow-sm" onClick={handleGenerate} disabled={isGenerating}>
+              <Button size="lg" className="w-full h-12 text-base shadow-sm" onClick={handleGenerate} disabled={isGenerateDisabled}>
                 {isGenerating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Generate Flashcards
               </Button>
@@ -465,17 +482,20 @@ export function FlashcardConfigPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div
-                    className="perspective-1000 h-64 w-full cursor-pointer group"
-                    onClick={() => setIsFlipped(!isFlipped)}
+                  <button
+                    type="button"
+                    aria-label="Flip sample flashcard preview"
+                    aria-pressed={isFlipped}
+                    className="h-64 w-full cursor-pointer group text-left [perspective:1000px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
+                    onClick={() => setIsFlipped((prev) => !prev)}
                   >
                     <div
                       className={cn(
-                        'relative h-full w-full transition-all duration-500 transform-style-3d shadow-xl rounded-xl',
-                        isFlipped ? 'rotate-y-180' : '',
+                        'relative h-full w-full transition-all duration-500 [transform-style:preserve-3d] shadow-xl rounded-xl',
+                        isFlipped ? '[transform:rotateY(180deg)]' : '',
                       )}
                     >
-                      <div className="absolute inset-0 h-full w-full bg-card border rounded-xl p-8 flex flex-col items-center justify-center text-center backface-hidden">
+                      <div className="absolute inset-0 h-full w-full bg-card border rounded-xl p-8 flex flex-col items-center justify-center text-center [backface-visibility:hidden]">
                         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
                           {strategy === 'definitions' ? 'Term' : 'Question'}
                         </span>
@@ -489,7 +509,7 @@ export function FlashcardConfigPage() {
                         )}
                         <p className="text-sm text-muted-foreground mt-4">(Click to flip)</p>
                       </div>
-                      <div className="absolute inset-0 h-full w-full bg-primary text-primary-foreground rounded-xl p-8 flex flex-col items-center justify-center text-center backface-hidden rotate-y-180">
+                      <div className="absolute inset-0 h-full w-full bg-primary text-primary-foreground rounded-xl p-8 flex flex-col items-center justify-center text-center [backface-visibility:hidden] [transform:rotateY(180deg)]">
                         <span className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/70 mb-4">
                           {strategy === 'definitions' ? 'Definition' : 'Answer'}
                         </span>
@@ -503,7 +523,7 @@ export function FlashcardConfigPage() {
                         )}
                       </div>
                     </div>
-                  </div>
+                  </button>
 
                   <div className="mt-5 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                     <div className="rounded-lg border px-3 py-2 bg-muted/10 inline-flex items-center gap-2">
@@ -521,7 +541,7 @@ export function FlashcardConfigPage() {
                       size="lg"
                       className="w-full h-12 text-base shadow-md"
                       onClick={handleGenerate}
-                      disabled={isGenerating}
+                      disabled={isGenerateDisabled}
                     >
                       {isGenerating ? (
                         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -540,6 +560,12 @@ export function FlashcardConfigPage() {
                         Select at least one topic before generating.
                       </p>
                     )}
+
+                    {isDeckNameInvalid && (
+                      <p className="mt-2 text-xs text-center text-destructive">
+                        Enter a deck name before generating.
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -548,12 +574,6 @@ export function FlashcardConfigPage() {
         </div>
       </div>
 
-      <style>{`
-        .perspective-1000 { perspective: 1000px; }
-        .transform-style-3d { transform-style: preserve-3d; }
-        .backface-hidden { backface-visibility: hidden; }
-        .rotate-y-180 { transform: rotateY(180deg); }
-      `}</style>
     </AppLayout>
   )
 }
