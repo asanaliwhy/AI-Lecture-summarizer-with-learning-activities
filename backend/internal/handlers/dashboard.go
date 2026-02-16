@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -474,7 +476,17 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 // User & Settings handler
 
 type UserHandler struct {
-	userRepo *repository.UserRepo
+	userRepo userSettingsRepo
+}
+
+type userSettingsRepo interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
+	Update(ctx context.Context, user *models.User) error
+	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	GetSettings(ctx context.Context, userID uuid.UUID) (*models.UserSettings, error)
+	UpdateSettings(ctx context.Context, settings *models.UserSettings) error
+	SetNotificationSetting(ctx context.Context, userID uuid.UUID, key string, enabled bool) error
 }
 
 var allowedNotificationKeys = map[string]struct{}{
@@ -568,7 +580,42 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		CurrentPassword string `json:"current_password"`
 		NewPassword     string `json:"new_password"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
+
+	fieldErrors := make(map[string]string)
+	if strings.TrimSpace(req.CurrentPassword) == "" {
+		fieldErrors["current_password"] = "Current password is required"
+	}
+	if strings.TrimSpace(req.NewPassword) == "" {
+		fieldErrors["new_password"] = "New password is required"
+	}
+	if len(req.NewPassword) > 0 && len(req.NewPassword) < 8 {
+		fieldErrors["new_password"] = "New password must be at least 8 characters"
+	}
+	if len(req.NewPassword) > 0 {
+		hasNumber := false
+		for _, ch := range req.NewPassword {
+			if unicode.IsDigit(ch) {
+				hasNumber = true
+				break
+			}
+		}
+		if !hasNumber {
+			fieldErrors["new_password"] = "New password must contain at least one number"
+		}
+	}
+	if req.CurrentPassword != "" && req.NewPassword != "" && req.CurrentPassword == req.NewPassword {
+		fieldErrors["new_password"] = "New password must be different from current password"
+	}
+	if len(fieldErrors) > 0 {
+		writeJSON(w, http.StatusBadRequest, errorRespWithFields("VALIDATION_ERROR", "Validation failed", fieldErrors, r))
+		return
+	}
 
 	user, err := h.userRepo.GetByID(r.Context(), userID)
 	if err != nil {
@@ -587,7 +634,11 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.userRepo.UpdatePassword(r.Context(), userID, string(hash))
+	if err := h.userRepo.UpdatePassword(r.Context(), userID, string(hash)); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to update password", r))
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Password changed successfully"})
 }
 

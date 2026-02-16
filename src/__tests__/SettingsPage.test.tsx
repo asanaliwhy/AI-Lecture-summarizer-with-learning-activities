@@ -166,6 +166,16 @@ describe('SettingsPage avatar persistence', () => {
         })
     }
 
+    const typeIntoInput = (input: HTMLInputElement, value: string) => {
+        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+        if (!valueSetter) throw new Error('Unable to resolve input value setter')
+
+        act(() => {
+            valueSetter.call(input, value)
+            input.dispatchEvent(new Event('input', { bubbles: true }))
+        })
+    }
+
     beforeEach(() => {
         vi.clearAllMocks()
         localStorage.removeItem(SUMMARY_LENGTH_STORAGE_KEY)
@@ -415,6 +425,62 @@ describe('SettingsPage avatar persistence', () => {
 
         expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light')
         expect(document.documentElement.classList.contains('dark')).toBe(false)
+    })
+
+    it('validates new password complexity before calling API', async () => {
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        clickButton('Security')
+        await flush()
+
+        const currentInput = container.querySelector('#current-password') as HTMLInputElement | null
+        const newInput = container.querySelector('#new-password') as HTMLInputElement | null
+        expect(currentInput).toBeTruthy()
+        expect(newInput).toBeTruthy()
+
+        typeIntoInput(currentInput!, 'CurrentPass1')
+        typeIntoInput(newInput!, 'NoDigitsHere')
+        await flush()
+
+        clickButton('Update Password')
+        await flush()
+
+        expect(mocked.userApi.changePassword).not.toHaveBeenCalled()
+        expect(container.textContent).toContain('New password must contain at least one number')
+    })
+
+    it('changes password successfully, trims current password, and resets fields', async () => {
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        clickButton('Security')
+        await flush()
+
+        const currentInput = container.querySelector('#current-password') as HTMLInputElement | null
+        const newInput = container.querySelector('#new-password') as HTMLInputElement | null
+        expect(currentInput).toBeTruthy()
+        expect(newInput).toBeTruthy()
+
+        typeIntoInput(currentInput!, '  CurrentPass1  ')
+        typeIntoInput(newInput!, 'NewPass123')
+        await flush()
+
+        clickButton('Update Password')
+        await flush()
+
+        expect(mocked.userApi.changePassword).toHaveBeenCalledWith({
+            current_password: 'CurrentPass1',
+            new_password: 'NewPass123',
+        })
+        expect(mocked.toast.success).toHaveBeenCalledWith('Password changed successfully!')
+
+        expect((container.querySelector('#current-password') as HTMLInputElement).value).toBe('')
+        expect((container.querySelector('#new-password') as HTMLInputElement).value).toBe('')
     })
 })
 

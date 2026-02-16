@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
@@ -57,6 +57,18 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferencesResponse = {
   study_reminders: false,
 }
 
+const PASSWORD_MIN_LENGTH = 8
+
+function validateNewPassword(value: string): string | null {
+  if (value.length < PASSWORD_MIN_LENGTH) {
+    return 'New password must be at least 8 characters'
+  }
+  if (!/\d/.test(value)) {
+    return 'New password must contain at least one number'
+  }
+  return null
+}
+
 export function SettingsPage() {
   const { user, logout, refreshUser } = useAuth()
   const navigate = useNavigate()
@@ -71,6 +83,7 @@ export function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [defaultSummaryLength, setDefaultSummaryLength] =
     useState<SummaryLengthPreference>(() => getStoredSummaryLengthPreference())
@@ -205,17 +218,30 @@ export function SettingsPage() {
   const handleChangePassword = async () => {
     setPasswordError('')
     setPasswordSuccess(false)
-    if (!currentPassword || !newPassword) {
+
+    const trimmedCurrentPassword = currentPassword.trim()
+
+    if (!trimmedCurrentPassword || !newPassword) {
       setPasswordError('Both fields are required')
       return
     }
-    if (newPassword.length < 8) {
-      setPasswordError('New password must be at least 8 characters')
+
+    if (trimmedCurrentPassword === newPassword) {
+      setPasswordError('New password must be different from current password')
       return
     }
+
+    const newPasswordValidationError = validateNewPassword(newPassword)
+    if (newPasswordValidationError) {
+      setPasswordError(newPasswordValidationError)
+      return
+    }
+
+    setIsChangingPassword(true)
+
     try {
       await api.user.changePassword({
-        current_password: currentPassword,
+        current_password: trimmedCurrentPassword,
         new_password: newPassword,
       })
       setPasswordSuccess(true)
@@ -224,9 +250,18 @@ export function SettingsPage() {
       toast.success('Password changed successfully!')
       setTimeout(() => setPasswordSuccess(false), 3000)
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to change password'
+      let message = err instanceof Error ? err.message : 'Failed to change password'
+      if (err instanceof ApiError && err.fields) {
+        message =
+          err.fields.new_password ||
+          err.fields.current_password ||
+          err.message ||
+          message
+      }
       setPasswordError(message)
       toast.error(message)
+    } finally {
+      setIsChangingPassword(false)
     }
   }
 
@@ -537,8 +572,12 @@ export function SettingsPage() {
                   <Input
                     id="current-password"
                     type="password"
+                    autoComplete="current-password"
                     value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    onChange={(e) => {
+                      setCurrentPassword(e.target.value)
+                      if (passwordError) setPasswordError('')
+                    }}
                   />
                 </div>
                 <div className="space-y-2">
@@ -546,9 +585,16 @@ export function SettingsPage() {
                   <Input
                     id="new-password"
                     type="password"
+                    autoComplete="new-password"
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value)
+                      if (passwordError) setPasswordError('')
+                    }}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Use at least 8 characters and include at least 1 number.
+                  </p>
                 </div>
                 {passwordError && (
                   <p className="text-sm text-destructive">{passwordError}</p>
@@ -560,9 +606,16 @@ export function SettingsPage() {
               <CardFooter className="border-t px-6 py-4">
                 <Button
                   onClick={handleChangePassword}
-                  disabled={!currentPassword || !newPassword}
+                  disabled={!currentPassword.trim() || !newPassword || isChangingPassword}
                 >
-                  Update Password
+                  {isChangingPassword ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    'Update Password'
+                  )}
                 </Button>
               </CardFooter>
             </Card>
