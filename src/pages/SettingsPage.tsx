@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
@@ -28,12 +28,17 @@ import {
 import { User, Bell, Key, CreditCard, Shield, LogOut, Loader2 } from 'lucide-react'
 import { useToast } from '../components/ui/Toast'
 
+const MAX_AVATAR_BYTES = 800 * 1024
+const ACCEPTED_AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif'])
+
 export function SettingsPage() {
-  const { user, logout } = useAuth()
+  const { user, logout, refreshUser } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [isAvatarProcessing, setIsAvatarProcessing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
@@ -41,24 +46,83 @@ export function SettingsPage() {
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (user) {
       setDisplayName(user.full_name || '')
       setEmail(user.email || '')
+      setAvatarUrl(user.avatar_url || '')
     }
   }, [user])
+
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result)
+          return
+        }
+        reject(new Error('Invalid avatar data'))
+      }
+      reader.onerror = () => reject(new Error('Failed to read avatar file'))
+      reader.readAsDataURL(file)
+    })
+
+  const handleAvatarButtonClick = () => {
+    avatarInputRef.current?.click()
+  }
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!ACCEPTED_AVATAR_TYPES.has(file.type)) {
+      toast.error('Avatar must be JPG, GIF, or PNG.')
+      e.target.value = ''
+      return
+    }
+
+    if (file.size > MAX_AVATAR_BYTES) {
+      toast.error('Avatar file is too large. Maximum size is 800KB.')
+      e.target.value = ''
+      return
+    }
+
+    setIsAvatarProcessing(true)
+    try {
+      const dataUrl = await readFileAsDataUrl(file)
+      setAvatarUrl(dataUrl)
+      setSaveSuccess(false)
+      toast.success('Avatar selected. Click Save Changes to persist it.')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to process avatar'
+      toast.error(message)
+    } finally {
+      setIsAvatarProcessing(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleRemoveAvatar = () => {
+    setAvatarUrl('')
+    setSaveSuccess(false)
+    toast.info('Avatar removed locally. Click Save Changes to persist it.')
+  }
 
   const handleSaveProfile = async () => {
     setIsSaving(true)
     setSaveSuccess(false)
     try {
-      await api.user.updateMe({ full_name: displayName, email })
+      await api.user.updateMe({ full_name: displayName, email, avatar_url: avatarUrl || '' })
+      await refreshUser()
       setSaveSuccess(true)
       toast.success('Profile updated successfully!')
       setTimeout(() => setSaveSuccess(false), 3000)
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to update profile')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update profile'
+      toast.error(message)
     } finally {
       setIsSaving(false)
     }
@@ -85,9 +149,10 @@ export function SettingsPage() {
       setNewPassword('')
       toast.success('Password changed successfully!')
       setTimeout(() => setPasswordSuccess(false), 3000)
-    } catch (err: any) {
-      setPasswordError(err.message || 'Failed to change password')
-      toast.error(err.message || 'Failed to change password')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to change password'
+      setPasswordError(message)
+      toast.error(message)
     }
   }
 
@@ -99,8 +164,9 @@ export function SettingsPage() {
       toast.info('Account deleted.')
       logout()
       navigate('/login')
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to delete account')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete account'
+      toast.error(message)
     } finally {
       setIsDeleting(false)
     }
@@ -138,10 +204,39 @@ export function SettingsPage() {
               <CardContent className="space-y-6">
                 <div className="flex items-center gap-6">
                   <Avatar className="h-20 w-20">
+                    <AvatarImage src={avatarUrl || ''} alt={displayName || 'User avatar'} />
                     <AvatarFallback>{initials}</AvatarFallback>
                   </Avatar>
                   <div className="space-y-2">
-                    <Button variant="outline" size="sm">Change Avatar</Button>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif"
+                      className="hidden"
+                      onChange={handleAvatarChange}
+                      aria-label="Upload avatar"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAvatarButtonClick}
+                        disabled={isSaving || isAvatarProcessing}
+                      >
+                        {isAvatarProcessing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Change Avatar
+                      </Button>
+                      {avatarUrl && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRemoveAvatar}
+                          disabled={isSaving || isAvatarProcessing}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       JPG, GIF or PNG. Max size of 800K.
                     </p>

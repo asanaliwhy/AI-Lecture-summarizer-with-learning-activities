@@ -313,6 +313,28 @@ export interface LibraryListResponse {
     total?: number
 }
 
+export interface UserProfileResponse {
+    id: string
+    email: string
+    full_name: string
+    avatar_url?: string
+    is_verified: boolean
+    is_active: boolean
+    plan: string
+    created_at?: string
+    last_login_at?: string | null
+}
+
+export interface UserMeResponse extends UserProfileResponse {
+    user?: UserProfileResponse
+}
+
+export interface UpdateMePayload {
+    full_name?: string
+    email?: string
+    avatar_url?: string
+}
+
 export interface GenerateFlashcardsPayload {
     summary_id: string
     title: string
@@ -519,9 +541,9 @@ export const api = {
 
     // User & Settings
     user: {
-        getMe: () => apiFetch<any>('/user/me'),
-        updateMe: (data: any) =>
-            apiFetch('/user/me', { method: 'PUT', body: JSON.stringify(data) }),
+        getMe: () => apiFetch<UserMeResponse>('/user/me'),
+        updateMe: (data: UpdateMePayload) =>
+            apiFetch<UserProfileResponse>('/user/me', { method: 'PUT', body: JSON.stringify(data) }),
         changePassword: (data: { current_password: string; new_password: string }) =>
             apiFetch('/user/password', { method: 'PUT', body: JSON.stringify(data) }),
         deleteMe: () => apiFetch('/user/me', { method: 'DELETE' }),
