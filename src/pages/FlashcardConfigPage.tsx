@@ -178,10 +178,6 @@ export function FlashcardConfigPage() {
 
           <div className="relative flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border bg-background/80 px-3 py-1 text-xs text-muted-foreground">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                Flashcard builder
-              </div>
               <h1 className="text-3xl font-bold tracking-tight">Create Flashcards</h1>
               <p className="mt-2 text-muted-foreground max-w-2xl">
                 Tune your deck strategy and options, then generate study cards optimized for retention.
