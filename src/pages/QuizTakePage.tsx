@@ -17,10 +17,88 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
+type QuizQuestion = {
+  id?: string
+  question?: string
+  text?: string
+  options?: string[]
+  answers?: string[]
+  hint?: string
+  type?: string
+}
+
+type QuizConfig = {
+  enable_timer?: boolean
+  shuffle_questions?: boolean
+  enable_hints?: boolean
+}
+
+type QuizData = {
+  id?: string
+  title?: string
+  summary_id?: string
+  question_count?: number
+  questions?: QuizQuestion[]
+  config?: QuizConfig | string
+}
+
+function parseQuizConfig(config: QuizData['config']): QuizConfig {
+  if (!config) return {}
+
+  if (typeof config === 'string') {
+    try {
+      const parsed = JSON.parse(config) as unknown
+      if (parsed && typeof parsed === 'object') {
+        return parsed as QuizConfig
+      }
+      return {}
+    } catch {
+      return {}
+    }
+  }
+
+  if (typeof config === 'object') {
+    return config
+  }
+
+  return {}
+}
+
+function shuffleItems<T>(items: T[]): T[] {
+  const copy = [...items]
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const temp = copy[i]
+    copy[i] = copy[j]
+    copy[j] = temp
+  }
+  return copy
+}
+
+function applyQuizOptions(quizData: QuizData): {
+  quiz: QuizData
+  options: Required<Pick<QuizConfig, 'enable_timer' | 'shuffle_questions' | 'enable_hints'>>
+} {
+  const config = parseQuizConfig(quizData.config)
+  const options = {
+    enable_timer: typeof config.enable_timer === 'boolean' ? config.enable_timer : false,
+    shuffle_questions: typeof config.shuffle_questions === 'boolean' ? config.shuffle_questions : true,
+    enable_hints: typeof config.enable_hints === 'boolean' ? config.enable_hints : true,
+  }
+
+  const questions = Array.isArray(quizData.questions) ? quizData.questions : []
+  const quizWithOptions: QuizData = {
+    ...quizData,
+    questions: options.shuffle_questions ? shuffleItems(questions) : questions,
+  }
+
+  return { quiz: quizWithOptions, options }
+}
+
 export function QuizTakePage() {
   const navigate = useNavigate()
   const { quizId } = useParams()
-  const [quiz, setQuiz] = useState<any>(null)
+  const [quiz, setQuiz] = useState<QuizData | null>(null)
   const [attemptId, setAttemptId] = useState<string | null>(null)
   const [currentQuestion, setCurrentQuestion] = useState(0)
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
@@ -29,14 +107,20 @@ export function QuizTakePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [timer, setTimer] = useState(0)
+  const [enableTimer, setEnableTimer] = useState(false)
+  const [enableHints, setEnableHints] = useState(true)
 
   // Fetch quiz and start attempt
   useEffect(() => {
     if (!quizId) return
     async function init() {
       try {
-        const quizData = await api.quizzes.get(quizId!)
-        setQuiz(quizData)
+        const quizData = await api.quizzes.get(quizId!) as QuizData
+        const configured = applyQuizOptions(quizData)
+        setQuiz(configured.quiz)
+        setEnableTimer(configured.options.enable_timer)
+        setEnableHints(configured.options.enable_hints)
+
         const start = await api.quizzes.startAttempt(quizId!)
         const startedAttemptId = start.attempt?.id || start.attempt_id || null
         setAttemptId(startedAttemptId)
@@ -58,8 +142,12 @@ export function QuizTakePage() {
     const timer = setInterval(async () => {
       attempts += 1
       try {
-        const fresh = await api.quizzes.get(quizId)
-        setQuiz(fresh)
+        const fresh = await api.quizzes.get(quizId) as QuizData
+        const configured = applyQuizOptions(fresh)
+        setQuiz(configured.quiz)
+        setEnableTimer(configured.options.enable_timer)
+        setEnableHints(configured.options.enable_hints)
+
         if ((fresh?.questions?.length || 0) > 0 || attempts >= maxAttempts) {
           clearInterval(timer)
         }
@@ -75,10 +163,10 @@ export function QuizTakePage() {
 
   // Timer
   useEffect(() => {
-    if (isLoading || !quiz) return
+    if (isLoading || !quiz || !enableTimer) return
     const interval = setInterval(() => setTimer(t => t + 1), 1000)
     return () => clearInterval(interval)
-  }, [isLoading, quiz])
+  }, [isLoading, quiz, enableTimer])
 
   useStudySession({
     activityType: 'quiz',
@@ -178,16 +266,18 @@ export function QuizTakePage() {
           <Progress value={progress} className="h-2" />
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm font-mono bg-secondary/50 px-3 py-1.5 rounded-md">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span>{formatTime(timer)}</span>
+        {enableTimer && (
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm font-mono bg-secondary/50 px-3 py-1.5 rounded-md">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span>{formatTime(timer)}</span>
+            </div>
+            <Button variant="ghost" size="sm" className="hidden sm:flex">
+              <PauseCircle className="h-4 w-4 mr-2" />
+              Pause
+            </Button>
           </div>
-          <Button variant="ghost" size="sm" className="hidden sm:flex">
-            <PauseCircle className="h-4 w-4 mr-2" />
-            Pause
-          </Button>
-        </div>
+        )}
       </header>
 
       {/* Main Content */}
@@ -239,7 +329,7 @@ export function QuizTakePage() {
             </div>
 
             {/* Hint Section */}
-            {showHint && currentQ?.hint && (
+            {enableHints && showHint && currentQ?.hint && (
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 animate-in fade-in slide-in-from-top-2">
                 <div className="flex items-start gap-3">
                   <HelpCircle className="h-5 w-5 text-blue-600 mt-0.5" />
@@ -265,7 +355,7 @@ export function QuizTakePage() {
             </Button>
 
             <div className="flex items-center gap-4">
-              {!showHint && currentQ?.hint && (
+              {enableHints && !showHint && currentQ?.hint && (
                 <Button
                   variant="ghost"
                   size="sm"
