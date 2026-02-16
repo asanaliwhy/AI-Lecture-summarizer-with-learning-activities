@@ -8,7 +8,6 @@ import {
   X,
   RotateCw,
   Shuffle,
-  MoreHorizontal,
   Loader2,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -136,9 +135,6 @@ export function FlashcardStudyPage() {
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={shuffleCards}>
             <Shuffle className="h-4 w-4 text-muted-foreground" />
-          </Button>
-          <Button variant="ghost" size="icon">
-            <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
           </Button>
         </div>
       </header>

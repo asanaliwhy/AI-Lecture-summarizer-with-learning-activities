@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -31,6 +31,19 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
+type Strategy = 'definitions' | 'qa'
+
+type SummaryWithTopics = Awaited<ReturnType<typeof api.summaries.get>> & {
+  topics?: unknown[]
+  tags?: unknown[]
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.message) return error.message
+  if (error instanceof Error && error.message) return error.message
+  return fallback
+}
+
 export function FlashcardConfigPage() {
   const navigate = useNavigate()
   const { summaryId } = useParams()
@@ -39,7 +52,7 @@ export function FlashcardConfigPage() {
   const [cardCount, setCardCount] = useState([20])
   const [availableTopics, setAvailableTopics] = useState<string[]>([])
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
-  const [strategy, setStrategy] = useState('definitions')
+  const [strategy, setStrategy] = useState<Strategy>('definitions')
   const [enableSpacedRepetition, setEnableSpacedRepetition] = useState(true)
   const [includeMnemonics, setIncludeMnemonics] = useState(false)
   const [includeExamples, setIncludeExamples] = useState(true)
@@ -50,7 +63,11 @@ export function FlashcardConfigPage() {
   // Load summary info
   useEffect(() => {
     if (!summaryId) return
-    api.summaries.get(summaryId).then((data: any) => {
+    let isMounted = true
+
+    api.summaries.get(summaryId).then((data: SummaryWithTopics) => {
+      if (!isMounted) return
+
       const resolvedDeckName = `Flashcards: ${data.title || 'Untitled'}`
       setDeckName(resolvedDeckName)
       setBaseDeckName(resolvedDeckName)
@@ -69,7 +86,18 @@ export function FlashcardConfigPage() {
       const dedupedTopics: string[] = Array.from(new Set(normalizedTopics))
       setAvailableTopics(dedupedTopics)
       setSelectedTopics(dedupedTopics)
-    }).catch(() => { })
+      setError('')
+    }).catch((err: unknown) => {
+      if (!isMounted) return
+
+      setAvailableTopics([])
+      setSelectedTopics([])
+      setError(getErrorMessage(err, 'Failed to load summary details. You can still configure manually.'))
+    })
+
+    return () => {
+      isMounted = false
+    }
   }, [summaryId])
 
   const quickCardCounts = [10, 20, 30, 40, 50]
@@ -134,8 +162,8 @@ export function FlashcardConfigPage() {
       } else {
         throw new Error('Flashcard generation did not return a job or deck id')
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to generate flashcards')
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to generate flashcards'))
     } finally {
       setIsGenerating(false)
     }
@@ -257,64 +285,56 @@ export function FlashcardConfigPage() {
                 <div className="space-y-3 border-t pt-6">
                   <Label>Card Strategy</Label>
                   <div className="grid grid-cols-1 gap-3">
-                    <button
-                      type="button"
+                    <label
+                      htmlFor="definitions"
                       className={cn(
                         'flex w-full items-start space-x-3 border p-4 rounded-xl cursor-pointer transition-all text-left',
                         strategy === 'definitions'
                           ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20'
                           : 'hover:bg-secondary/20 hover:border-primary/30'
                       )}
-                      onClick={() => setStrategy('definitions')}
-                      aria-pressed={strategy === 'definitions'}
                     >
-                      <div className="mt-0.5">
-                        <input
-                          type="radio"
-                          name="strategy"
-                          id="definitions"
-                          checked={strategy === 'definitions'}
-                          onChange={() => setStrategy('definitions')}
-                          className="h-4 w-4 border-gray-300 dark:border-slate-600 text-primary focus:ring-primary"
-                        />
-                      </div>
-                      <div className="grid gap-1">
-                        <label htmlFor="definitions" className="text-sm font-medium leading-none cursor-pointer inline-flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="strategy"
+                        id="definitions"
+                        checked={strategy === 'definitions'}
+                        onChange={() => setStrategy('definitions')}
+                        className="mt-0.5 h-4 w-4 border-gray-300 dark:border-slate-600 text-primary focus:ring-primary"
+                      />
+                      <span className="grid gap-1">
+                        <span className="text-sm font-medium leading-none inline-flex items-center gap-2">
                           <BookOpenText className="h-4 w-4 text-primary" />
                           Term & Definition
-                        </label>
-                        <p className="text-xs text-muted-foreground">Standard vocabulary cards</p>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
+                        </span>
+                        <span className="text-xs text-muted-foreground">Standard vocabulary cards</span>
+                      </span>
+                    </label>
+                    <label
+                      htmlFor="qa"
                       className={cn(
                         'flex w-full items-start space-x-3 border p-4 rounded-xl cursor-pointer transition-all text-left',
                         strategy === 'qa'
                           ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20'
                           : 'hover:bg-secondary/20 hover:border-primary/30'
                       )}
-                      onClick={() => setStrategy('qa')}
-                      aria-pressed={strategy === 'qa'}
                     >
-                      <div className="mt-0.5">
-                        <input
-                          type="radio"
-                          name="strategy"
-                          id="qa"
-                          checked={strategy === 'qa'}
-                          onChange={() => setStrategy('qa')}
-                          className="h-4 w-4 border-gray-300 dark:border-slate-600 text-primary focus:ring-primary"
-                        />
-                      </div>
-                      <div className="grid gap-1">
-                        <label htmlFor="qa" className="text-sm font-medium leading-none cursor-pointer inline-flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="strategy"
+                        id="qa"
+                        checked={strategy === 'qa'}
+                        onChange={() => setStrategy('qa')}
+                        className="mt-0.5 h-4 w-4 border-gray-300 dark:border-slate-600 text-primary focus:ring-primary"
+                      />
+                      <span className="grid gap-1">
+                        <span className="text-sm font-medium leading-none inline-flex items-center gap-2">
                           <Brain className="h-4 w-4 text-primary" />
                           Question & Answer
-                        </label>
-                        <p className="text-xs text-muted-foreground">Conceptual questions based on key points</p>
-                      </div>
-                    </button>
+                        </span>
+                        <span className="text-xs text-muted-foreground">Conceptual questions based on key points</span>
+                      </span>
+                    </label>
                   </div>
                 </div>
 

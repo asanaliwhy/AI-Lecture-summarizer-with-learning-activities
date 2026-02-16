@@ -2,6 +2,8 @@ import React from 'react'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
+const actEnvironment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+
 const mocked = vi.hoisted(() => ({
     navigate: vi.fn(),
     summariesApi: {
@@ -83,6 +85,15 @@ import { FlashcardConfigPage } from '../pages/FlashcardConfigPage'
 describe('FlashcardConfigPage card strategy', () => {
     let container: HTMLDivElement
     let root: Root
+    const previousActEnvironment = actEnvironment.IS_REACT_ACT_ENVIRONMENT
+
+    beforeAll(() => {
+        actEnvironment.IS_REACT_ACT_ENVIRONMENT = true
+    })
+
+    afterAll(() => {
+        actEnvironment.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment
+    })
 
     const flush = async () => {
         await act(async () => {
