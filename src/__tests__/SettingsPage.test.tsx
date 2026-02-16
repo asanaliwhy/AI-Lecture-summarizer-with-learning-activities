@@ -360,5 +360,36 @@ describe('SettingsPage avatar persistence', () => {
             enabled: true,
         })
     })
+
+    it('persists weekly digest and study reminders toggles', async () => {
+        mocked.userApi.getNotifications.mockResolvedValue({
+            processing_complete: true,
+            weekly_digest: false,
+            study_reminders: false,
+        })
+
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        clickButton('Preferences')
+        await flush()
+
+        clickSwitch('Weekly Digest')
+        await flush()
+
+        clickSwitch('Study Reminders')
+        await flush()
+
+        expect(mocked.userApi.updateNotification).toHaveBeenCalledWith({
+            key: 'weekly_digest',
+            enabled: true,
+        })
+        expect(mocked.userApi.updateNotification).toHaveBeenCalledWith({
+            key: 'study_reminders',
+            enabled: true,
+        })
+    })
 })
 

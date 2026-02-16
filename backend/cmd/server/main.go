@@ -113,6 +113,10 @@ func main() {
 	workerPool.Start()
 	log.Println("✓ Worker pool started (5 goroutines)")
 
+	notificationScheduler := services.NewNotificationScheduler(userRepo, emailService)
+	notificationScheduler.Start()
+	log.Println("✓ Notification scheduler started")
+
 	// ──── Step 7: Start WebSocket Hub ────
 	wsHub := websocket.NewHub(redisClients.PubSub, cfg.JWTSecret)
 	log.Println("✓ WebSocket hub started")
@@ -150,6 +154,7 @@ func main() {
 
 		log.Println("Shutting down...")
 		workerPool.Stop()
+		notificationScheduler.Stop()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

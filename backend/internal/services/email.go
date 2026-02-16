@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/smtp"
 	"strings"
+	"time"
 )
 
 type EmailService struct {
@@ -141,6 +142,92 @@ func (s *EmailService) SendProcessingCompleteEmail(to, summaryTitle string, summ
   </div>
 </body>
 </html>`, title, viewURL, viewURL, viewURL)
+
+	return s.sendHTML(to, subject, body)
+}
+
+func (s *EmailService) SendWeeklyDigestEmail(to, fullName string, summaries, quizzes, flashcards int, studyHours float64) error {
+	if strings.TrimSpace(to) == "" {
+		return fmt.Errorf("recipient email is required")
+	}
+
+	name := strings.TrimSpace(fullName)
+	if name == "" {
+		name = "there"
+	}
+
+	subject := "Your weekly Lectura digest"
+	body := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+  <div style="max-width: 560px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
+    <div style="background: linear-gradient(135deg, #6366f1 0%%, #8b5cf6 100%%); padding: 28px 32px; text-align: center;">
+      <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 700;">Lectura</h1>
+      <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">Weekly Digest</p>
+    </div>
+    <div style="padding: 28px 32px;">
+      <h2 style="margin: 0 0 12px; font-size: 20px; color: #0f172a;">Hi %s, here is your week</h2>
+      <p style="margin: 0 0 18px; color: #334155; font-size: 14px; line-height: 1.6;">
+        Your last 7 days of learning activity in Lectura:
+      </p>
+      <ul style="margin: 0 0 20px; padding-left: 18px; color: #0f172a; font-size: 14px; line-height: 1.8;">
+        <li><strong>%d</strong> summaries created</li>
+        <li><strong>%d</strong> quizzes created</li>
+        <li><strong>%d</strong> flashcard decks created</li>
+        <li><strong>%.1f hours</strong> of study time</li>
+      </ul>
+      <a href="%s/dashboard" style="display: inline-block; background: #6366f1; color: white; text-decoration: none; padding: 11px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+        Open Dashboard
+      </a>
+    </div>
+  </div>
+</body>
+</html>`, name, summaries, quizzes, flashcards, studyHours, s.frontendURL)
+
+	return s.sendHTML(to, subject, body)
+}
+
+func (s *EmailService) SendStudyReminderEmail(to, fullName string, lastActivityAt *time.Time) error {
+	if strings.TrimSpace(to) == "" {
+		return fmt.Errorf("recipient email is required")
+	}
+
+	name := strings.TrimSpace(fullName)
+	if name == "" {
+		name = "there"
+	}
+
+	activityLine := "You have not studied in the last 3+ days."
+	if lastActivityAt != nil && !lastActivityAt.IsZero() {
+		activityLine = fmt.Sprintf("Your last activity was on %s.", lastActivityAt.UTC().Format("2006-01-02"))
+	}
+
+	subject := "Study reminder from Lectura"
+	body := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+  <div style="max-width: 560px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
+    <div style="background: linear-gradient(135deg, #6366f1 0%%, #8b5cf6 100%%); padding: 28px 32px; text-align: center;">
+      <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 700;">Lectura</h1>
+      <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">Study Reminder</p>
+    </div>
+    <div style="padding: 28px 32px;">
+      <h2 style="margin: 0 0 12px; font-size: 20px; color: #0f172a;">Hi %s, ready to continue learning?</h2>
+      <p style="margin: 0 0 14px; color: #334155; font-size: 14px; line-height: 1.6;">
+        %s
+      </p>
+      <p style="margin: 0 0 20px; color: #334155; font-size: 14px; line-height: 1.6;">
+        Open Lectura and continue with summaries, quizzes, or flashcards to keep your streak going.
+      </p>
+      <a href="%s/dashboard" style="display: inline-block; background: #6366f1; color: white; text-decoration: none; padding: 11px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+        Continue Studying
+      </a>
+    </div>
+  </div>
+</body>
+</html>`, name, activityLine, s.frontendURL)
 
 	return s.sendHTML(to, subject, body)
 }
