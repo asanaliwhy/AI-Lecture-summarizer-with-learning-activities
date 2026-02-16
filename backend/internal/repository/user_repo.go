@@ -87,7 +87,7 @@ func (r *UserRepo) UpdatePassword(ctx context.Context, userID uuid.UUID, passwor
 }
 
 func (r *UserRepo) Delete(ctx context.Context, userID uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, "UPDATE users SET is_active = FALSE WHERE id = $1", userID)
+	_, err := r.pool.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
 	return err
 }
 
