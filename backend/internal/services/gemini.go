@@ -48,7 +48,7 @@ func NewGeminiService(
 		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 	}
 
-	model := client.GenerativeModel("gemini-3-flash-preview")
+	model := client.GenerativeModel("gemini-2.5-flash")
 	model.SetTemperature(0.3)
 	model.SetTopP(0.95)
 
@@ -1430,11 +1430,18 @@ func validateFlashcardCards(cards []models.FlashcardCard, config models.Generate
 			c.Front = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(c.Front), "?"))
 		}
 
+		c.Mnemonic = normalizeOptionalText(c.Mnemonic)
+		c.Example = normalizeOptionalText(c.Example)
+
 		if !config.IncludeMnemonics {
 			c.Mnemonic = nil
+		} else if c.Mnemonic == nil {
+			c.Mnemonic = buildMnemonicFallback(c.Front)
 		}
 		if !config.IncludeExamples {
 			c.Example = nil
+		} else if c.Example == nil {
+			c.Example = buildExampleFallback(c.Front, c.Back)
 		}
 
 		if len(allowedTopics) > 0 {
@@ -1453,6 +1460,77 @@ func validateFlashcardCards(cards []models.FlashcardCard, config models.Generate
 	}
 
 	return valid
+}
+
+func normalizeOptionalText(value *string) *string {
+	if value == nil {
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+
+	return &trimmed
+}
+
+func buildMnemonicFallback(front string) *string {
+	words := strings.Fields(strings.TrimSpace(front))
+	if len(words) == 0 {
+		return nil
+	}
+
+	if len(words) > 4 {
+		words = words[:4]
+	}
+
+	initials := make([]rune, 0, len(words))
+	for _, w := range words {
+		r := []rune(strings.TrimSpace(w))
+		if len(r) == 0 {
+			continue
+		}
+		initials = append(initials, unicode.ToUpper(r[0]))
+	}
+
+	if len(initials) == 0 {
+		return nil
+	}
+
+	mnemonic := fmt.Sprintf("Memory cue: %s → %s", strings.Join(words, " "), string(initials))
+	return &mnemonic
+}
+
+func buildExampleFallback(front, back string) *string {
+	front = strings.TrimSpace(front)
+	back = strings.TrimSpace(back)
+
+	if front == "" && back == "" {
+		return nil
+	}
+
+	if front == "" {
+		example := fmt.Sprintf("Example: %s", truncateSentence(back, 90))
+		return &example
+	}
+
+	if back == "" {
+		example := fmt.Sprintf("Example: apply \"%s\" in a realistic study scenario.", front)
+		return &example
+	}
+
+	example := fmt.Sprintf("Example: use \"%s\" when explaining \"%s\".", front, truncateSentence(back, 70))
+	return &example
+}
+
+func truncateSentence(text string, maxLen int) string {
+	normalized := strings.Join(strings.Fields(text), " ")
+	if maxLen <= 3 || len(normalized) <= maxLen {
+		return normalized
+	}
+
+	return strings.TrimSpace(normalized[:maxLen-3]) + "..."
 }
 
 func validateQuizQuestions(questions []models.QuizQuestion, config models.GenerateQuizRequest) []models.QuizQuestion {
