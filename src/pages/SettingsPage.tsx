@@ -73,7 +73,8 @@ export function SettingsPage() {
   const { user, logout, refreshUser } = useAuth()
   const navigate = useNavigate()
   const toast = useToast()
-  const [displayName, setDisplayName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [isAvatarProcessing, setIsAvatarProcessing] = useState(false)
@@ -100,7 +101,13 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (user) {
-      setDisplayName(user.full_name || '')
+      const normalizedFullName = String(user.full_name || '').trim()
+      const nameParts = normalizedFullName.split(/\s+/).filter(Boolean)
+      const derivedFirstName = nameParts[0] || ''
+      const derivedLastName = nameParts.slice(1).join(' ')
+
+      setFirstName(derivedFirstName)
+      setLastName(derivedLastName)
       setEmail(user.email || '')
       setAvatarUrl(user.avatar_url || '')
     }
@@ -202,7 +209,17 @@ export function SettingsPage() {
     setIsSaving(true)
     setSaveSuccess(false)
     try {
-      await api.user.updateMe({ full_name: displayName, email, avatar_url: avatarUrl || '' })
+      const normalizedFirstName = firstName.trim()
+      const normalizedLastName = lastName.trim()
+
+      if (!normalizedFirstName || !normalizedLastName) {
+        toast.error('First name and last name are required.')
+        return
+      }
+
+      const fullName = `${normalizedFirstName} ${normalizedLastName}`.trim()
+
+      await api.user.updateMe({ full_name: fullName, email, avatar_url: avatarUrl || '' })
       await refreshUser()
       setSaveSuccess(true)
       toast.success('Profile updated successfully!')
@@ -329,17 +346,20 @@ export function SettingsPage() {
     }
   }
 
-  const initials = displayName
-    ? displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+  const fullName = `${firstName.trim()} ${lastName.trim()}`.trim()
+
+  const initials = fullName
+    ? fullName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
     : 'U'
 
   const enabledNotificationsCount = Object.values(notificationPreferences).filter(Boolean).length
   const profileCompletionSteps = [
-    displayName.trim().length > 0,
+    firstName.trim().length > 0,
+    lastName.trim().length > 0,
     email.trim().length > 0,
     avatarUrl.trim().length > 0,
   ].filter(Boolean).length
-  const profileCompletionPercent = Math.round((profileCompletionSteps / 3) * 100)
+  const profileCompletionPercent = Math.round((profileCompletionSteps / 4) * 100)
   const currentPlan = user?.plan ? `${user.plan.charAt(0).toUpperCase()}${user.plan.slice(1)}` : 'Free'
 
   return (
@@ -434,7 +454,7 @@ export function SettingsPage() {
               <CardContent className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl border bg-muted/20 p-4">
                   <Avatar className="h-20 w-20">
-                    <AvatarImage src={avatarUrl || ''} alt={displayName || 'User avatar'} />
+                    <AvatarImage src={avatarUrl || ''} alt={fullName || 'User avatar'} />
                     <AvatarFallback>{initials}</AvatarFallback>
                   </Avatar>
                   <div className="space-y-2">
@@ -474,12 +494,21 @@ export function SettingsPage() {
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Display Name</Label>
+                    <Label htmlFor="first-name">First Name</Label>
                     <Input
-                      id="name"
-                      placeholder="Enter your display name"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
+                      id="first-name"
+                      placeholder="Enter your first name"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="last-name">Last Name</Label>
+                    <Input
+                      id="last-name"
+                      placeholder="Enter your last name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
                     />
                   </div>
                   <div className="space-y-2">

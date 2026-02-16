@@ -301,6 +301,32 @@ describe('SettingsPage avatar persistence', () => {
         )
     })
 
+    it('persists first and last name as combined full_name on save', async () => {
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        const firstNameInput = container.querySelector('#first-name') as HTMLInputElement | null
+        const lastNameInput = container.querySelector('#last-name') as HTMLInputElement | null
+        expect(firstNameInput).toBeTruthy()
+        expect(lastNameInput).toBeTruthy()
+
+        typeIntoInput(firstNameInput!, 'Aruzhan')
+        typeIntoInput(lastNameInput!, 'Nurmukhan')
+        await flush()
+
+        clickButton('Save Changes')
+        await flush()
+
+        expect(mocked.userApi.updateMe).toHaveBeenCalledWith(
+            expect.objectContaining({
+                full_name: 'Aruzhan Nurmukhan',
+                email: 'test@example.com',
+            }),
+        )
+    })
+
     it('persists default summary length when switching tabs', async () => {
         await act(async () => {
             root.render(<SettingsPage />)

@@ -13,7 +13,8 @@ export function RegisterPage() {
   const { register } = useAuth()
   const { success: toastSuccess, error: toastError } = useToast()
   const [showPassword, setShowPassword] = useState(false)
-  const [fullName, setFullName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -36,8 +37,12 @@ export function RegisterPage() {
 
   const validateForm = () => {
     const errors: Record<string, string> = {}
-    if (!fullName.trim()) errors.fullName = 'Full name is required'
-    else if (fullName.trim().length < 2) errors.fullName = 'Name must be at least 2 characters'
+    if (!firstName.trim()) errors.firstName = 'First name is required'
+    else if (firstName.trim().length < 2) errors.firstName = 'First name must be at least 2 characters'
+
+    if (!lastName.trim()) errors.lastName = 'Last name is required'
+    else if (lastName.trim().length < 2) errors.lastName = 'Last name must be at least 2 characters'
+
     if (!email.trim()) errors.email = 'Email is required'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 'Enter a valid email address'
     if (!password) errors.password = 'Password is required'
@@ -57,6 +62,10 @@ export function RegisterPage() {
     setFieldErrors({})
 
     try {
+      const normalizedFirstName = firstName.trim()
+      const normalizedLastName = lastName.trim()
+      const fullName = `${normalizedFirstName} ${normalizedLastName}`.trim()
+
       await register(fullName, email, password)
       localStorage.setItem('pending_verification_email', email.trim().toLowerCase())
       toastSuccess('Account created! Check your email to verify.')
@@ -102,10 +111,32 @@ export function RegisterPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input id="name" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-              {fieldErrors.full_name && <p className="text-xs text-destructive">{fieldErrors.full_name}</p>}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="first-name">First Name</Label>
+                <Input
+                  id="first-name"
+                  placeholder="John"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                />
+                {fieldErrors.firstName && <p className="text-xs text-destructive">{fieldErrors.firstName}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="last-name">Last Name</Label>
+                <Input
+                  id="last-name"
+                  placeholder="Doe"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                />
+                {fieldErrors.lastName && <p className="text-xs text-destructive">{fieldErrors.lastName}</p>}
+              </div>
+
+              {fieldErrors.full_name && <p className="text-xs text-destructive sm:col-span-2">{fieldErrors.full_name}</p>}
             </div>
 
             <div className="space-y-2">
