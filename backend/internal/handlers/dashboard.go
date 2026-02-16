@@ -553,7 +553,12 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		Email    string  `json:"email"`
 		Avatar   *string `json:"avatar_url"`
 	}
-	json.NewDecoder(r.Body).Decode(&update)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&update); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
 
 	if update.FullName != "" {
 		user.FullName = update.FullName
@@ -644,7 +649,10 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 func (h *UserHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	h.userRepo.Delete(r.Context(), userID)
+	if err := h.userRepo.Delete(r.Context(), userID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to delete account", r))
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Account deleted"})
 }
 
@@ -662,7 +670,12 @@ func (h *UserHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 
 	var s models.UserSettings
-	json.NewDecoder(r.Body).Decode(&s)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&s); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
 	s.UserID = userID
 
 	if err := h.userRepo.UpdateSettings(r.Context(), &s); err != nil {
