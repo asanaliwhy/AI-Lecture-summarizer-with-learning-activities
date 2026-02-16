@@ -15,13 +15,27 @@ import { Slider } from '../components/ui/Slider'
 import { Label } from '../components/ui/Label'
 import { Checkbox } from '../components/ui/Checkbox'
 import { Badge } from '../components/ui/Badge'
-import { Layers, CheckCircle2, Loader2 } from 'lucide-react'
+import {
+  Layers,
+  CheckCircle2,
+  Loader2,
+  Sparkles,
+  SlidersHorizontal,
+  Brain,
+  BookOpenText,
+  Lightbulb,
+  Wand2,
+  NotebookPen,
+  RotateCcw,
+  Tags,
+} from 'lucide-react'
 import { cn } from '../lib/utils'
 
 export function FlashcardConfigPage() {
   const navigate = useNavigate()
   const { summaryId } = useParams()
   const [deckName, setDeckName] = useState('Flashcards')
+  const [baseDeckName, setBaseDeckName] = useState('Flashcards')
   const [cardCount, setCardCount] = useState([20])
   const [availableTopics, setAvailableTopics] = useState<string[]>([])
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
@@ -37,7 +51,9 @@ export function FlashcardConfigPage() {
   useEffect(() => {
     if (!summaryId) return
     api.summaries.get(summaryId).then((data: any) => {
-      setDeckName(`Flashcards: ${data.title || 'Untitled'}`)
+      const resolvedDeckName = `Flashcards: ${data.title || 'Untitled'}`
+      setDeckName(resolvedDeckName)
+      setBaseDeckName(resolvedDeckName)
 
       const rawTopics: unknown[] = Array.isArray(data.topics)
         ? data.topics
@@ -55,6 +71,33 @@ export function FlashcardConfigPage() {
       setSelectedTopics(dedupedTopics)
     }).catch(() => { })
   }, [summaryId])
+
+  const quickCardCounts = [10, 20, 30, 40, 50]
+  const hasTopicOptions = availableTopics.length > 0
+  const selectedTopicCount = selectedTopics.length
+  const strategyLabel = strategy === 'qa' ? 'Q&A' : 'Term'
+  const estimatedMinutes = Math.max(5, Math.round(cardCount[0] * (strategy === 'qa' ? 0.9 : 0.7)))
+
+  const toggleTopic = (topic: string) => {
+    setSelectedTopics((prev) => {
+      if (prev.includes(topic)) {
+        return prev.filter((t) => t !== topic)
+      }
+      return [...prev, topic]
+    })
+  }
+
+  const handleResetConfig = () => {
+    setDeckName(baseDeckName)
+    setCardCount([20])
+    setStrategy('definitions')
+    setEnableSpacedRepetition(true)
+    setIncludeMnemonics(false)
+    setIncludeExamples(true)
+    setSelectedTopics(availableTopics)
+    setIsFlipped(false)
+    setError('')
+  }
 
   const handleGenerate = async () => {
     setIsGenerating(true)
@@ -100,25 +143,70 @@ export function FlashcardConfigPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Create Flashcards</h1>
-          <p className="text-muted-foreground">
-            Generate a study deck from your summary.
-          </p>
+      <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background via-background to-primary/5 p-6 shadow-sm">
+          <div className="pointer-events-none absolute -right-16 -top-12 h-44 w-44 rounded-full bg-primary/10 blur-3xl" />
+          <div className="pointer-events-none absolute -left-10 -bottom-16 h-40 w-40 rounded-full bg-indigo-400/10 blur-3xl" />
+
+          <div className="relative flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border bg-background/80 px-3 py-1 text-xs text-muted-foreground">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                Flashcard builder
+              </div>
+              <h1 className="text-3xl font-bold tracking-tight">Create Flashcards</h1>
+              <p className="mt-2 text-muted-foreground max-w-2xl">
+                Tune your deck strategy and options, then generate study cards optimized for retention.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="rounded-xl border bg-card/90 px-3 py-2">
+                <p className="text-muted-foreground">Cards</p>
+                <p className="font-semibold text-foreground">{cardCount[0]}</p>
+              </div>
+              <div className="rounded-xl border bg-card/90 px-3 py-2">
+                <p className="text-muted-foreground">Strategy</p>
+                <p className="font-semibold text-foreground">{strategyLabel}</p>
+              </div>
+              <div className="rounded-xl border bg-card/90 px-3 py-2">
+                <p className="text-muted-foreground">Topics</p>
+                <p className="font-semibold text-foreground">
+                  {hasTopicOptions ? `${selectedTopicCount}/${availableTopics.length}` : 'All'}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-destructive/10 text-destructive rounded-lg text-sm">{error}</div>
+          <div className="p-4 bg-destructive/10 text-destructive rounded-lg text-sm border border-destructive/20">{error}</div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left Column - Configuration */}
           <div className="lg:col-span-7 space-y-6">
-            <Card>
+            <Card className="rounded-2xl border shadow-sm overflow-hidden">
               <CardHeader>
-                <CardTitle>Deck Settings</CardTitle>
-                <CardDescription>Customize how your flashcards are generated.</CardDescription>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <SlidersHorizontal className="h-5 w-5 text-primary" />
+                      Deck Settings
+                    </CardTitle>
+                    <CardDescription>Customize how your flashcards are generated.</CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={handleResetConfig}
+                    disabled={isGenerating}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Reset
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-8">
                 <div className="space-y-2">
@@ -127,13 +215,17 @@ export function FlashcardConfigPage() {
                     id="deck-name"
                     value={deckName}
                     onChange={(e) => setDeckName(e.target.value)}
+                    className="h-11"
                   />
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-4 border-t pt-6">
                   <div className="flex justify-between items-center">
-                    <Label>Number of Cards</Label>
-                    <span className="font-mono text-sm bg-secondary px-2 py-1 rounded">{cardCount[0]}</span>
+                    <Label className="inline-flex items-center gap-2">
+                      <NotebookPen className="h-4 w-4 text-primary" />
+                      Number of Cards
+                    </Label>
+                    <span className="font-mono text-sm bg-secondary px-2.5 py-1 rounded-md border">{cardCount[0]}</span>
                   </div>
                   <Slider
                     defaultValue={[20]}
@@ -143,17 +235,38 @@ export function FlashcardConfigPage() {
                     value={cardCount}
                     onValueChange={setCardCount}
                   />
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {quickCardCounts.map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setCardCount([preset])}
+                        className={cn(
+                          'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                          cardCount[0] === preset
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'hover:bg-secondary/60',
+                        )}
+                      >
+                        {preset} cards
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-3 border-t pt-6">
                   <Label>Card Strategy</Label>
                   <div className="grid grid-cols-1 gap-3">
-                    <div
+                    <button
+                      type="button"
                       className={cn(
-                        'flex items-start space-x-3 border p-3 rounded-lg cursor-pointer transition-colors',
-                        strategy === 'definitions' ? 'border-primary bg-primary/5' : 'hover:bg-secondary/20'
+                        'flex w-full items-start space-x-3 border p-4 rounded-xl cursor-pointer transition-all text-left',
+                        strategy === 'definitions'
+                          ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20'
+                          : 'hover:bg-secondary/20 hover:border-primary/30'
                       )}
                       onClick={() => setStrategy('definitions')}
+                      aria-pressed={strategy === 'definitions'}
                     >
                       <div className="mt-0.5">
                         <input
@@ -166,18 +279,23 @@ export function FlashcardConfigPage() {
                         />
                       </div>
                       <div className="grid gap-1">
-                        <label htmlFor="definitions" className="text-sm font-medium leading-none cursor-pointer">
+                        <label htmlFor="definitions" className="text-sm font-medium leading-none cursor-pointer inline-flex items-center gap-2">
+                          <BookOpenText className="h-4 w-4 text-primary" />
                           Term & Definition
                         </label>
                         <p className="text-xs text-muted-foreground">Standard vocabulary cards</p>
                       </div>
-                    </div>
-                    <div
+                    </button>
+                    <button
+                      type="button"
                       className={cn(
-                        'flex items-start space-x-3 border p-3 rounded-lg cursor-pointer transition-colors',
-                        strategy === 'qa' ? 'border-primary bg-primary/5' : 'hover:bg-secondary/20'
+                        'flex w-full items-start space-x-3 border p-4 rounded-xl cursor-pointer transition-all text-left',
+                        strategy === 'qa'
+                          ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20'
+                          : 'hover:bg-secondary/20 hover:border-primary/30'
                       )}
                       onClick={() => setStrategy('qa')}
+                      aria-pressed={strategy === 'qa'}
                     >
                       <div className="mt-0.5">
                         <input
@@ -190,71 +308,125 @@ export function FlashcardConfigPage() {
                         />
                       </div>
                       <div className="grid gap-1">
-                        <label htmlFor="qa" className="text-sm font-medium leading-none cursor-pointer">
+                        <label htmlFor="qa" className="text-sm font-medium leading-none cursor-pointer inline-flex items-center gap-2">
+                          <Brain className="h-4 w-4 text-primary" />
                           Question & Answer
                         </label>
                         <p className="text-xs text-muted-foreground">Conceptual questions based on key points</p>
                       </div>
-                    </div>
+                    </button>
                   </div>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-3 border-t pt-6">
                   <Label>Options</Label>
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
+                  <div className="space-y-2.5">
+                    <div className="flex items-start justify-between gap-4 rounded-xl border p-3.5 bg-muted/10">
+                      <div className="space-y-1">
+                        <label htmlFor="spaced-repetition" className="text-sm font-medium inline-flex items-center gap-2">
+                          <Wand2 className="h-4 w-4 text-primary" />
+                          Enable Spaced Repetition
+                        </label>
+                        <p className="text-xs text-muted-foreground">Prioritizes challenging cards during study rounds.</p>
+                      </div>
                       <Checkbox id="spaced-repetition" checked={enableSpacedRepetition} onCheckedChange={(checked) => setEnableSpacedRepetition(Boolean(checked))} />
-                      <label htmlFor="spaced-repetition" className="text-sm font-medium">Enable Spaced Repetition</label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-start justify-between gap-4 rounded-xl border p-3.5 bg-muted/10">
+                      <div className="space-y-1">
+                        <label htmlFor="mnemonics" className="text-sm font-medium inline-flex items-center gap-2">
+                          <Lightbulb className="h-4 w-4 text-primary" />
+                          Include Mnemonic Hints
+                        </label>
+                        <p className="text-xs text-muted-foreground">Adds memory anchors and association cues.</p>
+                      </div>
                       <Checkbox id="mnemonics" checked={includeMnemonics} onCheckedChange={(checked) => setIncludeMnemonics(Boolean(checked))} />
-                      <label htmlFor="mnemonics" className="text-sm font-medium">Include Mnemonic Hints</label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-start justify-between gap-4 rounded-xl border p-3.5 bg-muted/10">
+                      <div className="space-y-1">
+                        <label htmlFor="examples" className="text-sm font-medium inline-flex items-center gap-2">
+                          <BookOpenText className="h-4 w-4 text-primary" />
+                          Include Contextual Examples
+                        </label>
+                        <p className="text-xs text-muted-foreground">Shows practical usage to reinforce understanding.</p>
+                      </div>
                       <Checkbox id="examples" checked={includeExamples} onCheckedChange={(checked) => setIncludeExamples(Boolean(checked))} />
-                      <label htmlFor="examples" className="text-sm font-medium">Include Contextual Examples</label>
                     </div>
                   </div>
+
                 </div>
               </CardContent>
             </Card>
 
             {availableTopics.length > 0 && (
-              <Card>
+              <Card className="rounded-2xl border shadow-sm overflow-hidden">
                 <CardHeader>
-                  <CardTitle>Topics Covered</CardTitle>
-                  <CardDescription>Select which topics to include in the deck.</CardDescription>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <CardTitle className="inline-flex items-center gap-2">
+                        <Tags className="h-5 w-5 text-primary" />
+                        Topics Covered
+                      </CardTitle>
+                      <CardDescription>Select which topics to include in the deck.</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="rounded-full px-3 py-1">
+                        {selectedTopicCount}/{availableTopics.length} selected
+                      </Badge>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedTopics(availableTopics)}
+                        disabled={selectedTopicCount === availableTopics.length}
+                      >
+                        Select all
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedTopics([])}
+                        disabled={selectedTopicCount === 0}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
                     {availableTopics.map((topic) => {
                       const isSelected = selectedTopics.includes(topic)
                       return (
-                        <Badge
+                        <button
+                          type="button"
                           key={topic}
-                          variant={isSelected ? 'default' : 'secondary'}
-                          className="cursor-pointer transition-colors px-3 py-1 text-sm"
-                          onClick={() => {
-                            setSelectedTopics((prev) => {
-                              if (prev.includes(topic)) {
-                                return prev.filter((t) => t !== topic)
-                              }
-                              return [...prev, topic]
-                            })
-                          }}
+                          className={cn(
+                            'inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                            isSelected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+                          )}
+                          onClick={() => toggleTopic(topic)}
                         >
                           {topic}
                           {isSelected && <CheckCircle2 className="ml-2 h-3 w-3" />}
-                        </Badge>
+                        </button>
                       )
                     })}
                   </div>
+
+                  {selectedTopicCount === 0 && (
+                    <div className="mt-4 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                      Select at least one topic to generate this deck.
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
 
             <div className="lg:hidden">
-              <Button size="lg" className="w-full" onClick={handleGenerate} disabled={isGenerating}>
+              <Button size="lg" className="w-full h-12 text-base shadow-sm" onClick={handleGenerate} disabled={isGenerating}>
                 {isGenerating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 Generate Flashcards
               </Button>
@@ -264,59 +436,97 @@ export function FlashcardConfigPage() {
           {/* Right Column - Live Preview */}
           <div className="lg:col-span-5 space-y-6">
             <div className="sticky top-24">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Card Preview</h3>
-                <Badge variant="outline" className="text-xs">Sample Card</Badge>
-              </div>
-
-              <div
-                className="perspective-1000 h-64 w-full cursor-pointer group"
-                onClick={() => setIsFlipped(!isFlipped)}
-              >
-                <div
-                  className={cn(
-                    'relative h-full w-full transition-all duration-500 transform-style-3d shadow-xl rounded-xl',
-                    isFlipped ? 'rotate-y-180' : '',
-                  )}
-                >
-                  <div className="absolute inset-0 h-full w-full bg-card border rounded-xl p-8 flex flex-col items-center justify-center text-center backface-hidden">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-                      {strategy === 'definitions' ? 'Term' : 'Question'}
-                    </span>
-                    <h3 className="text-2xl font-bold">
-                      {strategy === 'definitions' ? 'Supervised Learning' : 'What is supervised learning?'}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-4">(Click to flip)</p>
+              <Card className="rounded-2xl border shadow-sm overflow-hidden">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Card Preview</h3>
+                    <Badge variant="outline" className="text-xs">Sample Card</Badge>
                   </div>
-                  <div className="absolute inset-0 h-full w-full bg-primary text-primary-foreground rounded-xl p-8 flex flex-col items-center justify-center text-center backface-hidden rotate-y-180">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/70 mb-4">
-                      {strategy === 'definitions' ? 'Definition' : 'Answer'}
-                    </span>
-                    <p className="text-lg font-medium leading-relaxed">
-                      A type of machine learning where the algorithm learns from labeled training data, and makes predictions based on that data.
+                  <CardDescription>
+                    {strategy === 'qa'
+                      ? 'Question-first cards focused on concept recall.'
+                      : 'Term-definition cards for fast memorization.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className="perspective-1000 h-64 w-full cursor-pointer group"
+                    onClick={() => setIsFlipped(!isFlipped)}
+                  >
+                    <div
+                      className={cn(
+                        'relative h-full w-full transition-all duration-500 transform-style-3d shadow-xl rounded-xl',
+                        isFlipped ? 'rotate-y-180' : '',
+                      )}
+                    >
+                      <div className="absolute inset-0 h-full w-full bg-card border rounded-xl p-8 flex flex-col items-center justify-center text-center backface-hidden">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+                          {strategy === 'definitions' ? 'Term' : 'Question'}
+                        </span>
+                        <h3 className="text-2xl font-bold">
+                          {strategy === 'definitions' ? 'Supervised Learning' : 'What is supervised learning?'}
+                        </h3>
+                        {includeMnemonics && (
+                          <p className="mt-4 text-xs rounded-full border px-3 py-1 bg-background/70 text-muted-foreground">
+                            Mnemonic: think “teacher + labeled data”.
+                          </p>
+                        )}
+                        <p className="text-sm text-muted-foreground mt-4">(Click to flip)</p>
+                      </div>
+                      <div className="absolute inset-0 h-full w-full bg-primary text-primary-foreground rounded-xl p-8 flex flex-col items-center justify-center text-center backface-hidden rotate-y-180">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-primary-foreground/70 mb-4">
+                          {strategy === 'definitions' ? 'Definition' : 'Answer'}
+                        </span>
+                        <p className="text-lg font-medium leading-relaxed">
+                          A type of machine learning where the algorithm learns from labeled training data, and makes predictions based on that data.
+                        </p>
+                        {includeExamples && (
+                          <p className="text-xs mt-4 rounded-lg bg-primary-foreground/15 px-3 py-2">
+                            Example: predicting house prices from labeled past sales.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    <div className="rounded-lg border px-3 py-2 bg-muted/10 inline-flex items-center gap-2">
+                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                      {includeMnemonics ? 'Mnemonics on' : 'Mnemonics off'}
+                    </div>
+                    <div className="rounded-lg border px-3 py-2 bg-muted/10 inline-flex items-center gap-2">
+                      <BookOpenText className="h-3.5 w-3.5 text-primary" />
+                      {includeExamples ? 'Examples on' : 'Examples off'}
+                    </div>
+                  </div>
+
+                  <div className="mt-8">
+                    <Button
+                      size="lg"
+                      className="w-full h-12 text-base shadow-md"
+                      onClick={handleGenerate}
+                      disabled={isGenerating}
+                    >
+                      {isGenerating ? (
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      ) : (
+                        <Layers className="mr-2 h-5 w-5" />
+                      )}
+                      Generate Flashcards
+                    </Button>
+                    <p className="text-xs text-center text-muted-foreground mt-3 inline-flex items-center justify-center gap-1.5 w-full">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Creating {cardCount[0]} cards optimized for learning in ~{estimatedMinutes} minutes...
                     </p>
-                  </div>
-                </div>
-              </div>
 
-              <div className="mt-8">
-                <Button
-                  size="lg"
-                  className="w-full h-12 text-base shadow-md"
-                  onClick={handleGenerate}
-                  disabled={isGenerating}
-                >
-                  {isGenerating ? (
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  ) : (
-                    <Layers className="mr-2 h-5 w-5" />
-                  )}
-                  Generate Flashcards
-                </Button>
-                <p className="text-xs text-center text-muted-foreground mt-3">
-                  Creating {cardCount[0]} cards optimized for learning...
-                </p>
-              </div>
+                    {hasTopicOptions && selectedTopicCount === 0 && (
+                      <p className="mt-2 text-xs text-center text-destructive">
+                        Select at least one topic before generating.
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
