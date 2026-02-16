@@ -25,6 +25,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import {
+  getStoredSummaryLengthPreference,
+  parseSummaryLengthPreference,
+  saveStoredSummaryLengthPreference,
+  type SummaryLengthPreference,
+} from '../lib/summaryLengthPreference'
 import { User, Bell, Key, CreditCard, Shield, LogOut, Loader2 } from 'lucide-react'
 import { useToast } from '../components/ui/Toast'
 
@@ -46,6 +52,8 @@ export function SettingsPage() {
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [defaultSummaryLength, setDefaultSummaryLength] =
+    useState<SummaryLengthPreference>(() => getStoredSummaryLengthPreference())
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -170,6 +178,13 @@ export function SettingsPage() {
     } finally {
       setIsDeleting(false)
     }
+  }
+
+  const handleDefaultSummaryLengthChange = (value: string) => {
+    const normalizedValue = parseSummaryLengthPreference(value)
+    setDefaultSummaryLength(normalizedValue)
+    saveStoredSummaryLengthPreference(normalizedValue)
+    toast.success('Default summary length saved.')
   }
 
   const initials = displayName
@@ -314,14 +329,18 @@ export function SettingsPage() {
                 </div>
                 <div className="space-y-2 pt-4 border-t">
                   <Label>Default Summary Length</Label>
-                  <Select defaultValue="medium">
+                  <Select
+                    value={defaultSummaryLength}
+                    onValueChange={handleDefaultSummaryLengthChange}
+                  >
                     <SelectTrigger className="w-[180px]">
                       <SelectValue placeholder="Select length" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="short">Short</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="long">Long</SelectItem>
+                      <SelectItem value="concise">Concise</SelectItem>
+                      <SelectItem value="standard">Standard</SelectItem>
+                      <SelectItem value="detailed">Detailed</SelectItem>
+                      <SelectItem value="comprehensive">Comprehensive</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

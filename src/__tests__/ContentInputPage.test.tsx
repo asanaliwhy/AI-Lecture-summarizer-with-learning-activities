@@ -2,6 +2,8 @@ import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 
+const SUMMARY_LENGTH_STORAGE_KEY = 'default_summary_length'
+
 const mocked = vi.hoisted(() => ({
     navigate: vi.fn(),
     contentApi: {
@@ -161,6 +163,7 @@ describe('ContentInputPage critical production flows', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
+        localStorage.removeItem(SUMMARY_LENGTH_STORAGE_KEY)
 
         mocked.contentApi.validateYouTube.mockResolvedValue({
             metadata: {
@@ -182,6 +185,7 @@ describe('ContentInputPage critical production flows', () => {
             root.unmount()
         })
         container.remove()
+        localStorage.removeItem(SUMMARY_LENGTH_STORAGE_KEY)
     })
 
     it('validates YouTube source and starts summary generation successfully', async () => {
@@ -320,6 +324,33 @@ describe('ContentInputPage critical production flows', () => {
         await flush()
 
         expect(container.textContent).not.toContain('Valid source detected')
+    })
+
+    it('uses saved default summary length from settings for generation payload', async () => {
+        localStorage.setItem(SUMMARY_LENGTH_STORAGE_KEY, 'detailed')
+
+        await act(async () => {
+            root.render(<ContentInputPage />)
+        })
+        await flush()
+
+        const urlInput = container.querySelector('#youtube-url') as HTMLInputElement | null
+        expect(urlInput).toBeTruthy()
+
+        setInputValue(urlInput!, 'https://www.youtube.com/watch?v=abc123')
+        await flush()
+
+        clickButton('Validate')
+        await flush()
+
+        clickButton('Generate Summary')
+        await flush()
+
+        expect(mocked.summariesApi.generate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                length: 'detailed',
+            }),
+        )
     })
 })
 

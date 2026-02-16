@@ -2,6 +2,8 @@ import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 
+const SUMMARY_LENGTH_STORAGE_KEY = 'default_summary_length'
+
 const mocked = vi.hoisted(() => ({
     navigate: vi.fn(),
     logout: vi.fn(),
@@ -48,6 +50,84 @@ vi.mock('../components/ui/Toast', () => ({
     useToast: () => mocked.toast,
 }))
 
+vi.mock('../components/ui/Tabs', async () => {
+    const React = await vi.importActual<typeof import('react')>('react')
+
+    const TabsContext = React.createContext<{
+        value: string
+        setValue: (value: string) => void
+    } | null>(null)
+
+    const Tabs = ({ defaultValue, children }: any) => {
+        const [value, setValue] = React.useState<string>(defaultValue || 'account')
+        return (
+            <TabsContext.Provider value={{ value, setValue }}>
+                {children}
+            </TabsContext.Provider>
+        )
+    }
+
+    const TabsList = ({ children, ...props }: any) => <div {...props}>{children}</div>
+
+    const TabsTrigger = ({ value, children, ...props }: any) => {
+        const ctx = React.useContext(TabsContext)
+        if (!ctx) return null
+        return (
+            <button
+                type="button"
+                data-state={ctx.value === value ? 'active' : 'inactive'}
+                onClick={() => ctx.setValue(value)}
+                {...props}
+            >
+                {children}
+            </button>
+        )
+    }
+
+    const TabsContent = ({ value, children, ...props }: any) => {
+        const ctx = React.useContext(TabsContext)
+        if (!ctx || ctx.value !== value) return null
+        return <div {...props}>{children}</div>
+    }
+
+    return { Tabs, TabsList, TabsTrigger, TabsContent }
+})
+
+vi.mock('../components/ui/Select', async () => {
+    const React = await vi.importActual<typeof import('react')>('react')
+
+    const SelectContext = React.createContext<{
+        value?: string
+        onValueChange?: (value: string) => void
+    } | null>(null)
+
+    const Select = ({ value, onValueChange, children }: any) => (
+        <SelectContext.Provider value={{ value, onValueChange }}>
+            <div data-testid="default-summary-length-select" data-value={value}>{children}</div>
+        </SelectContext.Provider>
+    )
+
+    const SelectTrigger = ({ children, ...props }: any) => <div {...props}>{children}</div>
+    const SelectValue = ({ placeholder }: any) => <span>{placeholder}</span>
+    const SelectContent = ({ children, ...props }: any) => <div {...props}>{children}</div>
+
+    const SelectItem = ({ value, children, ...props }: any) => {
+        const ctx = React.useContext(SelectContext)
+        return (
+            <button
+                type="button"
+                onClick={() => ctx?.onValueChange?.(value)}
+                data-value={value}
+                {...props}
+            >
+                {children}
+            </button>
+        )
+    }
+
+    return { Select, SelectTrigger, SelectValue, SelectContent, SelectItem }
+})
+
 vi.mock('react-router-dom', () => ({
     useNavigate: () => mocked.navigate,
 }))
@@ -76,6 +156,7 @@ describe('SettingsPage avatar persistence', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
+        localStorage.removeItem(SUMMARY_LENGTH_STORAGE_KEY)
         mocked.userApi.updateMe.mockResolvedValue({ ...mocked.user })
         mocked.userApi.changePassword.mockResolvedValue({})
         mocked.userApi.deleteMe.mockResolvedValue({})
@@ -117,6 +198,7 @@ describe('SettingsPage avatar persistence', () => {
             root.unmount()
         })
         container.remove()
+        localStorage.removeItem(SUMMARY_LENGTH_STORAGE_KEY)
         vi.unstubAllGlobals()
     })
 
@@ -182,6 +264,29 @@ describe('SettingsPage avatar persistence', () => {
                 avatar_url: '',
             }),
         )
+    })
+
+    it('persists default summary length when switching tabs', async () => {
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        clickButton('Preferences')
+        await flush()
+
+        clickButton('Detailed')
+        await flush()
+
+        expect(localStorage.getItem(SUMMARY_LENGTH_STORAGE_KEY)).toBe('detailed')
+
+        clickButton('Account')
+        await flush()
+        clickButton('Preferences')
+        await flush()
+
+        const selectRoot = container.querySelector('[data-testid="default-summary-length-select"]')
+        expect(selectRoot?.getAttribute('data-value')).toBe('detailed')
     })
 })
 

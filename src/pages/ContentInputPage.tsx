@@ -29,6 +29,11 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useToast } from '../components/ui/Toast'
+import {
+  getStoredSummaryLengthPreference,
+  sliderValueToSummaryLengthPreference,
+  summaryLengthPreferenceToSliderValue,
+} from '../lib/summaryLengthPreference'
 import defaultVideoThumbnail from '../assets/default-video-thumbnail.svg'
 export function ContentInputPage() {
   const navigate = useNavigate()
@@ -48,7 +53,9 @@ export function ContentInputPage() {
   }
   const [videoMeta, setVideoMeta] = useState<VideoMetadata | null>(null)
   const [contentId, setContentId] = useState<string | null>(null)
-  const [summaryLength, setSummaryLength] = useState([50])
+  const [summaryLength, setSummaryLength] = useState<number[]>(() => [
+    summaryLengthPreferenceToSliderValue(getStoredSummaryLengthPreference()),
+  ])
   const [outputFormat, setOutputFormat] = useState('cornell')
   const [targetAudience, setTargetAudience] = useState('academic')
   const [language, setLanguage] = useState('en')
@@ -204,14 +211,7 @@ export function ContentInputPage() {
     setIsGenerating(true)
     setValidationError('')
     try {
-      const lengthSetting =
-        summaryLength[0] <= 25
-          ? 'concise'
-          : summaryLength[0] <= 50
-            ? 'standard'
-            : summaryLength[0] <= 75
-              ? 'detailed'
-              : 'comprehensive'
+      const lengthSetting = sliderValueToSummaryLengthPreference(summaryLength[0])
 
       if (sourceType === 'file' && uploadedFile) {
         const uploaded = await api.content.upload(uploadedFile)
