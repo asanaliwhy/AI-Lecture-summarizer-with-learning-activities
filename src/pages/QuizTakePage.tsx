@@ -9,7 +9,6 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
-  Flag,
   HelpCircle,
   X,
   PauseCircle,
@@ -317,10 +316,6 @@ export function QuizTakePage() {
                 <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground">
                   {currentQ?.type === 'true_false' ? 'True / False' : 'Multiple Choice'}
                 </span>
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-yellow-600">
-                  <Flag className="h-4 w-4 mr-2" />
-                  Flag
-                </Button>
               </div>
               <h2 className="text-2xl md:text-3xl font-bold leading-tight text-foreground">
                 {currentQ?.question || currentQ?.text || 'Loading...'}
