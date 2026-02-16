@@ -100,6 +100,51 @@ func (s *EmailService) SendPasswordResetEmail(to, token string) error {
 	return s.sendHTML(to, subject, body)
 }
 
+func (s *EmailService) SendProcessingCompleteEmail(to, summaryTitle string, summaryID string) error {
+	if strings.TrimSpace(to) == "" {
+		return fmt.Errorf("recipient email is required")
+	}
+
+	title := strings.TrimSpace(summaryTitle)
+	if title == "" {
+		title = "Your summary"
+	}
+
+	viewURL := fmt.Sprintf("%s/summary/%s", s.frontendURL, summaryID)
+
+	subject := "Your summary is ready"
+	body := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+  <div style="max-width: 520px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
+    <div style="background: linear-gradient(135deg, #6366f1 0%%, #8b5cf6 100%%); padding: 28px 32px; text-align: center;">
+      <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 700;">Lectura</h1>
+      <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 14px;">Processing complete</p>
+    </div>
+    <div style="padding: 28px 32px;">
+      <h2 style="margin: 0 0 12px; font-size: 20px; color: #0f172a;">Your summary is ready</h2>
+      <p style="margin: 0 0 14px; color: #334155; font-size: 14px; line-height: 1.6;">
+        We finished generating your summary:
+      </p>
+      <p style="margin: 0 0 22px; color: #0f172a; font-size: 15px; font-weight: 600;">
+        %s
+      </p>
+      <a href="%s" style="display: inline-block; background: #6366f1; color: white; text-decoration: none; padding: 11px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+        Open Summary
+      </a>
+      <p style="color: #94a3b8; font-size: 12px; margin: 20px 0 0; line-height: 1.5;">
+        If the button does not work, copy and paste this link:<br>
+        <a href="%s" style="color: #6366f1;">%s</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>`, title, viewURL, viewURL, viewURL)
+
+	return s.sendHTML(to, subject, body)
+}
+
 func (s *EmailService) sendHTML(to, subject, htmlBody string) error {
 	if s.devMode {
 		log.Printf("📧 [DEV EMAIL] To: %s | Subject: %s", to, subject)

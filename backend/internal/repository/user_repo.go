@@ -119,6 +119,42 @@ func (r *UserRepo) UpdateSettings(ctx context.Context, s *models.UserSettings) e
 	return err
 }
 
+func (r *UserRepo) GetNotificationSetting(ctx context.Context, userID uuid.UUID, key string, defaultValue bool) (bool, error) {
+	var enabled bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT COALESCE((
+			SELECT CASE
+				WHEN LOWER(COALESCE(notifications_json->>$2, '')) IN ('true', 'false')
+					THEN (notifications_json->>$2)::boolean
+				ELSE NULL
+			END
+			FROM user_settings
+			WHERE user_id = $1
+		), $3)
+	`, userID, key, defaultValue).Scan(&enabled)
+	if err != nil {
+		return defaultValue, err
+	}
+
+	return enabled, nil
+}
+
+func (r *UserRepo) SetNotificationSetting(ctx context.Context, userID uuid.UUID, key string, enabled bool) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO user_settings (user_id, notifications_json, updated_at)
+		VALUES (
+			$1,
+			jsonb_build_object($2::text, to_jsonb($3::boolean)),
+			NOW()
+		)
+		ON CONFLICT (user_id) DO UPDATE
+		SET notifications_json = COALESCE(user_settings.notifications_json, '{}'::jsonb) ||
+			jsonb_build_object($2::text, to_jsonb($3::boolean)),
+			updated_at = NOW()
+	`, userID, key, enabled)
+	return err
+}
+
 func (r *UserRepo) SetWeeklyGoalTarget(ctx context.Context, userID uuid.UUID, target int, goalType string) error {
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO user_settings (user_id, notifications_json, updated_at)

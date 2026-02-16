@@ -156,6 +156,8 @@ func New(
 			r.Delete("/me", userHandler.DeleteMe)
 			r.Get("/settings", userHandler.GetSettings)
 			r.Put("/settings", userHandler.UpdateSettings)
+			r.Get("/notifications", userHandler.GetNotificationSettings)
+			r.Put("/notifications", userHandler.UpdateNotificationSetting)
 		})
 
 		// ──── Job Routes ────

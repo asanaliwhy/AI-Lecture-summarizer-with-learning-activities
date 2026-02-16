@@ -18,6 +18,8 @@ const mocked = vi.hoisted(() => ({
         updateMe: vi.fn(),
         changePassword: vi.fn(),
         deleteMe: vi.fn(),
+        getNotifications: vi.fn(),
+        updateNotification: vi.fn(),
     },
     user: {
         id: 'user-1',
@@ -155,6 +157,14 @@ describe('SettingsPage avatar persistence', () => {
         })
     }
 
+    const clickSwitch = (label: string) => {
+        const target = container.querySelector(`[aria-label="${label}"]`) as HTMLButtonElement | null
+        expect(target).toBeTruthy()
+        act(() => {
+            target!.click()
+        })
+    }
+
     beforeEach(() => {
         vi.clearAllMocks()
         localStorage.removeItem(SUMMARY_LENGTH_STORAGE_KEY)
@@ -162,6 +172,15 @@ describe('SettingsPage avatar persistence', () => {
         mocked.userApi.updateMe.mockResolvedValue({ ...mocked.user })
         mocked.userApi.changePassword.mockResolvedValue({})
         mocked.userApi.deleteMe.mockResolvedValue({})
+        mocked.userApi.getNotifications.mockResolvedValue({
+            processing_complete: true,
+            weekly_digest: false,
+            study_reminders: false,
+        })
+        mocked.userApi.updateNotification.mockResolvedValue({
+            key: 'processing_complete',
+            enabled: false,
+        })
         mocked.refreshUser.mockResolvedValue(undefined)
 
         const fileReaderRead = vi.fn(function (this: FileReader) {
@@ -314,6 +333,32 @@ describe('SettingsPage avatar persistence', () => {
         const selectRoots = Array.from(container.querySelectorAll('[data-testid="default-summary-length-select"]'))
         expect(selectRoots.length).toBeGreaterThanOrEqual(2)
         expect(selectRoots[1]?.getAttribute('data-value')).toBe('smart')
+    })
+
+    it('loads notification preferences and persists processing-complete toggle', async () => {
+        mocked.userApi.getNotifications.mockResolvedValue({
+            processing_complete: false,
+            weekly_digest: true,
+            study_reminders: false,
+        })
+
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        expect(mocked.userApi.getNotifications).toHaveBeenCalledTimes(1)
+
+        clickButton('Preferences')
+        await flush()
+
+        clickSwitch('Processing Complete')
+        await flush()
+
+        expect(mocked.userApi.updateNotification).toHaveBeenCalledWith({
+            key: 'processing_complete',
+            enabled: true,
+        })
     })
 })
 

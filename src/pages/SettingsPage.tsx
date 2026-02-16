@@ -35,11 +35,21 @@ import {
   type SummaryFormatPreference,
   type SummaryLengthPreference,
 } from '../lib/summaryLengthPreference'
+import {
+  type NotificationPreferencesResponse,
+  type UpdateNotificationPreferencePayload,
+} from '../lib/api'
 import { User, Bell, Key, CreditCard, Shield, LogOut, Loader2 } from 'lucide-react'
 import { useToast } from '../components/ui/Toast'
 
 const MAX_AVATAR_BYTES = 800 * 1024
 const ACCEPTED_AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif'])
+
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferencesResponse = {
+  processing_complete: true,
+  weekly_digest: false,
+  study_reminders: false,
+}
 
 export function SettingsPage() {
   const { user, logout, refreshUser } = useAuth()
@@ -60,6 +70,11 @@ export function SettingsPage() {
     useState<SummaryLengthPreference>(() => getStoredSummaryLengthPreference())
   const [defaultSummaryFormat, setDefaultSummaryFormat] =
     useState<SummaryFormatPreference>(() => getStoredSummaryFormatPreference())
+  const [notificationPreferences, setNotificationPreferences] =
+    useState<NotificationPreferencesResponse>(DEFAULT_NOTIFICATION_PREFERENCES)
+  const [isNotificationsLoading, setIsNotificationsLoading] = useState(true)
+  const [savingNotificationKey, setSavingNotificationKey] =
+    useState<UpdateNotificationPreferencePayload['key'] | null>(null)
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -67,6 +82,43 @@ export function SettingsPage() {
       setDisplayName(user.full_name || '')
       setEmail(user.email || '')
       setAvatarUrl(user.avatar_url || '')
+    }
+  }, [user])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadNotifications = async () => {
+      if (!user) {
+        setNotificationPreferences(DEFAULT_NOTIFICATION_PREFERENCES)
+        setIsNotificationsLoading(false)
+        return
+      }
+
+      setIsNotificationsLoading(true)
+      try {
+        const prefs = await api.user.getNotifications()
+        if (!isActive) return
+
+        setNotificationPreferences({
+          ...DEFAULT_NOTIFICATION_PREFERENCES,
+          ...prefs,
+        })
+      } catch {
+        if (!isActive) return
+
+        setNotificationPreferences(DEFAULT_NOTIFICATION_PREFERENCES)
+      } finally {
+        if (isActive) {
+          setIsNotificationsLoading(false)
+        }
+      }
+    }
+
+    loadNotifications()
+
+    return () => {
+      isActive = false
     }
   }, [user])
 
@@ -198,6 +250,32 @@ export function SettingsPage() {
     setDefaultSummaryFormat(normalizedValue)
     saveStoredSummaryFormatPreference(normalizedValue)
     toast.success('Default summary format saved.')
+  }
+
+  const handleNotificationToggle = async (
+    key: UpdateNotificationPreferencePayload['key'],
+    enabled: boolean,
+  ) => {
+    const previousValue = notificationPreferences[key]
+    setNotificationPreferences((prev) => ({
+      ...prev,
+      [key]: enabled,
+    }))
+    setSavingNotificationKey(key)
+
+    try {
+      await api.user.updateNotification({ key, enabled })
+      toast.success('Notification preference saved.')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update notification preference'
+      setNotificationPreferences((prev) => ({
+        ...prev,
+        [key]: previousValue,
+      }))
+      toast.error(message)
+    } finally {
+      setSavingNotificationKey(null)
+    }
   }
 
   const initials = displayName
@@ -389,14 +467,24 @@ export function SettingsPage() {
                     <Label className="text-base">Processing Complete</Label>
                     <p className="text-sm text-muted-foreground">Email when your summaries are ready.</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch
+                    aria-label="Processing Complete"
+                    checked={notificationPreferences.processing_complete}
+                    onCheckedChange={(enabled) => handleNotificationToggle('processing_complete', enabled)}
+                    disabled={isNotificationsLoading || savingNotificationKey !== null}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label className="text-base">Weekly Digest</Label>
                     <p className="text-sm text-muted-foreground">Summary of your learning activity.</p>
                   </div>
-                  <Switch />
+                  <Switch
+                    aria-label="Weekly Digest"
+                    checked={notificationPreferences.weekly_digest}
+                    onCheckedChange={(enabled) => handleNotificationToggle('weekly_digest', enabled)}
+                    disabled={isNotificationsLoading || savingNotificationKey !== null}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
@@ -405,7 +493,12 @@ export function SettingsPage() {
                       Gentle nudge when you haven&apos;t studied in 3+ days.
                     </p>
                   </div>
-                  <Switch />
+                  <Switch
+                    aria-label="Study Reminders"
+                    checked={notificationPreferences.study_reminders}
+                    onCheckedChange={(enabled) => handleNotificationToggle('study_reminders', enabled)}
+                    disabled={isNotificationsLoading || savingNotificationKey !== null}
+                  />
                 </div>
               </CardContent>
             </Card>

@@ -98,6 +98,8 @@ func main() {
 	workerPool := worker.NewPool(
 		redisClients.Queue,
 		geminiService,
+		emailService,
+		userRepo,
 		youtubeService,
 		fileExtractService,
 		jobRepo,

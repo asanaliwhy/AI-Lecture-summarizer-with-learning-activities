@@ -475,6 +475,43 @@ type UserHandler struct {
 	userRepo *repository.UserRepo
 }
 
+var allowedNotificationKeys = map[string]struct{}{
+	"processing_complete": {},
+	"weekly_digest":       {},
+	"study_reminders":     {},
+}
+
+func defaultNotificationPreferences() map[string]bool {
+	return map[string]bool{
+		"processing_complete": true,
+		"weekly_digest":       false,
+		"study_reminders":     false,
+	}
+}
+
+func mergeNotificationPreferences(raw json.RawMessage) map[string]bool {
+	prefs := defaultNotificationPreferences()
+	if len(raw) == 0 {
+		return prefs
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return prefs
+	}
+
+	for key, value := range parsed {
+		if _, allowed := allowedNotificationKeys[key]; !allowed {
+			continue
+		}
+		if enabled, ok := value.(bool); ok {
+			prefs[key] = enabled
+		}
+	}
+
+	return prefs
+}
+
 func NewUserHandler(userRepo *repository.UserRepo) *UserHandler {
 	return &UserHandler{userRepo: userRepo}
 }
@@ -581,6 +618,46 @@ func (h *UserHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, s)
+}
+
+func (h *UserHandler) GetNotificationSettings(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	settings, err := h.userRepo.GetSettings(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusOK, defaultNotificationPreferences())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, mergeNotificationPreferences(settings.NotificationsJSON))
+}
+
+func (h *UserHandler) UpdateNotificationSetting(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var req struct {
+		Key     string `json:"key"`
+		Enabled bool   `json:"enabled"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
+
+	if _, ok := allowedNotificationKeys[req.Key]; !ok {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid notification key", r))
+		return
+	}
+
+	if err := h.userRepo.SetNotificationSetting(r.Context(), userID, req.Key, req.Enabled); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to update notification setting", r))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"key":     req.Key,
+		"enabled": req.Enabled,
+	})
 }
 
 // Job handler

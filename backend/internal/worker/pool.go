@@ -23,6 +23,8 @@ import (
 type Pool struct {
 	redis       *redis.Client
 	gemini      *services.GeminiService
+	email       *services.EmailService
+	userRepo    *repository.UserRepo
 	youtube     *services.YouTubeService
 	fileExtract *services.FileExtractService
 	jobRepo     *repository.JobRepo
@@ -38,6 +40,8 @@ type Pool struct {
 func NewPool(
 	redisClient *redis.Client,
 	gemini *services.GeminiService,
+	email *services.EmailService,
+	userRepo *repository.UserRepo,
 	youtube *services.YouTubeService,
 	fileExtract *services.FileExtractService,
 	jobRepo *repository.JobRepo,
@@ -51,6 +55,8 @@ func NewPool(
 	return &Pool{
 		redis:       redisClient,
 		gemini:      gemini,
+		email:       email,
+		userRepo:    userRepo,
 		youtube:     youtube,
 		fileExtract: fileExtract,
 		jobRepo:     jobRepo,
@@ -520,6 +526,10 @@ func extractVideoID(url string) string {
 func (p *Pool) handleSuccess(ctx context.Context, job *models.Job) {
 	p.jobRepo.UpdateStatus(ctx, job.ID, "completed")
 
+	if job.Type == "summary-generation" {
+		go p.sendSummaryCompletionEmail(context.Background(), job)
+	}
+
 	p.gemini.PublishUpdate(ctx, job.UserID, models.WSMessage{
 		Type: "completed",
 		Payload: models.CompletedEvent{
@@ -530,6 +540,38 @@ func (p *Pool) handleSuccess(ctx context.Context, job *models.Job) {
 	})
 
 	log.Printf("Job %s completed successfully", job.ID)
+}
+
+func (p *Pool) sendSummaryCompletionEmail(ctx context.Context, job *models.Job) {
+	if p.email == nil || p.userRepo == nil || p.summaryRepo == nil {
+		return
+	}
+
+	enabled, err := p.userRepo.GetNotificationSetting(ctx, job.UserID, "processing_complete", true)
+	if err != nil {
+		log.Printf("failed to load processing_complete notification preference for user %s: %v", job.UserID, err)
+		return
+	}
+
+	if !enabled {
+		return
+	}
+
+	user, err := p.userRepo.GetByID(ctx, job.UserID)
+	if err != nil {
+		log.Printf("failed to load user %s for completion email: %v", job.UserID, err)
+		return
+	}
+
+	summary, err := p.summaryRepo.GetByID(ctx, job.ReferenceID)
+	if err != nil {
+		log.Printf("failed to load summary %s for completion email: %v", job.ReferenceID, err)
+		return
+	}
+
+	if err := p.email.SendProcessingCompleteEmail(user.Email, summary.Title, summary.ID.String()); err != nil {
+		log.Printf("failed to send processing-complete email to %s for summary %s: %v", user.Email, summary.ID, err)
+	}
 }
 
 func (p *Pool) handleFailure(ctx context.Context, job *models.Job, err error) {

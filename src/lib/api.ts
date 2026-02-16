@@ -335,6 +335,17 @@ export interface UpdateMePayload {
     avatar_url?: string
 }
 
+export interface NotificationPreferencesResponse {
+    processing_complete: boolean
+    weekly_digest: boolean
+    study_reminders: boolean
+}
+
+export interface UpdateNotificationPreferencePayload {
+    key: 'processing_complete' | 'weekly_digest' | 'study_reminders'
+    enabled: boolean
+}
+
 export interface GenerateFlashcardsPayload {
     summary_id: string
     title: string
@@ -550,6 +561,12 @@ export const api = {
         getSettings: () => apiFetch<any>('/user/settings'),
         updateSettings: (data: any) =>
             apiFetch('/user/settings', { method: 'PUT', body: JSON.stringify(data) }),
+        getNotifications: () => apiFetch<NotificationPreferencesResponse>('/user/notifications'),
+        updateNotification: (data: UpdateNotificationPreferencePayload) =>
+            apiFetch<{ key: string; enabled: boolean }>('/user/notifications', {
+                method: 'PUT',
+                body: JSON.stringify(data),
+            }),
     },
 
     // Jobs
