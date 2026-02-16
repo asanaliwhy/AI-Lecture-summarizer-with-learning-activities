@@ -1,8 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Search, ChevronRight, Menu } from 'lucide-react'
+import { Search, ChevronRight, Menu } from 'lucide-react'
 import { Input } from '../ui/Input'
-import { Button } from '../ui/Button'
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/Avatar'
 import { useAuth } from '../../lib/AuthContext'
 
@@ -91,16 +90,6 @@ export function Header({ onMenuToggle }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
-        <Button variant="ghost" size="icon"
-          className="relative text-muted-foreground hover:text-foreground hover:bg-secondary transition-all duration-200 group"
-        >
-          <Bell className="h-5 w-5 group-hover:rotate-12 transition-transform" />
-          <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-background animate-pulse" />
-          <span className="sr-only">Notifications</span>
-        </Button>
-
-        <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
-
         <div className="hidden sm:flex items-center gap-3 pl-1 group cursor-pointer p-1 rounded-full hover:bg-secondary/50 transition-colors">
           <div className="hidden md:flex flex-col items-end">
             <span className="text-sm font-medium leading-none group-hover:text-primary transition-colors">
