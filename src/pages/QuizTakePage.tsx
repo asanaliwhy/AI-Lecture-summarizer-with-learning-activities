@@ -17,6 +17,8 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
+const QUESTION_TIMER_SECONDS = 30
+
 type QuizQuestion = {
   id?: string
   question?: string
@@ -106,7 +108,8 @@ export function QuizTakePage() {
   const [showHint, setShowHint] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [timer, setTimer] = useState(0)
+  const [questionTimeLeft, setQuestionTimeLeft] = useState(QUESTION_TIMER_SECONDS)
+  const [isTimerPaused, setIsTimerPaused] = useState(false)
   const [enableTimer, setEnableTimer] = useState(false)
   const [enableHints, setEnableHints] = useState(true)
 
@@ -120,6 +123,8 @@ export function QuizTakePage() {
         setQuiz(configured.quiz)
         setEnableTimer(configured.options.enable_timer)
         setEnableHints(configured.options.enable_hints)
+        setQuestionTimeLeft(QUESTION_TIMER_SECONDS)
+        setIsTimerPaused(false)
 
         const start = await api.quizzes.startAttempt(quizId!)
         const startedAttemptId = start.attempt?.id || start.attempt_id || null
@@ -160,13 +165,6 @@ export function QuizTakePage() {
 
     return () => clearInterval(timer)
   }, [quizId, quiz])
-
-  // Timer
-  useEffect(() => {
-    if (isLoading || !quiz || !enableTimer) return
-    const interval = setInterval(() => setTimer(t => t + 1), 1000)
-    return () => clearInterval(interval)
-  }, [isLoading, quiz, enableTimer])
 
   useStudySession({
     activityType: 'quiz',
@@ -228,6 +226,30 @@ export function QuizTakePage() {
     }
   }
 
+  useEffect(() => {
+    if (!enableTimer || isLoading || !quiz || !attemptId) return
+    setQuestionTimeLeft(QUESTION_TIMER_SECONDS)
+    setIsTimerPaused(false)
+  }, [enableTimer, isLoading, quiz?.id, currentQuestion, attemptId])
+
+  useEffect(() => {
+    if (!enableTimer || isLoading || !quiz || !attemptId || isSubmitting || isTimerPaused) return
+
+    const interval = window.setInterval(() => {
+      setQuestionTimeLeft((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(interval)
+          void handleNext()
+          return 0
+        }
+
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => window.clearInterval(interval)
+  }, [enableTimer, isLoading, quiz, attemptId, isSubmitting, isTimerPaused, currentQuestion])
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -270,11 +292,16 @@ export function QuizTakePage() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm font-mono bg-secondary/50 px-3 py-1.5 rounded-md">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              <span>{formatTime(timer)}</span>
+              <span>{formatTime(questionTimeLeft)}</span>
             </div>
-            <Button variant="ghost" size="sm" className="hidden sm:flex">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hidden sm:flex"
+              onClick={() => setIsTimerPaused((prev) => !prev)}
+            >
               <PauseCircle className="h-4 w-4 mr-2" />
-              Pause
+              {isTimerPaused ? 'Resume' : 'Pause'}
             </Button>
           </div>
         )}

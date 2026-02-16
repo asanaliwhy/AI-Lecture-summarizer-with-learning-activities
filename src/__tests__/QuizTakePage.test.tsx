@@ -60,7 +60,7 @@ describe('QuizTakePage quiz options behavior', () => {
 
     const flush = async () => {
         await act(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 0))
+            await Promise.resolve()
         })
     }
 
@@ -133,6 +133,69 @@ describe('QuizTakePage quiz options behavior', () => {
 
         expect(container.textContent).toContain('First question')
         expect(container.textContent).not.toContain('Second questionFinish Quiz')
+    })
+
+    it('runs 30s per-question timer countdown when enabled', async () => {
+        vi.useFakeTimers()
+
+        mocked.quizzesApi.get.mockResolvedValue({
+            id: 'quiz-1',
+            title: 'Quiz 1',
+            config: {
+                enable_timer: true,
+                shuffle_questions: false,
+                enable_hints: false,
+            },
+            questions: [
+                { question: 'Timed question', options: ['A', 'B'] },
+            ],
+        })
+
+        await act(async () => {
+            root.render(<QuizTakePage />)
+        })
+        await flush()
+
+        expect(container.textContent).toContain('00:30')
+
+        await act(async () => {
+            vi.advanceTimersByTime(1000)
+        })
+
+        expect(container.textContent).toContain('00:29')
+
+        vi.useRealTimers()
+    })
+
+    it('auto-submits when timer reaches zero on last question', async () => {
+        vi.useFakeTimers()
+
+        mocked.quizzesApi.get.mockResolvedValue({
+            id: 'quiz-1',
+            title: 'Quiz 1',
+            config: {
+                enable_timer: true,
+                shuffle_questions: false,
+                enable_hints: false,
+            },
+            questions: [
+                { question: 'Only question', options: ['A', 'B'] },
+            ],
+        })
+
+        await act(async () => {
+            root.render(<QuizTakePage />)
+        })
+        await flush()
+
+        await act(async () => {
+            vi.advanceTimersByTime(30000)
+        })
+        await flush()
+
+        expect(mocked.quizzesApi.submitAttempt).toHaveBeenCalledTimes(1)
+
+        vi.useRealTimers()
     })
 })
 
