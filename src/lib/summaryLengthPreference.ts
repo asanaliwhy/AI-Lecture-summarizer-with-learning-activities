@@ -1,14 +1,24 @@
 export type SummaryLengthPreference = 'concise' | 'standard' | 'detailed' | 'comprehensive'
+export type SummaryFormatPreference = 'cornell' | 'bullets' | 'paragraph' | 'smart'
 
 export const SUMMARY_LENGTH_STORAGE_KEY = 'default_summary_length'
+export const SUMMARY_FORMAT_STORAGE_KEY = 'default_summary_format'
 
 const DEFAULT_SUMMARY_LENGTH: SummaryLengthPreference = 'standard'
+const DEFAULT_SUMMARY_FORMAT: SummaryFormatPreference = 'cornell'
 
 const VALID_SUMMARY_LENGTHS: ReadonlySet<SummaryLengthPreference> = new Set([
     'concise',
     'standard',
     'detailed',
     'comprehensive',
+])
+
+const VALID_SUMMARY_FORMATS: ReadonlySet<SummaryFormatPreference> = new Set([
+    'cornell',
+    'bullets',
+    'paragraph',
+    'smart',
 ])
 
 export function parseSummaryLengthPreference(value: string | null | undefined): SummaryLengthPreference {
@@ -24,6 +34,30 @@ export function getStoredSummaryLengthPreference(): SummaryLengthPreference {
         return parseSummaryLengthPreference(localStorage.getItem(SUMMARY_LENGTH_STORAGE_KEY))
     } catch {
         return DEFAULT_SUMMARY_LENGTH
+    }
+}
+
+export function parseSummaryFormatPreference(value: string | null | undefined): SummaryFormatPreference {
+    if (value && VALID_SUMMARY_FORMATS.has(value as SummaryFormatPreference)) {
+        return value as SummaryFormatPreference
+    }
+
+    return DEFAULT_SUMMARY_FORMAT
+}
+
+export function getStoredSummaryFormatPreference(): SummaryFormatPreference {
+    try {
+        return parseSummaryFormatPreference(localStorage.getItem(SUMMARY_FORMAT_STORAGE_KEY))
+    } catch {
+        return DEFAULT_SUMMARY_FORMAT
+    }
+}
+
+export function saveStoredSummaryFormatPreference(value: SummaryFormatPreference): void {
+    try {
+        localStorage.setItem(SUMMARY_FORMAT_STORAGE_KEY, value)
+    } catch {
+        // no-op: storage may be unavailable in restricted environments
     }
 }
 

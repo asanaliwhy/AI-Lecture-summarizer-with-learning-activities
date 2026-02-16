@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 
 const SUMMARY_LENGTH_STORAGE_KEY = 'default_summary_length'
+const SUMMARY_FORMAT_STORAGE_KEY = 'default_summary_format'
 
 const mocked = vi.hoisted(() => ({
     navigate: vi.fn(),
@@ -157,6 +158,7 @@ describe('SettingsPage avatar persistence', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         localStorage.removeItem(SUMMARY_LENGTH_STORAGE_KEY)
+        localStorage.removeItem(SUMMARY_FORMAT_STORAGE_KEY)
         mocked.userApi.updateMe.mockResolvedValue({ ...mocked.user })
         mocked.userApi.changePassword.mockResolvedValue({})
         mocked.userApi.deleteMe.mockResolvedValue({})
@@ -199,6 +201,7 @@ describe('SettingsPage avatar persistence', () => {
         })
         container.remove()
         localStorage.removeItem(SUMMARY_LENGTH_STORAGE_KEY)
+        localStorage.removeItem(SUMMARY_FORMAT_STORAGE_KEY)
         vi.unstubAllGlobals()
     })
 
@@ -287,6 +290,30 @@ describe('SettingsPage avatar persistence', () => {
 
         const selectRoot = container.querySelector('[data-testid="default-summary-length-select"]')
         expect(selectRoot?.getAttribute('data-value')).toBe('detailed')
+    })
+
+    it('persists default summary format when switching tabs', async () => {
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        clickButton('Preferences')
+        await flush()
+
+        clickButton('Smart Summary')
+        await flush()
+
+        expect(localStorage.getItem(SUMMARY_FORMAT_STORAGE_KEY)).toBe('smart')
+
+        clickButton('Security')
+        await flush()
+        clickButton('Preferences')
+        await flush()
+
+        const selectRoots = Array.from(container.querySelectorAll('[data-testid="default-summary-length-select"]'))
+        expect(selectRoots.length).toBeGreaterThanOrEqual(2)
+        expect(selectRoots[1]?.getAttribute('data-value')).toBe('smart')
     })
 })
 

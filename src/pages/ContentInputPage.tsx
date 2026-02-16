@@ -30,6 +30,7 @@ import {
 import { cn } from '../lib/utils'
 import { useToast } from '../components/ui/Toast'
 import {
+  getStoredSummaryFormatPreference,
   getStoredSummaryLengthPreference,
   sliderValueToSummaryLengthPreference,
   summaryLengthPreferenceToSliderValue,
@@ -56,7 +57,7 @@ export function ContentInputPage() {
   const [summaryLength, setSummaryLength] = useState<number[]>(() => [
     summaryLengthPreferenceToSliderValue(getStoredSummaryLengthPreference()),
   ])
-  const [outputFormat, setOutputFormat] = useState('cornell')
+  const [outputFormat, setOutputFormat] = useState(() => getStoredSummaryFormatPreference())
   const [targetAudience, setTargetAudience] = useState('academic')
   const [language, setLanguage] = useState('en')
   const [advancedOpen, setAdvancedOpen] = useState(false)

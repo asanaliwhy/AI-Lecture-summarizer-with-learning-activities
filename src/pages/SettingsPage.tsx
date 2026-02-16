@@ -27,8 +27,12 @@ import {
 } from '../components/ui/Select'
 import {
   getStoredSummaryLengthPreference,
+  getStoredSummaryFormatPreference,
   parseSummaryLengthPreference,
+  parseSummaryFormatPreference,
   saveStoredSummaryLengthPreference,
+  saveStoredSummaryFormatPreference,
+  type SummaryFormatPreference,
   type SummaryLengthPreference,
 } from '../lib/summaryLengthPreference'
 import { User, Bell, Key, CreditCard, Shield, LogOut, Loader2 } from 'lucide-react'
@@ -54,6 +58,8 @@ export function SettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [defaultSummaryLength, setDefaultSummaryLength] =
     useState<SummaryLengthPreference>(() => getStoredSummaryLengthPreference())
+  const [defaultSummaryFormat, setDefaultSummaryFormat] =
+    useState<SummaryFormatPreference>(() => getStoredSummaryFormatPreference())
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -185,6 +191,13 @@ export function SettingsPage() {
     setDefaultSummaryLength(normalizedValue)
     saveStoredSummaryLengthPreference(normalizedValue)
     toast.success('Default summary length saved.')
+  }
+
+  const handleDefaultSummaryFormatChange = (value: string) => {
+    const normalizedValue = parseSummaryFormatPreference(value)
+    setDefaultSummaryFormat(normalizedValue)
+    saveStoredSummaryFormatPreference(normalizedValue)
+    toast.success('Default summary format saved.')
   }
 
   const initials = displayName
@@ -341,6 +354,24 @@ export function SettingsPage() {
                       <SelectItem value="standard">Standard</SelectItem>
                       <SelectItem value="detailed">Detailed</SelectItem>
                       <SelectItem value="comprehensive">Comprehensive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2 pt-4 border-t">
+                  <Label>Default Summary Format</Label>
+                  <Select
+                    value={defaultSummaryFormat}
+                    onValueChange={handleDefaultSummaryFormatChange}
+                  >
+                    <SelectTrigger className="w-[220px]">
+                      <SelectValue placeholder="Select format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cornell">Cornell Method</SelectItem>
+                      <SelectItem value="bullets">Structured Bullets</SelectItem>
+                      <SelectItem value="paragraph">Paragraph Text</SelectItem>
+                      <SelectItem value="smart">Smart Summary</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
