@@ -16,6 +16,7 @@ vi.mock('../lib/api', () => ({
   api: {
     flashcards: mocked.flashcardsApi,
   },
+  ApiError: class ApiError extends Error { },
 }))
 
 vi.mock('../lib/useStudySession', () => ({
@@ -170,6 +171,81 @@ describe('FlashcardStudyPage option handling', () => {
 
     expect(container.textContent).toContain('Mnemonic:')
     expect(container.textContent).toContain('Go downhill to lower loss')
+  })
+
+  it('does not flip card from global Space key presses', async () => {
+    mocked.flashcardsApi.getDeck.mockResolvedValue({
+      deck: {
+        id: 'deck-1',
+        title: 'Deck 1',
+        config: { enable_spaced_repetition: false },
+      },
+      cards: [
+        {
+          id: 'card-1',
+          front: 'Term',
+          back: 'Definition',
+        },
+      ],
+    })
+
+    await act(async () => {
+      root.render(<FlashcardStudyPage />)
+    })
+    await flush()
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+    })
+    await flush()
+
+    expect(container.textContent).toContain('Flip Card')
+    expect(container.textContent).not.toContain('Next Card')
+  })
+
+  it('flips card when Space is pressed on flip surface', async () => {
+    mocked.flashcardsApi.getDeck.mockResolvedValue({
+      deck: {
+        id: 'deck-1',
+        title: 'Deck 1',
+        config: { enable_spaced_repetition: false },
+      },
+      cards: [
+        {
+          id: 'card-1',
+          front: 'Term',
+          back: 'Definition',
+        },
+      ],
+    })
+
+    await act(async () => {
+      root.render(<FlashcardStudyPage />)
+    })
+    await flush()
+
+    const flipSurface = container.querySelector('[data-testid="flashcard-flip-surface"]') as HTMLDivElement | null
+    expect(flipSurface).toBeTruthy()
+
+    act(() => {
+      flipSurface!.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+    })
+    await flush()
+
+    expect(container.textContent).toContain('Next Card')
+  })
+
+  it('shows deck-load error message when getDeck fails', async () => {
+    mocked.flashcardsApi.getDeck.mockRejectedValue(new Error('Deck service unavailable'))
+
+    await act(async () => {
+      root.render(<FlashcardStudyPage />)
+    })
+    await flush()
+
+    expect(container.textContent).toContain('Deck Not Found')
+    expect(container.textContent).toContain('Deck service unavailable')
+    expect(container.textContent).toContain('Go to Dashboard')
   })
 })
 

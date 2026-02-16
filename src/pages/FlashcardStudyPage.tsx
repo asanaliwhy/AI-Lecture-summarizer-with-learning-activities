@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import { useStudySession } from '../lib/useStudySession'
@@ -112,20 +112,6 @@ export function FlashcardStudyPage() {
     }
   }, [deckId])
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === ' ' || event.key === 'Spacebar') {
-        event.preventDefault()
-        setIsFlipped((prev) => !prev)
-      }
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [])
-
   useStudySession({
     activityType: 'flashcard',
     resourceId: deckId,
@@ -218,13 +204,15 @@ export function FlashcardStudyPage() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 w-full max-w-3xl mx-auto">
         <div
+          data-testid="flashcard-flip-surface"
           className="w-full aspect-[3/2] perspective-1000 cursor-pointer group focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-2xl"
           onClick={handleFlip}
           role="button"
           tabIndex={0}
           aria-label="Flashcard preview. Click to flip card"
+          aria-pressed={isFlipped}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
               e.preventDefault()
               handleFlip()
             }
