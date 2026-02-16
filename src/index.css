@@ -212,4 +212,90 @@
   .smart-summary-content code {
     @apply bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded text-[0.9em];
   }
+
+  .dark .smart-summary-scroll {
+    scrollbar-color: #475569 transparent;
+  }
+
+  .dark .smart-summary-scroll::-webkit-scrollbar-thumb {
+    background: #475569;
+  }
+
+  .dark .smart-summary-content {
+    color: #e2e8f0;
+  }
+
+  .dark .smart-summary-content .smart-summary-section {
+    border-color: rgba(51, 65, 85, 0.8);
+    background: linear-gradient(to bottom, #0f172a, rgba(30, 41, 59, 0.75));
+  }
+
+  .dark .smart-summary-content .smart-summary-section>h1,
+  .dark .smart-summary-content .smart-summary-section>h2 {
+    color: #f1f5f9;
+    border-bottom-color: rgba(71, 85, 105, 0.8);
+  }
+
+  .dark .smart-summary-content .smart-summary-section>h1::before,
+  .dark .smart-summary-content .smart-summary-section>h2::before {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.22);
+  }
+
+  .dark .smart-summary-content .smart-key-row {
+    background: rgba(37, 99, 235, 0.14);
+    border-color: rgba(96, 165, 250, 0.28);
+  }
+
+  .dark .smart-summary-content .smart-key-label {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+  }
+
+  .dark .smart-summary-content .smart-key-title {
+    color: #f1f5f9;
+  }
+
+  .dark .smart-summary-content .smart-key-detail {
+    color: #e2e8f0;
+  }
+
+  .dark .smart-summary-content table {
+    border-color: #475569;
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+
+  .dark .smart-summary-content thead th {
+    background: #1e293b;
+    color: #f1f5f9;
+    border-bottom-color: #475569;
+  }
+
+  .dark .smart-summary-content th,
+  .dark .smart-summary-content td {
+    border-right-color: #334155;
+  }
+
+  .dark .smart-summary-content tbody tr {
+    border-bottom-color: #334155;
+  }
+
+  .dark .smart-summary-content tbody tr:nth-child(even) {
+    background: rgba(30, 41, 59, 0.6);
+  }
+
+  .dark .smart-summary-content tbody tr:hover {
+    background: rgba(59, 130, 246, 0.16);
+  }
+
+  .dark .smart-summary-content blockquote {
+    border-left-color: rgba(96, 165, 250, 0.75);
+    background: rgba(59, 130, 246, 0.14);
+    color: #cbd5e1;
+  }
+
+  .dark .smart-summary-content code {
+    background: #1e293b;
+    color: #e2e8f0;
+  }
 }
