@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { ApiError } from '../lib/api'
@@ -8,9 +8,10 @@ import { Label } from '../components/ui/Label'
 import { useToast } from '../components/ui/Toast'
 import { Eye, EyeOff, Check, X } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { useGoogleLogin } from '../hooks/useGoogleLogin'
 export function RegisterPage() {
   const navigate = useNavigate()
-  const { register } = useAuth()
+  const { register, googleLogin } = useAuth()
   const { success: toastSuccess, error: toastError } = useToast()
   const [showPassword, setShowPassword] = useState(false)
   const [firstName, setFirstName] = useState('')
@@ -21,6 +22,28 @@ export function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  const handleGoogleCredential = useCallback(async (idToken: string) => {
+    try {
+      setIsLoading(true)
+      setError('')
+      await googleLogin(idToken)
+      toastSuccess('Welcome!')
+      navigate('/dashboard')
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message)
+        toastError(err.message)
+      } else {
+        setError('Google sign-up failed')
+        toastError('Google sign-up failed. Please try again.')
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [googleLogin, navigate, toastSuccess, toastError])
+
+  const googleBtnRef = useGoogleLogin(handleGoogleCredential, 'signup_with')
 
   const getPasswordStrength = (pass: string) => {
     if (!pass) return { score: 0, label: '' }
@@ -240,6 +263,19 @@ export function RegisterPage() {
               {isLoading ? 'Creating account...' : 'Create Account'}
             </Button>
           </form>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or continue with
+              </span>
+            </div>
+          </div>
+
+          <div ref={googleBtnRef} className="w-full flex justify-center" />
 
           <p className="text-center text-sm text-muted-foreground">
             Already have an account?{' '}

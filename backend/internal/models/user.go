@@ -16,6 +16,8 @@ type User struct {
 	IsVerified      bool       `json:"is_verified"`
 	IsActive        bool       `json:"is_active"`
 	Plan            string     `json:"plan"`
+	AuthProvider    string     `json:"auth_provider"`
+	GoogleID        *string    `json:"-"`
 	GeminiAPIKeyEnc *string    `json:"-"`
 	CreatedAt       time.Time  `json:"created_at"`
 	LastLoginAt     *time.Time `json:"last_login_at"`
@@ -40,4 +42,8 @@ type AuthTokens struct {
 
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
+}
+
+type GoogleLoginRequest struct {
+	IDToken string `json:"id_token"`
 }

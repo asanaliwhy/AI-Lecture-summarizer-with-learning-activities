@@ -389,6 +389,12 @@ export const api = {
                 method: 'POST',
                 body: JSON.stringify({ email }),
             }),
+
+        googleLogin: (idToken: string) =>
+            apiFetch<{ access_token: string; refresh_token: string }>('/auth/google', {
+                method: 'POST',
+                body: JSON.stringify({ id_token: idToken }),
+            }),
     },
 
     // Content

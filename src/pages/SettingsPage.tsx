@@ -19,6 +19,7 @@ import { Switch } from '../components/ui/Switch'
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/Avatar'
 import { Badge } from '../components/ui/Badge'
 import { Textarea } from '../components/ui/Textarea'
+import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import {
   Select,
   SelectContent,
@@ -89,6 +90,7 @@ export function SettingsPage() {
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [defaultSummaryLength, setDefaultSummaryLength] =
     useState<SummaryLengthPreference>(() => getStoredSummaryLengthPreference())
   const [defaultSummaryFormat, setDefaultSummaryFormat] =
@@ -297,8 +299,10 @@ export function SettingsPage() {
     }
   }
 
-  const handleDeleteAccount = async () => {
-    if (!window.confirm('Are you sure? This action cannot be undone.')) return
+  const openDeleteModal = () => setShowDeleteModal(true)
+  const closeDeleteModal = () => setShowDeleteModal(false)
+
+  const confirmDeleteAccount = async () => {
     setIsDeleting(true)
     try {
       await api.user.deleteMe()
@@ -310,6 +314,7 @@ export function SettingsPage() {
       toast.error(message)
     } finally {
       setIsDeleting(false)
+      setShowDeleteModal(false)
     }
   }
 
@@ -584,7 +589,7 @@ export function SettingsPage() {
                   </div>
                   <Button
                     variant="destructive"
-                    onClick={handleDeleteAccount}
+                    onClick={openDeleteModal}
                     disabled={isDeleting}
                   >
                     {isDeleting ? 'Deleting...' : 'Delete Account'}
@@ -847,6 +852,18 @@ export function SettingsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteModal}
+        title="Delete your account?"
+        description="This will permanently remove your account and all associated data. This action cannot be undone."
+        confirmLabel="Delete Account"
+        cancelLabel="Cancel"
+        variant="destructive"
+        loading={isDeleting}
+        onConfirm={confirmDeleteAccount}
+        onCancel={closeDeleteModal}
+      />
     </AppLayout>
   )
 }

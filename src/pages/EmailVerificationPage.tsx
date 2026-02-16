@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { api, setTokens } from '../lib/api'
+import { api, ApiError, setTokens } from '../lib/api'
 import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
 import {
   Card,
   CardContent,
@@ -26,7 +27,11 @@ export function EmailVerificationPage() {
   const [resendEmail, setResendEmail] = useState('')
   const [isResending, setIsResending] = useState(false)
   const [resendError, setResendError] = useState('')
+  const [resendAttempts, setResendAttempts] = useState(0)
   const verifyCalled = useRef(false)
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const MAX_RESEND_ATTEMPTS = 5
 
   useEffect(() => {
     const stored = localStorage.getItem(RESEND_STORAGE_KEY)
@@ -42,24 +47,35 @@ export function EmailVerificationPage() {
     }
   }, [token])
 
+  // Cleanup redirect timer on unmount
+  useEffect(() => {
+    return () => {
+      if (redirectTimer.current) {
+        clearTimeout(redirectTimer.current)
+      }
+    }
+  }, [])
+
   const verifyEmail = async (token: string) => {
     setStatus('verifying')
     try {
       const data = await api.auth.verifyEmail(token)
-      // data contains { access_token, refresh_token, ... }
       if (data.access_token && data.refresh_token) {
         setTokens(data.access_token, data.refresh_token)
         setStatus('success')
         success('Email verified successfully! Redirecting...')
-        setTimeout(() => navigate('/dashboard'), 2000)
+        redirectTimer.current = setTimeout(() => navigate('/dashboard'), 2000)
       } else {
-        // Fallback if structured differently, though backend sends tokens
         setStatus('success')
-        setTimeout(() => navigate('/login'), 2000)
+        redirectTimer.current = setTimeout(() => navigate('/login'), 2000)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus('error')
-      error(err.message || 'Verification failed')
+      if (err instanceof ApiError) {
+        error(err.message)
+      } else {
+        error('Verification failed. The link may be invalid or expired.')
+      }
     }
   }
 
@@ -90,6 +106,11 @@ export function EmailVerificationPage() {
       return
     }
 
+    if (resendAttempts >= MAX_RESEND_ATTEMPTS) {
+      setResendError('Maximum resend attempts reached. Please try again later or contact support.')
+      return
+    }
+
     setIsResending(true)
     setResendError('')
 
@@ -97,9 +118,10 @@ export function EmailVerificationPage() {
       await api.auth.resendVerification(email)
       localStorage.setItem(RESEND_STORAGE_KEY, email)
       setCountdown(60)
+      setResendAttempts((prev) => prev + 1)
       success('Verification email sent again.')
-    } catch (err: any) {
-      const message = err?.message || 'Failed to resend verification email'
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : 'Failed to resend verification email'
       setResendError(message)
       error(message)
     } finally {
@@ -128,9 +150,9 @@ export function EmailVerificationPage() {
   if (status === 'success') {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-secondary/30 p-4">
-        <Card className="w-full max-w-md text-center border-green-200 bg-green-50/50">
+        <Card className="w-full max-w-md text-center border-emerald-500/30 bg-emerald-500/5">
           <CardHeader>
-            <div className="mx-auto mb-4 text-green-500">
+            <div className="mx-auto mb-4 text-emerald-500">
               <CheckCircle className="h-12 w-12" />
             </div>
             <CardTitle>Email Verified!</CardTitle>
@@ -148,9 +170,9 @@ export function EmailVerificationPage() {
   if (status === 'error') {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-secondary/30 p-4">
-        <Card className="w-full max-w-md text-center border-red-200 bg-red-50/50">
+        <Card className="w-full max-w-md text-center border-destructive/30 bg-destructive/5">
           <CardHeader>
-            <div className="mx-auto mb-4 text-red-500">
+            <div className="mx-auto mb-4 text-destructive">
               <XCircle className="h-12 w-12" />
             </div>
             <CardTitle>Verification Failed</CardTitle>
@@ -189,10 +211,9 @@ export function EmailVerificationPage() {
             <label htmlFor="resend-email" className="text-sm font-medium">
               Email address
             </label>
-            <input
+            <Input
               id="resend-email"
               type="email"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
               placeholder="name@example.com"
               value={resendEmail}
               onChange={(e) => {
@@ -214,7 +235,9 @@ export function EmailVerificationPage() {
               ? 'Sending...'
               : countdown > 0
                 ? `Resend in ${countdown}s`
-                : 'Resend verification email'}
+                : resendAttempts >= MAX_RESEND_ATTEMPTS
+                  ? 'Max attempts reached'
+                  : `Resend verification email${resendAttempts > 0 ? ` (${MAX_RESEND_ATTEMPTS - resendAttempts} left)` : ''}`}
           </Button>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">

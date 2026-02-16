@@ -55,6 +55,20 @@ vi.mock('../components/ui/Toast', () => ({
     useToast: () => mocked.toast,
 }))
 
+vi.mock('../components/ui/ConfirmDialog', async () => {
+    const React = await vi.importActual<typeof import('react')>('react')
+    return {
+        ConfirmDialog: ({ open, title, confirmLabel, cancelLabel, onConfirm, onCancel, loading }: any) => {
+            if (!open) return null
+            return React.createElement('div', { 'data-testid': 'confirm-dialog', role: 'alertdialog' },
+                React.createElement('h2', null, title),
+                React.createElement('button', { onClick: onCancel, disabled: loading }, cancelLabel || 'Cancel'),
+                React.createElement('button', { onClick: onConfirm, disabled: loading }, confirmLabel || 'Confirm'),
+            )
+        },
+    }
+})
+
 vi.mock('../components/ui/Tabs', async () => {
     const React = await vi.importActual<typeof import('react')>('react')
 
@@ -540,6 +554,63 @@ describe('SettingsPage avatar persistence', () => {
 
         expect((container.querySelector('#current-password') as HTMLInputElement).value).toBe('')
         expect((container.querySelector('#new-password') as HTMLInputElement).value).toBe('')
+    })
+
+    it('opens delete modal and confirms account deletion', async () => {
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        clickButton('Delete Account')
+        await flush()
+
+        const dialog = container.querySelector('[data-testid="confirm-dialog"]')
+        expect(dialog).toBeTruthy()
+        expect(dialog!.textContent).toContain('Delete your account?')
+
+        // Click the confirm button inside the dialog
+        const confirmBtn = Array.from(dialog!.querySelectorAll('button')).find(
+            (btn) => btn.textContent === 'Delete Account',
+        )
+        expect(confirmBtn).toBeTruthy()
+        await act(async () => {
+            confirmBtn!.click()
+        })
+        await flush()
+
+        expect(mocked.userApi.deleteMe).toHaveBeenCalled()
+        expect(mocked.toast.info).toHaveBeenCalledWith('Account deleted.')
+        expect(mocked.logout).toHaveBeenCalled()
+        expect(mocked.navigate).toHaveBeenCalledWith('/login')
+    })
+
+    it('opens delete modal and cancels without deleting', async () => {
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        clickButton('Delete Account')
+        await flush()
+
+        const dialog = container.querySelector('[data-testid="confirm-dialog"]')
+        expect(dialog).toBeTruthy()
+
+        // Click the cancel button inside the dialog
+        const cancelBtn = Array.from(dialog!.querySelectorAll('button')).find(
+            (btn) => btn.textContent === 'Cancel',
+        )
+        expect(cancelBtn).toBeTruthy()
+        act(() => {
+            cancelBtn!.click()
+        })
+        await flush()
+
+        // Dialog should be gone
+        expect(container.querySelector('[data-testid="confirm-dialog"]')).toBeNull()
+        expect(mocked.userApi.deleteMe).not.toHaveBeenCalled()
+        expect(mocked.logout).not.toHaveBeenCalled()
     })
 })
 

@@ -95,6 +95,27 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
 
+func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
+	var req models.GoogleLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
+
+	if req.IDToken == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "id_token is required", r))
+		return
+	}
+
+	tokens, err := h.authService.GoogleLogin(r.Context(), req.IDToken)
+	if err != nil {
+		handleServiceError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, tokens)
+}
+
 func (h *AuthHandler) ResendVerification(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email string `json:"email"`

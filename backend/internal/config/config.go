@@ -23,10 +23,10 @@ type Config struct {
 	JWTSecret string
 
 	// Gemini AI
-	GeminiAPIKey           string
-	GeminiRequestsPerMin   int
-	GeminiTokensPerMin     int
-	GeminiConcurrentReqs   int
+	GeminiAPIKey         string
+	GeminiRequestsPerMin int
+	GeminiTokensPerMin   int
+	GeminiConcurrentReqs int
 
 	// Storage
 	StorageType string
@@ -41,6 +41,9 @@ type Config struct {
 
 	// Frontend
 	FrontendURL string
+
+	// Google OAuth
+	GoogleClientID string
 }
 
 func Load() *Config {
@@ -48,23 +51,24 @@ func Load() *Config {
 	godotenv.Load()
 
 	cfg := &Config{
-		Port:        getEnvOrDefault("PORT", "8080"),
-		Env:         getEnvOrDefault("ENV", "development"),
-		DatabaseURL: mustGetEnv("DATABASE_URL"),
-		RedisURL:    mustGetEnv("REDIS_URL"),
-		JWTSecret:   mustGetEnv("JWT_SECRET"),
-		GeminiAPIKey: mustGetEnv("GEMINI_API_KEY"),
+		Port:                 getEnvOrDefault("PORT", "8080"),
+		Env:                  getEnvOrDefault("ENV", "development"),
+		DatabaseURL:          mustGetEnv("DATABASE_URL"),
+		RedisURL:             mustGetEnv("REDIS_URL"),
+		JWTSecret:            mustGetEnv("JWT_SECRET"),
+		GeminiAPIKey:         mustGetEnv("GEMINI_API_KEY"),
 		GeminiRequestsPerMin: getEnvAsIntOrDefault("GEMINI_REQUESTS_PER_MINUTE", 60),
 		GeminiTokensPerMin:   getEnvAsIntOrDefault("GEMINI_TOKENS_PER_MINUTE", 1000000),
 		GeminiConcurrentReqs: getEnvAsIntOrDefault("GEMINI_CONCURRENT_REQUESTS", 5),
-		StorageType: getEnvOrDefault("STORAGE_TYPE", "local"),
-		StoragePath: getEnvOrDefault("STORAGE_PATH", "./uploads"),
-		SMTPHost:    getEnvOrDefault("SMTP_HOST", ""),
-		SMTPPort:    getEnvOrDefault("SMTP_PORT", "587"),
-		SMTPUser:    getEnvOrDefault("SMTP_USER", ""),
-		SMTPPass:    getEnvOrDefault("SMTP_PASS", ""),
-		SMTPFrom:    getEnvOrDefault("SMTP_FROM", "noreply@lectura.app"),
-		FrontendURL: getEnvOrDefault("FRONTEND_URL", "http://localhost:5173"),
+		StorageType:          getEnvOrDefault("STORAGE_TYPE", "local"),
+		StoragePath:          getEnvOrDefault("STORAGE_PATH", "./uploads"),
+		SMTPHost:             getEnvOrDefault("SMTP_HOST", ""),
+		SMTPPort:             getEnvOrDefault("SMTP_PORT", "587"),
+		SMTPUser:             getEnvOrDefault("SMTP_USER", ""),
+		SMTPPass:             getEnvOrDefault("SMTP_PASS", ""),
+		SMTPFrom:             getEnvOrDefault("SMTP_FROM", "noreply@lectura.app"),
+		FrontendURL:          getEnvOrDefault("FRONTEND_URL", "http://localhost:5173"),
+		GoogleClientID:       getEnvOrDefault("GOOGLE_CLIENT_ID", ""),
 	}
 
 	return cfg

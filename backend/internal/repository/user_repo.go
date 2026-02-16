@@ -29,27 +29,50 @@ func NewUserRepo(pool *pgxpool.Pool) *UserRepo {
 
 func (r *UserRepo) Create(ctx context.Context, user *models.User) error {
 	query := `
-		INSERT INTO users (id, email, password_hash, full_name, is_verified, plan)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO users (id, email, password_hash, full_name, is_verified, plan, auth_provider, google_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING created_at`
 
 	user.ID = uuid.New()
 	user.Plan = "free"
 	user.IsActive = true
+	if user.AuthProvider == "" {
+		user.AuthProvider = "local"
+	}
+
+	var pwHash *string
+	if user.PasswordHash != "" {
+		pwHash = &user.PasswordHash
+	}
 
 	return r.pool.QueryRow(ctx, query,
-		user.ID, user.Email, user.PasswordHash, user.FullName, user.IsVerified, user.Plan,
+		user.ID, user.Email, pwHash, user.FullName, user.IsVerified, user.Plan, user.AuthProvider, user.GoogleID,
 	).Scan(&user.CreatedAt)
 }
 
 func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	user := &models.User{}
-	query := `SELECT id, email, password_hash, full_name, avatar_url, bio, is_verified, is_active, plan, created_at, last_login_at
+	query := `SELECT id, email, COALESCE(password_hash, ''), full_name, avatar_url, bio, is_verified, is_active, plan, COALESCE(auth_provider, 'local'), google_id, created_at, last_login_at
 		FROM users WHERE email = $1`
 
 	err := r.pool.QueryRow(ctx, query, email).Scan(
 		&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.AvatarURL, &user.Bio,
-		&user.IsVerified, &user.IsActive, &user.Plan, &user.CreatedAt, &user.LastLoginAt,
+		&user.IsVerified, &user.IsActive, &user.Plan, &user.AuthProvider, &user.GoogleID, &user.CreatedAt, &user.LastLoginAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func (r *UserRepo) GetByGoogleID(ctx context.Context, googleID string) (*models.User, error) {
+	user := &models.User{}
+	query := `SELECT id, email, COALESCE(password_hash, ''), full_name, avatar_url, bio, is_verified, is_active, plan, COALESCE(auth_provider, 'local'), google_id, created_at, last_login_at
+		FROM users WHERE google_id = $1`
+
+	err := r.pool.QueryRow(ctx, query, googleID).Scan(
+		&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.AvatarURL, &user.Bio,
+		&user.IsVerified, &user.IsActive, &user.Plan, &user.AuthProvider, &user.GoogleID, &user.CreatedAt, &user.LastLoginAt,
 	)
 	if err != nil {
 		return nil, err
@@ -59,12 +82,12 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, 
 
 func (r *UserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	user := &models.User{}
-	query := `SELECT id, email, password_hash, full_name, avatar_url, bio, is_verified, is_active, plan, created_at, last_login_at
+	query := `SELECT id, email, COALESCE(password_hash, ''), full_name, avatar_url, bio, is_verified, is_active, plan, COALESCE(auth_provider, 'local'), google_id, created_at, last_login_at
 		FROM users WHERE id = $1`
 
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Email, &user.PasswordHash, &user.FullName, &user.AvatarURL, &user.Bio,
-		&user.IsVerified, &user.IsActive, &user.Plan, &user.CreatedAt, &user.LastLoginAt,
+		&user.IsVerified, &user.IsActive, &user.Plan, &user.AuthProvider, &user.GoogleID, &user.CreatedAt, &user.LastLoginAt,
 	)
 	if err != nil {
 		return nil, err
@@ -92,6 +115,14 @@ func (r *UserRepo) Update(ctx context.Context, user *models.User) error {
 
 func (r *UserRepo) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
 	_, err := r.pool.Exec(ctx, "UPDATE users SET password_hash = $1 WHERE id = $2", passwordHash, userID)
+	return err
+}
+
+func (r *UserRepo) LinkGoogle(ctx context.Context, userID uuid.UUID, googleID string) error {
+	_, err := r.pool.Exec(ctx,
+		"UPDATE users SET google_id = $1, auth_provider = CASE WHEN auth_provider = 'local' THEN 'local' ELSE auth_provider END WHERE id = $2",
+		googleID, userID,
+	)
 	return err
 }
 
