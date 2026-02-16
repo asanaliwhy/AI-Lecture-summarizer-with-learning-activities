@@ -312,13 +312,6 @@ export function SettingsPage() {
                   </div>
                   <Switch />
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Compact Mode</Label>
-                    <p className="text-sm text-muted-foreground">Use denser layout for lists and tables.</p>
-                  </div>
-                  <Switch />
-                </div>
                 <div className="space-y-2 pt-4 border-t">
                   <Label>Default Summary Length</Label>
                   <Select defaultValue="medium">
