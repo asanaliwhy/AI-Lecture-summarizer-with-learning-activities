@@ -20,7 +20,7 @@ export function FlashcardStudyPage() {
   const [cards, setCards] = useState<any[]>([])
   const [currentCardIndex, setCurrentCardIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
-  const [showRating, setShowRating] = useState(false)
+  const [enableSpacedRepetition, setEnableSpacedRepetition] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -28,8 +28,25 @@ export function FlashcardStudyPage() {
     async function load() {
       try {
         const data = await api.flashcards.getDeck(deckId!)
-        setDeck(data)
-        setCards(data.cards || [])
+
+        const deckData = (data as any).deck || (data as any)
+        setDeck(deckData)
+        setCards(Array.isArray((data as any).cards) ? (data as any).cards : [])
+
+        let parsedConfig: Record<string, unknown> = {}
+        const rawConfig = (deckData as any)?.config
+        if (typeof rawConfig === 'string') {
+          try {
+            parsedConfig = JSON.parse(rawConfig) as Record<string, unknown>
+          } catch {
+            parsedConfig = {}
+          }
+        } else if (rawConfig && typeof rawConfig === 'object') {
+          parsedConfig = rawConfig as Record<string, unknown>
+        }
+
+        const spacedValue = parsedConfig.enable_spaced_repetition
+        setEnableSpacedRepetition(typeof spacedValue === 'boolean' ? spacedValue : true)
       } catch {
         setDeck(null)
       } finally {
@@ -52,11 +69,10 @@ export function FlashcardStudyPage() {
 
   const handleFlip = () => {
     setIsFlipped(!isFlipped)
-    if (!isFlipped) setShowRating(true)
   }
 
   const handleRate = async (rating: number) => {
-    // Rate the card (1=again, 2=hard, 3=good, 4=easy)
+    // Rate the card (0=again, 1=hard, 2=good, 3=easy)
     if (currentCard?.id) {
       api.flashcards.rateCard(currentCard.id, rating).catch(() => { })
     }
@@ -66,7 +82,6 @@ export function FlashcardStudyPage() {
   const handleNext = () => {
     if (currentCardIndex < totalCards - 1) {
       setIsFlipped(false)
-      setShowRating(false)
       setTimeout(() => setCurrentCardIndex(prev => prev + 1), 300)
     } else {
       navigate('/dashboard')
@@ -78,7 +93,6 @@ export function FlashcardStudyPage() {
     setCards(shuffled)
     setCurrentCardIndex(0)
     setIsFlipped(false)
-    setShowRating(false)
   }
 
   if (isLoading) {
@@ -162,6 +176,12 @@ export function FlashcardStudyPage() {
               <p className="text-xl md:text-2xl font-medium leading-relaxed">
                 {currentCard?.back || currentCard?.definition || ''}
               </p>
+              {currentCard?.mnemonic && (
+                <div className="mt-6 p-4 bg-indigo-500/10 dark:bg-indigo-400/15 rounded-lg text-sm text-indigo-200 dark:text-indigo-100 border border-indigo-400/20 dark:border-indigo-300/25">
+                  <span className="font-semibold text-indigo-100 dark:text-indigo-50">Mnemonic: </span>
+                  {currentCard.mnemonic}
+                </div>
+              )}
               {currentCard?.example && (
                 <div className="mt-8 p-4 bg-slate-800/90 dark:bg-slate-700/80 rounded-lg text-sm text-slate-300 dark:text-slate-200">
                   <span className="font-semibold text-slate-200 dark:text-slate-100">Example: </span>
@@ -174,10 +194,14 @@ export function FlashcardStudyPage() {
 
         {/* Controls */}
         <div className="mt-12 w-full max-w-2xl h-24 flex items-center justify-center">
-          {!showRating ? (
+          {!isFlipped ? (
             <Button size="lg" className="px-12 h-14 text-lg shadow-lg" onClick={handleFlip}>
               <RotateCw className="mr-2 h-5 w-5" />
               Flip Card
+            </Button>
+          ) : !enableSpacedRepetition ? (
+            <Button size="lg" className="px-12 h-14 text-lg shadow-lg" onClick={handleNext}>
+              Next Card
             </Button>
           ) : (
             <div className="grid grid-cols-4 gap-4 w-full animate-in fade-in slide-in-from-bottom-4">
@@ -185,7 +209,7 @@ export function FlashcardStudyPage() {
                 <Button
                   variant="outline"
                   className="h-14 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 dark:border-red-500/40 dark:hover:bg-red-500/15 dark:hover:text-red-300 dark:hover:border-red-500/50"
-                  onClick={() => handleRate(1)}
+                  onClick={() => handleRate(0)}
                 >
                   Again
                 </Button>
@@ -195,7 +219,7 @@ export function FlashcardStudyPage() {
                 <Button
                   variant="outline"
                   className="h-14 border-orange-200 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-300 dark:border-orange-500/40 dark:hover:bg-orange-500/15 dark:hover:text-orange-300 dark:hover:border-orange-500/50"
-                  onClick={() => handleRate(2)}
+                  onClick={() => handleRate(1)}
                 >
                   Hard
                 </Button>
@@ -205,7 +229,7 @@ export function FlashcardStudyPage() {
                 <Button
                   variant="outline"
                   className="h-14 border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 dark:border-blue-500/40 dark:hover:bg-blue-500/15 dark:hover:text-blue-300 dark:hover:border-blue-500/50"
-                  onClick={() => handleRate(3)}
+                  onClick={() => handleRate(2)}
                 >
                   Good
                 </Button>
@@ -215,7 +239,7 @@ export function FlashcardStudyPage() {
                 <Button
                   variant="outline"
                   className="h-14 border-green-200 hover:bg-green-50 hover:text-green-700 hover:border-green-300 dark:border-green-500/40 dark:hover:bg-green-500/15 dark:hover:text-green-300 dark:hover:border-green-500/50"
-                  onClick={() => handleRate(4)}
+                  onClick={() => handleRate(3)}
                 >
                   Easy
                 </Button>
