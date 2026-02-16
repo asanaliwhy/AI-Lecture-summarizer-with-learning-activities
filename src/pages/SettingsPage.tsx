@@ -380,7 +380,7 @@ export function SettingsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Notifications</CardTitle>
+                <CardTitle>Email Notifications</CardTitle>
                 <CardDescription>Manage how we communicate with you.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -395,6 +395,15 @@ export function SettingsPage() {
                   <div className="space-y-0.5">
                     <Label className="text-base">Weekly Digest</Label>
                     <p className="text-sm text-muted-foreground">Summary of your learning activity.</p>
+                  </div>
+                  <Switch />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Study Reminders</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Gentle nudge when you haven&apos;t studied in 3+ days.
+                    </p>
                   </div>
                   <Switch />
                 </div>
