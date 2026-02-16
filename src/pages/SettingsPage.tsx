@@ -36,6 +36,12 @@ import {
   type SummaryLengthPreference,
 } from '../lib/summaryLengthPreference'
 import {
+  applyThemePreference,
+  getStoredThemePreference,
+  saveStoredThemePreference,
+  type ThemePreference,
+} from '../lib/themePreference'
+import {
   type NotificationPreferencesResponse,
   type UpdateNotificationPreferencePayload,
 } from '../lib/api'
@@ -70,6 +76,8 @@ export function SettingsPage() {
     useState<SummaryLengthPreference>(() => getStoredSummaryLengthPreference())
   const [defaultSummaryFormat, setDefaultSummaryFormat] =
     useState<SummaryFormatPreference>(() => getStoredSummaryFormatPreference())
+  const [themePreference, setThemePreference] =
+    useState<ThemePreference>(() => getStoredThemePreference())
   const [notificationPreferences, setNotificationPreferences] =
     useState<NotificationPreferencesResponse>(DEFAULT_NOTIFICATION_PREFERENCES)
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(true)
@@ -252,6 +260,14 @@ export function SettingsPage() {
     toast.success('Default summary format saved.')
   }
 
+  const handleThemeToggle = (enabled: boolean) => {
+    const nextTheme: ThemePreference = enabled ? 'dark' : 'light'
+    setThemePreference(nextTheme)
+    saveStoredThemePreference(nextTheme)
+    applyThemePreference(nextTheme)
+    toast.success(`Theme switched to ${nextTheme} mode.`)
+  }
+
   const handleNotificationToggle = async (
     key: UpdateNotificationPreferencePayload['key'],
     enabled: boolean,
@@ -416,7 +432,11 @@ export function SettingsPage() {
                     <Label className="text-base">Dark Mode</Label>
                     <p className="text-sm text-muted-foreground">Toggle dark mode theme.</p>
                   </div>
-                  <Switch />
+                  <Switch
+                    aria-label="Dark Mode"
+                    checked={themePreference === 'dark'}
+                    onCheckedChange={handleThemeToggle}
+                  />
                 </div>
                 <div className="space-y-2 pt-4 border-t">
                   <Label>Default Summary Length</Label>

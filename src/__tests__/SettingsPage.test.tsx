@@ -4,6 +4,7 @@ import { act } from 'react'
 
 const SUMMARY_LENGTH_STORAGE_KEY = 'default_summary_length'
 const SUMMARY_FORMAT_STORAGE_KEY = 'default_summary_format'
+const THEME_STORAGE_KEY = 'theme_preference'
 
 const mocked = vi.hoisted(() => ({
     navigate: vi.fn(),
@@ -169,6 +170,7 @@ describe('SettingsPage avatar persistence', () => {
         vi.clearAllMocks()
         localStorage.removeItem(SUMMARY_LENGTH_STORAGE_KEY)
         localStorage.removeItem(SUMMARY_FORMAT_STORAGE_KEY)
+        localStorage.removeItem(THEME_STORAGE_KEY)
         mocked.userApi.updateMe.mockResolvedValue({ ...mocked.user })
         mocked.userApi.changePassword.mockResolvedValue({})
         mocked.userApi.deleteMe.mockResolvedValue({})
@@ -221,6 +223,7 @@ describe('SettingsPage avatar persistence', () => {
         container.remove()
         localStorage.removeItem(SUMMARY_LENGTH_STORAGE_KEY)
         localStorage.removeItem(SUMMARY_FORMAT_STORAGE_KEY)
+        localStorage.removeItem(THEME_STORAGE_KEY)
         vi.unstubAllGlobals()
     })
 
@@ -390,6 +393,28 @@ describe('SettingsPage avatar persistence', () => {
             key: 'study_reminders',
             enabled: true,
         })
+    })
+
+    it('toggles dark mode and persists theme preference', async () => {
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        clickButton('Preferences')
+        await flush()
+
+        clickSwitch('Dark Mode')
+        await flush()
+
+        expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark')
+        expect(document.documentElement.classList.contains('dark')).toBe(true)
+
+        clickSwitch('Dark Mode')
+        await flush()
+
+        expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light')
+        expect(document.documentElement.classList.contains('dark')).toBe(false)
     })
 })
 
