@@ -528,7 +528,8 @@ function enhanceSmartSummaryHtml(html: string): string {
       const items = Array.from(element.children).filter(c => c.tagName?.toLowerCase() === 'li')
 
       for (const li of items) {
-        const pEl = li.querySelector('p')
+        const allParagraphs = Array.from(li.querySelectorAll('p'))
+        const pEl = allParagraphs[0] || null
         const textSource = pEl || li
 
         // Split text at <br> to separate label line from detail line
@@ -551,6 +552,15 @@ function enhanceSmartSummaryHtml(html: string): string {
             detailLine = afterParts.join('').trim()
           } else {
             labelLine = pEl.textContent?.trim() || ''
+            // Check for additional <p> elements as detail text (common when marked
+            // renders separate paragraphs inside a single <li>)
+            if (allParagraphs.length > 1) {
+              detailLine = allParagraphs
+                .slice(1)
+                .map(p => p.textContent?.trim())
+                .filter(Boolean)
+                .join(' ')
+            }
           }
         } else {
           labelLine = li.textContent?.trim() || ''
