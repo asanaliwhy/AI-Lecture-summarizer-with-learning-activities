@@ -174,9 +174,6 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	}
 
 	if config.Format == "smart" {
-		if refined := s.rewriteSmartSummaryForFidelity(ctx, rawText, transcript); strings.TrimSpace(refined) != "" {
-			rawText = refined
-		}
 		rawText = normalizeSmartLabels(rawText)
 		rawText = removeWeakExampleLines(rawText)
 		rawText = pruneSmartRedundantSections(rawText)
@@ -1146,10 +1143,15 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Section-specific rules:\n")
 		b.WriteString("- Summary of Video Content: MANDATORY — always include this section. Write one concise narrative paragraph summarizing the overall video/document.\n")
 		b.WriteString("- Key Insights and Core Concepts: 3-5 deeper insights (implications/connections), not dictionary-like repetition.\n")
-		b.WriteString("  Format each insight as a mini-paragraph with a bold concept header, e.g. '**Key Concept: Neuro-Computational Superiority**' followed by 1-2 explanatory sentences.\n")
+		b.WriteString("  Format each insight EXACTLY like this example (note the blank lines and spacing):\n")
+		b.WriteString("  **Key Concept: Concept Title Here**\n")
+		b.WriteString("  Explanation paragraph here with 1-2 sentences.\n\n")
+		b.WriteString("  CRITICAL: Always put a space after the colon in 'Key Concept: Title'. Always put the explanation on a SEPARATE line (not on the same line as the title).\n")
 		b.WriteString("  Do NOT output repetitive 'Definition' lines for every item.\n")
 		b.WriteString("  Include 'Example:' ONLY if explicitly present in transcript; otherwise omit the Example line entirely.\n")
 		b.WriteString("- Table section: use a topic-appropriate title; this is the ONLY place for entity/concept descriptions in table form.\n")
+		b.WriteString("  The table MUST be a proper markdown table with header, separator, and at least 3 data rows. Example:\n")
+		b.WriteString("  | Column A | Column B |\n  | --- | --- |\n  | Value 1 | Description 1 |\n  | Value 2 | Description 2 |\n  | Value 3 | Description 3 |\n\n")
 		b.WriteString("- Additional Interesting Facts: output ONLY as a markdown bullet list (3-6 bullets, each line starts with '- '). Include only non-duplicated noteworthy facts, with numbers/evidence when present; avoid trivial or playful statements.\n")
 		b.WriteString("Forbidden sections: DO NOT output 'Conclusions' or 'Summary Highlights'.\n")
 		b.WriteString("For section 'Key Insights and Core Concepts', keep concept names faithful to transcript terminology and avoid invented terms.\n")
