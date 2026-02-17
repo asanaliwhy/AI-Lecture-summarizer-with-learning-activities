@@ -323,10 +323,13 @@ function normalizeSmartSummaryMarkdown(value: string): string {
       continue
     }
 
-    const knownSectionHeading = raw.match(/^(Summary(?:\s+of\s+[A-Za-z\s]+)?|Key Insights and Core Concepts|Brain Structure and Functions|Additional Interesting Facts|Conclusions|Summary Highlights):?$/i)
+    // Strip bold/italic markers for heading detection (Gemini often wraps headings in **)
+    const cleanRaw = cleanInlineMarkdown(raw)
+
+    const knownSectionHeading = cleanRaw.match(/^(Summary(?:\s+of\s+[A-Za-z\s]+)?|Key Insights and Core Concepts|Brain Structure and Functions|Brain Parts and Functions|Additional Interesting Facts|Conclusions|Summary Highlights):?$/i)
     if (knownSectionHeading) {
       if (out.length > 0 && out[out.length - 1] !== '') out.push('')
-      const headingText = cleanInlineMarkdown(knownSectionHeading[1]).replace(/:\s*$/, '')
+      const headingText = knownSectionHeading[1].replace(/:\s*$/, '')
       out.push(`## ${headingText}`)
       out.push('')
       currentSmartSection = headingText.toLowerCase()
@@ -336,13 +339,12 @@ function normalizeSmartSummaryMarkdown(value: string): string {
 
     // Also detect any generic section heading (e.g. "Key Historical Events", "Algorithm Comparison")
     // that the topic-adaptive table section might use
-    const genericSectionHeading = raw.match(/^([A-Z][A-Za-z\s,&-]{3,60}):?$/)
-    if (genericSectionHeading && !raw.match(/^(Key Concept|Definition|Example|Figure)\s*:/i)) {
-      // Only treat as heading if the next line is NOT empty or is also a heading-like line
+    const genericSectionHeading = cleanRaw.match(/^([A-Z][A-Za-z\s,&-]{3,60}):?$/)
+    if (genericSectionHeading && !cleanRaw.match(/^(Key Concept|Definition|Example|Figure)\s*:/i)) {
       const nextLine = (lines[i + 1] || '').trim()
       if (nextLine && !nextLine.match(/^(Key Concept|Definition|Example|Figure)\s*:/i)) {
         if (out.length > 0 && out[out.length - 1] !== '') out.push('')
-        const headingText = cleanInlineMarkdown(genericSectionHeading[1]).replace(/:\s*$/, '')
+        const headingText = genericSectionHeading[1].replace(/:\s*$/, '')
         out.push(`## ${headingText}`)
         out.push('')
         currentSmartSection = headingText.toLowerCase()
