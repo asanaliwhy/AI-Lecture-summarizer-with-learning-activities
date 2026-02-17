@@ -299,3 +299,81 @@
     color: #e2e8f0;
   }
 }
+
+/* Chat panel markdown prose */
+.chat-prose p {
+  margin: 0 0 0.5em;
+}
+
+.chat-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-prose ul,
+.chat-prose ol {
+  margin: 0.25em 0 0.5em;
+  padding-left: 1.25em;
+}
+
+.chat-prose ul {
+  list-style-type: disc;
+}
+
+.chat-prose ol {
+  list-style-type: decimal;
+}
+
+.chat-prose li {
+  margin: 0.15em 0;
+}
+
+.chat-prose code {
+  background: hsl(var(--muted));
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+}
+
+.chat-prose pre {
+  background: hsl(var(--muted));
+  padding: 0.5em 0.75em;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 0.5em 0;
+  font-size: 0.85em;
+}
+
+.chat-prose pre code {
+  background: none;
+  padding: 0;
+}
+
+.chat-prose h1,
+.chat-prose h2,
+.chat-prose h3 {
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+}
+
+.chat-prose h1 {
+  font-size: 1.1em;
+}
+
+.chat-prose h2 {
+  font-size: 1.05em;
+}
+
+.chat-prose h3 {
+  font-size: 1em;
+}
+
+.chat-prose blockquote {
+  border-left: 3px solid hsl(var(--border));
+  padding-left: 0.75em;
+  margin: 0.5em 0;
+  color: hsl(var(--muted-foreground));
+}
+
+.chat-prose strong {
+  font-weight: 600;
+}

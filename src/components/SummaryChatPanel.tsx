@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { MessageCircle, X, Send, Loader2, Bot, User, Trash2 } from 'lucide-react'
+import DOMPurify from 'dompurify'
 import { api } from '../lib/api'
 
 interface ChatMessage {
@@ -69,16 +70,19 @@ export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelPr
         setMessages([])
     }
 
-    const formatMessage = (text: string) => {
-        // Simple markdown-like formatting
-        return text
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`(.*?)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-sm">$1</code>')
-            .replace(/^- (.*)/gm, '• $1')
-            .replace(/^\d+\. (.*)/gm, '$&')
-            .replace(/\n/g, '<br />')
-    }
+    const formatMessage = useCallback((text: string) => {
+        // Safety net: strip any residual markdown Gemini might slip in
+        const cleaned = text
+            .replace(/^#{1,6}\s+/gm, '')          // headers
+            .replace(/\*\*(.*?)\*\*/g, '$1')       // bold
+            .replace(/\*(.*?)\*/g, '$1')           // italic
+            .replace(/`{1,3}[^`]*`{1,3}/g, (m) => // code blocks/inline
+                m.replace(/`/g, ''))
+            .replace(/^[\s]*[-*+]\s+/gm, '')       // bullet points
+            .replace(/^[\s]*\d+\.\s+/gm, '')       // numbered lists
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links
+        return DOMPurify.sanitize(cleaned.replace(/\n/g, '<br />'))
+    }, [])
 
     return (
         <>
@@ -181,8 +185,8 @@ export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelPr
                                     )}
                                     <div
                                         className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${msg.role === 'user'
-                                                ? 'bg-primary text-primary-foreground rounded-br-md'
-                                                : 'bg-muted text-foreground rounded-bl-md'
+                                            ? 'bg-primary text-primary-foreground rounded-br-md'
+                                            : 'bg-muted text-foreground rounded-bl-md chat-prose'
                                             }`}
                                         dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }}
                                     />
