@@ -397,7 +397,11 @@ function normalizeSmartSummaryMarkdown(value: string): string {
       const value = cleanInlineMarkdown(keyValue[2])
       const normalizedLabel = label.toLowerCase()
 
-      if (/^(key concept|definition|example|insight|fact|figure)$/.test(normalizedLabel)) {
+      if (/^(key concept|definition|insight|fact|figure)$/.test(normalizedLabel)) {
+        // Output as plain paragraph so enhanceSmartSummaryHtml can detect and badge-ify it
+        out.push(`${label}: ${value}`)
+      } else if (/^example$/.test(normalizedLabel)) {
+        // Examples stay as blockquotes with blue left border
         out.push(`> **${label}:** ${value}`)
       } else {
         out.push(`- **${label}:** ${value}`)
@@ -433,6 +437,50 @@ function enhanceSmartSummaryHtml(html: string): string {
   let currentSection: HTMLElement | null = null
   const keyLabelRegex = /^(Key Concept|Definition|Example|Figure)\s*:\s*/i
 
+  // Helper: try to extract key concept from any element's text content
+  const tryCreateKeyRow = (text: string): HTMLElement | null => {
+    const match = text.match(keyLabelRegex)
+    if (!match) return null
+    const label = match[1]
+    // Don't badge-ify "Example:" — those stay as blockquotes
+    if (/^example$/i.test(label)) return null
+
+    let rest = text.slice(match[0].length).trim()
+
+    // Fix collapsed text like "Boss of Your BodyThe brain..."
+    if (/^key concept$/i.test(label)) {
+      rest = rest.replace(/([a-z\)])([A-Z][a-z])/g, '$1\n$2')
+    }
+
+    const parts = rest.split(/\n+/, 2).map((v) => v.trim()).filter(Boolean)
+    const title = parts[0] || ''
+    const detail = parts[1] || (parts.length === 1 ? '' : parts.slice(1).join(' '))
+
+    const p = doc.createElement('p')
+    p.className = 'smart-key-row'
+
+    const badge = doc.createElement('span')
+    badge.className = 'smart-key-label'
+    badge.textContent = `${label}:`
+    p.appendChild(badge)
+
+    if (title) {
+      const titleSpan = doc.createElement('span')
+      titleSpan.className = 'smart-key-title'
+      titleSpan.textContent = title
+      p.appendChild(titleSpan)
+    }
+
+    if (detail) {
+      const detailSpan = doc.createElement('span')
+      detailSpan.className = 'smart-key-detail'
+      detailSpan.textContent = detail
+      p.appendChild(detailSpan)
+    }
+
+    return p
+  }
+
   for (const node of nodes) {
     if (node.nodeType === Node.TEXT_NODE && !node.textContent?.trim()) {
       continue
@@ -453,48 +501,31 @@ function enhanceSmartSummaryHtml(html: string): string {
       body.appendChild(currentSection)
     }
 
-    if (tag === 'p') {
-      const text = element.textContent?.trim() || ''
-      const match = text.match(keyLabelRegex)
-      if (match) {
-        const label = match[1]
-        let rest = text.slice(match[0].length).trim()
-
-        // Fix collapsed text like "Boss of Your BodyThe brain..."
-        if (/^key concept$/i.test(label)) {
-          rest = rest.replace(/([a-z\)])([A-Z][a-z])/g, '$1\n$2')
+    // Try to detect Key Concept patterns in <p>, <h3>-<h6>, <blockquote>, <strong> etc.
+    const text = element.textContent?.trim() || ''
+    if (tag === 'p' || tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6' || tag === 'blockquote') {
+      const keyRow = tryCreateKeyRow(text)
+      if (keyRow) {
+        // If there's a next sibling paragraph that's the detail text, merge it in
+        const nextNode = nodes[nodes.indexOf(node) + 1] as HTMLElement | undefined
+        if (nextNode && nextNode.tagName?.toLowerCase() === 'p' && !nextNode.textContent?.match(keyLabelRegex)) {
+          const existingDetail = keyRow.querySelector('.smart-key-detail')
+          if (!existingDetail) {
+            const detailSpan = doc.createElement('span')
+            detailSpan.className = 'smart-key-detail'
+            detailSpan.textContent = nextNode.textContent?.trim() || ''
+            keyRow.appendChild(detailSpan)
+            // Mark next node to skip
+            nextNode.setAttribute('data-skip', 'true')
+          }
         }
-
-        const parts = rest.split(/\n+/, 2).map((v) => v.trim()).filter(Boolean)
-        const title = parts[0] || ''
-        const detail = parts[1] || (parts.length === 1 ? '' : parts.slice(1).join(' '))
-
-        const p = doc.createElement('p')
-        p.className = 'smart-key-row'
-
-        const badge = doc.createElement('span')
-        badge.className = 'smart-key-label'
-        badge.textContent = `${label}:`
-        p.appendChild(badge)
-
-        if (title) {
-          const titleSpan = doc.createElement('span')
-          titleSpan.className = 'smart-key-title'
-          titleSpan.textContent = title
-          p.appendChild(titleSpan)
-        }
-
-        if (detail) {
-          const detailSpan = doc.createElement('span')
-          detailSpan.className = 'smart-key-detail'
-          detailSpan.textContent = detail
-          p.appendChild(detailSpan)
-        }
-
-        currentSection.appendChild(p)
+        currentSection.appendChild(keyRow)
         continue
       }
     }
+
+    // Skip nodes already consumed by key-row merging
+    if (element.getAttribute?.('data-skip') === 'true') continue
 
     currentSection.appendChild(node)
   }
