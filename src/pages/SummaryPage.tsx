@@ -339,18 +339,16 @@ function normalizeSmartSummaryMarkdown(value: string): string {
 
     // Also detect any generic section heading (e.g. "Key Historical Events", "Algorithm Comparison")
     // that the topic-adaptive table section might use
+    const genericWords = cleanRaw.split(/\s+/)
     const genericSectionHeading = cleanRaw.match(/^([A-Z][A-Za-z\s,&-]{3,60}):?$/)
-    if (genericSectionHeading && !cleanRaw.match(/^(Key Concept|Definition|Example|Figure)\s*:/i)) {
-      const nextLine = (lines[i + 1] || '').trim()
-      if (nextLine && !nextLine.match(/^(Key Concept|Definition|Example|Figure)\s*:/i)) {
-        if (out.length > 0 && out[out.length - 1] !== '') out.push('')
-        const headingText = genericSectionHeading[1].replace(/:\s*$/, '')
-        out.push(`## ${headingText}`)
-        out.push('')
-        currentSmartSection = headingText.toLowerCase()
-        i += 1
-        continue
-      }
+    if (genericSectionHeading && genericWords.length <= 8 && !cleanRaw.match(/^(Key Concept|Definition|Example|Figure)\s*:/i)) {
+      if (out.length > 0 && out[out.length - 1] !== '') out.push('')
+      const headingText = genericSectionHeading[1].replace(/:\s*$/, '')
+      out.push(`## ${headingText}`)
+      out.push('')
+      currentSmartSection = headingText.toLowerCase()
+      i += 1
+      continue
     }
 
     if (raw.startsWith('• ')) {
@@ -374,7 +372,10 @@ function normalizeSmartSummaryMarkdown(value: string): string {
     const headerCols = parseHeaderColumns(raw)
     const nextRaw = (lines[i + 1] || '').trim()
     const nextCols = nextRaw ? parseSmartTableRow(nextRaw, Math.max(headerCols.length, 2)) || [] : []
+    // Only use keyword matching for table detection if the line has column-like spacing
+    const hasColumnSpacing = /\s{2,}/.test(addImplicitSpaces(raw).trim())
     const headerLikeByKeywords =
+      hasColumnSpacing &&
       /(part|component|topic|section)/i.test(raw) &&
       /(function|description|role|detail|size|location|figure)/i.test(raw)
     const isTableBlock =
