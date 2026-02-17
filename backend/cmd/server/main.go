@@ -93,6 +93,7 @@ func main() {
 	libraryHandler := handlers.NewLibraryHandler(pool)
 	userHandler := handlers.NewUserHandler(userRepo)
 	jobHandler := handlers.NewJobHandler(jobRepo)
+	chatHandler := handlers.NewChatHandler(summaryRepo, geminiService)
 
 	// ──── Step 6: Start Job Worker Pool ────
 	workerPool := worker.NewPool(
@@ -134,6 +135,7 @@ func main() {
 		libraryHandler,
 		userHandler,
 		jobHandler,
+		chatHandler,
 		wsHub,
 		cfg.FrontendURL,
 	)

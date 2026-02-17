@@ -1661,3 +1661,63 @@ func isTrueFalseOptions(options []string) bool {
 	b := strings.TrimSpace(strings.ToLower(options[1]))
 	return (a == "true" && b == "false") || (a == "false" && b == "true")
 }
+
+// ChatWithSummary sends a user question to Gemini with summary content as context.
+func (s *GeminiService) ChatWithSummary(ctx context.Context, summaryContent, userMessage string, history []models.ChatMessage) (string, error) {
+	if err := s.acquireRate(ctx); err != nil {
+		return "", err
+	}
+	defer s.releaseRate()
+
+	// Create a chat-specific model instance with a system instruction
+	chatModel := s.client.GenerativeModel("gemini-2.5-flash")
+	chatModel.SetTemperature(0.4)
+	chatModel.SetTopP(0.95)
+
+	// Truncate summary if very long to stay within token limits
+	maxContext := 30000
+	contextText := summaryContent
+	if len(contextText) > maxContext {
+		contextText = contextText[:maxContext] + "\n\n[...content truncated for length]"
+	}
+
+	chatModel.SystemInstruction = &genai.Content{
+		Parts: []genai.Part{
+			genai.Text(fmt.Sprintf(`You are a helpful study assistant for a student. You answer questions based ONLY on the following summary content. If the answer is not found in the content, say so honestly instead of making things up.
+
+Keep answers concise, clear, and educational. Use bullet points or numbered lists when listing multiple items. If relevant, quote specific parts of the summary.
+
+=== SUMMARY CONTENT ===
+%s
+=== END OF SUMMARY ===`, contextText)),
+		},
+	}
+
+	// Build chat session with history
+	chat := chatModel.StartChat()
+
+	// Replay conversation history
+	for _, msg := range history {
+		role := "user"
+		if msg.Role == "assistant" {
+			role = "model"
+		}
+		chat.History = append(chat.History, &genai.Content{
+			Role:  role,
+			Parts: []genai.Part{genai.Text(msg.Content)},
+		})
+	}
+
+	// Send the new message
+	resp, err := chat.SendMessage(ctx, genai.Text(userMessage))
+	if err != nil {
+		return "", fmt.Errorf("Gemini chat error: %w", err)
+	}
+
+	reply := strings.TrimSpace(extractText(resp))
+	if reply == "" {
+		return "I couldn't generate a response. Please try rephrasing your question.", nil
+	}
+
+	return reply, nil
+}

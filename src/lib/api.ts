@@ -451,6 +451,12 @@ export const api = {
                 method: 'POST',
                 body: JSON.stringify(data || {}),
             }),
+
+        chat: (id: string, message: string, history: { role: string; content: string }[]) =>
+            apiFetch<{ reply: string }>(`/summaries/${id}/chat`, {
+                method: 'POST',
+                body: JSON.stringify({ message, history }),
+            }),
     },
 
     // Quizzes

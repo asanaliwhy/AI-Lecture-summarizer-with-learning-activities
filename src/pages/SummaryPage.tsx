@@ -6,6 +6,7 @@ import { marked } from 'marked'
 import { api, type SummaryDetailResponse, type SummarySectionResponse } from '../lib/api'
 import { ApiError } from '../lib/api'
 import { useStudySession } from '../lib/useStudySession'
+import { SummaryChatPanel } from '../components/SummaryChatPanel'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -1427,6 +1428,7 @@ export function SummaryPage() {
         </div>,
         document.body,
       )}
+      {id && <SummaryChatPanel summaryId={id} summaryTitle={title} />}
     </AppLayout>
   )
 }

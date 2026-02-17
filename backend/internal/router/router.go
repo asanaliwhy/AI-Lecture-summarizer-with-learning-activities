@@ -24,6 +24,7 @@ func New(
 	libraryHandler *handlers.LibraryHandler,
 	userHandler *handlers.UserHandler,
 	jobHandler *handlers.JobHandler,
+	chatHandler *handlers.ChatHandler,
 	wsHub *websocket.Hub,
 	frontendURL string,
 ) http.Handler {
@@ -86,6 +87,7 @@ func New(
 			r.Delete("/{id}", summaryHandler.Delete)
 			r.Post("/{id}/regenerate", summaryHandler.Regenerate)
 			r.Put("/{id}/favorite", summaryHandler.ToggleFavorite)
+			r.Post("/{id}/chat", chatHandler.AskQuestion)
 		})
 
 		// ──── Quiz Routes ────
