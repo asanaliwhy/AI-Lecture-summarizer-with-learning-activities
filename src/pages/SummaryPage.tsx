@@ -501,7 +501,7 @@ function enhanceSmartSummaryHtml(html: string): string {
       body.appendChild(currentSection)
     }
 
-    // Try to detect Key Concept patterns in <p>, <h3>-<h6>, <blockquote>, <strong> etc.
+    // Try to detect Key Concept patterns in <p>, <h3>-<h6>, <blockquote> etc.
     const text = element.textContent?.trim() || ''
     if (tag === 'p' || tag === 'h3' || tag === 'h4' || tag === 'h5' || tag === 'h6' || tag === 'blockquote') {
       const keyRow = tryCreateKeyRow(text)
@@ -515,13 +515,98 @@ function enhanceSmartSummaryHtml(html: string): string {
             detailSpan.className = 'smart-key-detail'
             detailSpan.textContent = nextNode.textContent?.trim() || ''
             keyRow.appendChild(detailSpan)
-            // Mark next node to skip
             nextNode.setAttribute('data-skip', 'true')
           }
         }
         currentSection.appendChild(keyRow)
         continue
       }
+    }
+
+    // Handle lists (ul/ol) containing Key Concept / Example items inside <li><p>...<br>...</p></li>
+    if (tag === 'ul' || tag === 'ol') {
+      const items = Array.from(element.children).filter(c => c.tagName?.toLowerCase() === 'li')
+
+      for (const li of items) {
+        const pEl = li.querySelector('p')
+        const textSource = pEl || li
+
+        // Split text at <br> to separate label line from detail line
+        let labelLine = ''
+        let detailLine = ''
+
+        if (pEl) {
+          const br = pEl.querySelector('br')
+          if (br) {
+            const beforeParts: string[] = []
+            const afterParts: string[] = []
+            let hitBr = false
+            for (const child of Array.from(pEl.childNodes)) {
+              if (child === br || (child as HTMLElement).tagName?.toLowerCase() === 'br') { hitBr = true; continue }
+              const t = child.textContent || ''
+              if (!hitBr) beforeParts.push(t)
+              else afterParts.push(t)
+            }
+            labelLine = beforeParts.join('').trim()
+            detailLine = afterParts.join('').trim()
+          } else {
+            labelLine = pEl.textContent?.trim() || ''
+          }
+        } else {
+          labelLine = li.textContent?.trim() || ''
+        }
+
+        const match = labelLine.match(keyLabelRegex)
+        if (!match) {
+          // Not a key concept item, keep as plain paragraph
+          const plainP = doc.createElement('p')
+          plainP.textContent = textSource.textContent?.trim() || ''
+          currentSection.appendChild(plainP)
+          continue
+        }
+
+        const label = match[1]
+        const rest = labelLine.slice(match[0].length).trim()
+
+        if (/^example$/i.test(label)) {
+          // Create blockquote for Example items
+          const bq = doc.createElement('blockquote')
+          const bp = doc.createElement('p')
+          const strong = doc.createElement('strong')
+          strong.textContent = `${label}:`
+          bp.appendChild(strong)
+          bp.appendChild(doc.createTextNode(` ${rest}`))
+          bq.appendChild(bp)
+          currentSection.appendChild(bq)
+          continue
+        }
+
+        // Create badge row for Key Concept, Definition, etc.
+        const row = doc.createElement('p')
+        row.className = 'smart-key-row'
+
+        const badge = doc.createElement('span')
+        badge.className = 'smart-key-label'
+        badge.textContent = `${label}:`
+        row.appendChild(badge)
+
+        if (rest) {
+          const titleSpan = doc.createElement('span')
+          titleSpan.className = 'smart-key-title'
+          titleSpan.textContent = rest
+          row.appendChild(titleSpan)
+        }
+
+        if (detailLine) {
+          const detailSpan = doc.createElement('span')
+          detailSpan.className = 'smart-key-detail'
+          detailSpan.textContent = detailLine
+          row.appendChild(detailSpan)
+        }
+
+        currentSection.appendChild(row)
+      }
+      continue
     }
 
     // Skip nodes already consumed by key-row merging
