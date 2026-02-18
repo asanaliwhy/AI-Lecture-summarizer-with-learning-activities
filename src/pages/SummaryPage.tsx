@@ -306,8 +306,8 @@ function normalizeSmartSummaryMarkdown(value: string): string {
     }
 
     // Drop wrapper titles like "Smart Summary" / "Smart Summary: ..."
-    // so they do not render as visible content in Smart mode.
-    if (/^smart\s*summary\s*(?::\s*.*)?$/i.test(raw)) {
+    // and preamble lines like "Here is a Smart Summary of the lecture transcript:"
+    if (/^smart\s*summary\s*(?::\s*.*)?$/i.test(raw) || /^here\s+is\s+a\s+smart\s+summary/i.test(raw)) {
       i += 1
       continue
     }
