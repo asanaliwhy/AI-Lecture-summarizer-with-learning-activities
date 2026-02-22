@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
 import { useToast } from '../components/ui/Toast'
-import { Eye, EyeOff, Check, X } from 'lucide-react'
+import { Eye, EyeOff, Check, X, Sparkles } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useGoogleLogin } from '../hooks/useGoogleLogin'
 export function RegisterPage() {
@@ -133,8 +133,8 @@ export function RegisterPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid gap-5 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="first-name">First Name</Label>
                 <Input
@@ -293,25 +293,29 @@ export function RegisterPage() {
       <div className="hidden lg:flex w-1/2 bg-primary items-center justify-center p-12 text-primary-foreground relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1513258496098-3f1b4e7d02ac?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-overlay"></div>
         <div className="relative z-10 max-w-lg">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/30 bg-primary-foreground/10 px-3 py-1.5 mb-5 shadow-[0_0_20px_rgba(255,255,255,0.14)]">
+            <Sparkles className="h-4 w-4 text-primary-foreground/90" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-foreground/85">Lectura</span>
+          </div>
           <h2 className="text-3xl font-bold mb-6">
-            Join thousands of students learning smarter.
+            Built for students who want to learn smarter.
           </h2>
           <ul className="space-y-4 text-lg opacity-90">
             <li className="flex items-center gap-3">
-              <div className="h-6 w-6 rounded-full bg-primary-foreground/20 flex items-center justify-center">
-                <Check className="h-4 w-4" />
+              <div className="h-8 w-8 rounded-full border border-primary-foreground/35 bg-primary-foreground/20 shadow-[0_0_18px_rgba(255,255,255,0.2)] flex items-center justify-center">
+                <Check className="h-5 w-5 text-primary-foreground" />
               </div>
               AI-powered summaries in seconds
             </li>
             <li className="flex items-center gap-3">
-              <div className="h-6 w-6 rounded-full bg-primary-foreground/20 flex items-center justify-center">
-                <Check className="h-4 w-4" />
+              <div className="h-8 w-8 rounded-full border border-primary-foreground/35 bg-primary-foreground/20 shadow-[0_0_18px_rgba(255,255,255,0.2)] flex items-center justify-center">
+                <Check className="h-5 w-5 text-primary-foreground" />
               </div>
               Automatically generated quizzes
             </li>
             <li className="flex items-center gap-3">
-              <div className="h-6 w-6 rounded-full bg-primary-foreground/20 flex items-center justify-center">
-                <Check className="h-4 w-4" />
+              <div className="h-8 w-8 rounded-full border border-primary-foreground/35 bg-primary-foreground/20 shadow-[0_0_18px_rgba(255,255,255,0.2)] flex items-center justify-center">
+                <Check className="h-5 w-5 text-primary-foreground" />
               </div>
               Spaced repetition flashcards
             </li>
