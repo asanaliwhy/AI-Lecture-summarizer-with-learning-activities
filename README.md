@@ -335,6 +335,20 @@ npx tsc --noEmit
 
 **Tested pages:** Dashboard, ContentInput, Library, Settings, Summaries, Summary, Quizzes, QuizConfig, QuizTake, QuizResults, Flashcards, FlashcardConfig, FlashcardStudy, EmailVerification, and API client.
 
+### Post-deploy smoke checks
+
+After deployment, run:
+
+```bash
+# Uses BASE_URL=https://localhost:3443 by default
+npm run smoke
+```
+
+This smoke script checks:
+- Auth endpoint reachability (`/api/v1/auth/login`)
+- Summary generation endpoint reachability (`/api/v1/summaries/generate`)
+- WebSocket handshake reachability (`/api/v1/ws`)
+
 ### Backend Tests
 
 ```bash
@@ -386,7 +400,45 @@ lectura/
 ├── nginx.ssl.conf                  # Production HTTPS config
 ├── .env.production                 # Production environment template
 └── scripts/
-    └── generate-ssl.sh             # Self-signed SSL certificate generator
+    ├── generate-ssl.sh             # Self-signed SSL certificate generator
+    └── smoke-check.sh              # Post-deploy smoke checks
+```
+
+---
+
+## 🧰 Operations Runbook (PostgreSQL/Redis)
+
+### Backup
+
+```bash
+# PostgreSQL logical backup
+docker compose exec -T postgres pg_dump -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-lectura} > ./backup-postgres.sql
+
+# Redis snapshot backup
+docker compose exec -T redis redis-cli BGSAVE
+docker compose cp redis:/data/dump.rdb ./backup-redis.rdb
+```
+
+### Restore
+
+```bash
+# PostgreSQL restore (WARNING: overwrites target db objects)
+cat ./backup-postgres.sql | docker compose exec -T postgres psql -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-lectura}
+
+# Redis restore (requires restart with restored dump)
+docker compose down
+copy ./backup-redis.rdb ./data/redis/dump.rdb
+docker compose up -d
+```
+
+### Verification
+
+```bash
+# App/API health
+curl -k https://localhost:3443/api/v1/health
+
+# Metrics endpoint (uptime + avg latency)
+curl -k https://localhost:3443/metrics
 ```
 
 ---

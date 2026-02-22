@@ -133,3 +133,79 @@ jobs:
           test "${{ needs.docker-build.result }}" = "success"
 
           echo "✅ Deploy gate passed. Safe to deploy."
+
+  # ─── Post-deploy smoke checks + simple alert thresholds ───
+  smoke-e2e:
+    name: Smoke E2E
+    runs-on: ubuntu-latest
+    needs: [deploy-gate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Build and start stack
+        run: |
+          docker compose up -d --build
+
+      - name: Wait for app readiness
+        run: |
+          for i in {1..30}; do
+            if curl -k -fsS https://localhost:3443/api/v1/health >/dev/null; then
+              echo "App is healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "App did not become healthy in time"
+          exit 1
+
+      - name: Run smoke checks (auth, summary endpoint reachability, websocket)
+        run: |
+          npm ci
+          npm run smoke
+
+      - name: Uptime/latency threshold check (alert gate)
+        run: |
+          METRICS=$(curl -k -fsS https://localhost:3443/metrics)
+          echo "$METRICS"
+
+          UPTIME=$(echo "$METRICS" | awk '/^lectura_process_uptime_seconds / {print $2}')
+          LATENCY=$(echo "$METRICS" | awk '/^lectura_request_latency_ms_avg / {print $2}')
+
+          : "${UPTIME:=0}"
+          : "${LATENCY:=9999}"
+
+          if [ "$UPTIME" -lt 10 ]; then
+            echo "Uptime too low for smoke window: $UPTIME"
+            exit 1
+          fi
+
+          LAT_INT=$(printf '%.0f' "$LATENCY")
+          if [ "$LAT_INT" -gt 1000 ]; then
+            echo "Average latency too high: ${LATENCY}ms"
+            exit 1
+          fi
+
+          echo "✅ Uptime/latency thresholds passed"
+
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose logs --no-color > smoke-failure.log
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-failure-logs
+          path: smoke-failure.log
+
+      - name: Shutdown stack
+        if: always()
+        run: docker compose down -v

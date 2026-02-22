@@ -35,6 +35,7 @@ func New(
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RealIP)
 	r.Use(middleware.RequestID)
+	r.Use(middleware.StructuredRequestLog)
 	r.Use(middleware.CORS(frontendURL))
 
 	// Auth rate limiter (10 req/min per IP)
@@ -45,6 +46,7 @@ func New(
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
 	})
+	r.Get("/metrics", middleware.MetricsHandler)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {

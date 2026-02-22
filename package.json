@@ -9,7 +9,8 @@
         "test": "vitest",
         "test:ci": "vitest run --reporter=verbose",
         "build": "tsc && vite build",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "smoke": "sh ./scripts/smoke-check.sh"
     },
     "dependencies": {
         "@radix-ui/react-avatar": "^1.1.2",
@@ -30,7 +31,8 @@
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
         "react-router-dom": "^6.28.0",
-        "tailwind-merge": "^2.6.0"
+        "tailwind-merge": "^2.6.0",
+        "ws": "^8.18.3"
     },
     "devDependencies": {
         "@types/react": "^18.3.12",
