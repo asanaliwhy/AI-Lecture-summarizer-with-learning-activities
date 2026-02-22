@@ -291,8 +291,12 @@ export function RegisterPage() {
 
       {/* Right Panel - Visual */}
       <div className="hidden lg:flex w-1/2 bg-primary items-center justify-center p-12 text-primary-foreground relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_20%,rgba(255,255,255,0.14),transparent_46%),radial-gradient(circle_at_80%_72%,rgba(255,255,255,0.1),transparent_42%),linear-gradient(145deg,rgba(255,255,255,0.05),transparent_62%)]"></div>
+        <div className="absolute inset-0 opacity-10 [background-size:36px_36px] [background-image:linear-gradient(to_right,rgba(255,255,255,0.16)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.16)_1px,transparent_1px)]"></div>
+        <div className="absolute -left-20 top-20 h-72 w-72 rounded-full border border-white/20 bg-white/5 blur-3xl"></div>
+        <div className="absolute -right-16 bottom-12 h-64 w-64 rounded-full border border-white/15 bg-white/5 blur-2xl"></div>
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1513258496098-3f1b4e7d02ac?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-overlay"></div>
-        <div className="relative z-10 max-w-lg">
+        <div className="relative z-10 max-w-lg w-full">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/30 bg-primary-foreground/10 px-3 py-1.5 mb-5 shadow-[0_0_20px_rgba(255,255,255,0.14)]">
             <Sparkles className="h-4 w-4 text-primary-foreground/90" />
             <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-foreground/85">Lectura</span>
