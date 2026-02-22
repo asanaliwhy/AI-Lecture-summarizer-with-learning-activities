@@ -1314,6 +1314,8 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Paragraph output rules:\n")
 		b.WriteString("1) Use natural essay-style paragraphs; prioritize readability and narrative flow over study-note labels.\n")
 		b.WriteString("2) Keep section headings concise, then explain ideas in full sentences.\n")
+		b.WriteString("Subheading rules (mandatory): ALWAYS use 2-4 title-case subheadings (2-5 words each); match each section's actual content; avoid generic labels like Overview/Main Points/Conclusion; each section under a subheading must have at least 2 full sentences; NEVER exceed 4 subheadings.\n")
+		b.WriteString("WRONG: no subheadings or generic headings. RIGHT: specific headings like 'The Containment Strategy', 'Nuclear Brinkmanship', 'Internal Soviet Collapse'.\n")
 		b.WriteString("3) STRICTLY FORBIDDEN labels in output: 'Key Concept:', 'Definition:', 'Example:', 'Case Study:', 'Dates & Figures:'.\n")
 		b.WriteString("4) Weave those ideas naturally into prose (e.g., 'Energybending is ...'), without meta-prefixes.\n")
 		b.WriteString("5) Avoid repetitive phrasing and repeated sentence templates.\n")
