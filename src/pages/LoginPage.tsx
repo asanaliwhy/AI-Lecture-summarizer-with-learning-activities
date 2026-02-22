@@ -90,7 +90,7 @@ export function LoginPage() {
           <div className="space-y-2">
             <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
             <p className="text-muted-foreground">
-              Enter your credentials to access your account
+              Good to see you again.
             </p>
           </div>
 
@@ -195,6 +195,10 @@ export function LoginPage() {
 
       {/* Right Panel - Visual */}
       <div className="hidden lg:flex w-1/2 bg-primary items-center justify-center p-12 text-primary-foreground relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.16),transparent_45%),radial-gradient(circle_at_80%_75%,rgba(255,255,255,0.1),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.04),transparent_60%)]"></div>
+        <div className="absolute inset-0 opacity-15 [background-size:34px_34px] [background-image:linear-gradient(to_right,rgba(255,255,255,0.14)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.14)_1px,transparent_1px)]"></div>
+        <div className="absolute -left-16 top-16 h-64 w-64 rounded-full border border-white/20 bg-white/5 blur-2xl"></div>
+        <div className="absolute -right-20 bottom-10 h-72 w-72 rounded-full border border-white/15 bg-white/5 blur-3xl"></div>
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-overlay"></div>
         <div className="relative z-10 max-w-lg text-center">
           <blockquote className="text-2xl font-medium italic mb-6">
