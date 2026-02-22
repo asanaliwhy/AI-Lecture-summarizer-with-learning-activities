@@ -661,16 +661,16 @@ export function LibraryPage() {
                         >
                           <div className={cn('absolute inset-x-0 top-0 h-1 bg-gradient-to-r', typeMeta.railClass)} />
                           {item.is_favorite && (
-                            <div className="absolute top-3 right-3 z-10 rounded-full bg-background/85 p-1 shadow-sm">
+                            <div className="absolute top-4 right-4 z-10 rounded-full bg-background/85 p-1 shadow-sm">
                               <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
                             </div>
                           )}
-                          <div className="absolute bottom-3 left-3 z-10">
-                            <Badge variant="outline" className={cn('text-[11px] font-medium bg-background/85 shadow-sm', typeMeta.badgeClass)}>
+                          <div className="absolute bottom-4 left-6 z-10">
+                            <Badge variant="outline" className={cn('text-[11px] font-medium bg-background/90 shadow-sm', typeMeta.badgeClass)}>
                               {typeMeta.label}
                             </Badge>
                           </div>
-                          <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-md bg-background/85 p-1 shadow-sm">
+                          <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-md bg-background/85 p-1 shadow-sm">
                             <Checkbox
                               checked={selectedItems.includes(item.id)}
                               aria-label={`Select ${item.title}`}
@@ -679,7 +679,7 @@ export function LibraryPage() {
                             />
                           </div>
                           <CardContent
-                            className="p-6 pt-7 pb-14"
+                            className="p-6 pt-7 pb-12"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="flex items-start mb-4">
@@ -690,7 +690,7 @@ export function LibraryPage() {
                             <h3 className="font-semibold text-lg mb-2 line-clamp-1 group-hover:text-primary transition-colors">
                               {item.title}
                             </h3>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4 rounded-md bg-secondary/40 px-2 py-1 w-fit">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 rounded-md bg-secondary/40 px-2 py-1 w-fit">
                               <Calendar className="h-3 w-3" />
                               <span>{item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</span>
                             </div>
