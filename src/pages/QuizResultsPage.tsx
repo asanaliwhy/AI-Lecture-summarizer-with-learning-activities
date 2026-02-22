@@ -405,7 +405,11 @@ export function QuizResultsPage() {
             'inline-flex items-center justify-center p-3 rounded-full mb-4',
             isPass ? 'bg-yellow-100 dark:bg-yellow-500/15' : 'bg-orange-100 dark:bg-orange-500/15'
           )}>
-            <Trophy className={cn('h-8 w-8', isPass ? 'text-yellow-600 dark:text-yellow-300' : 'text-orange-600 dark:text-orange-300')} />
+            {isPass ? (
+              <Trophy className="h-8 w-8 text-yellow-600 dark:text-yellow-300" />
+            ) : (
+              <Target className="h-8 w-8 text-orange-600 dark:text-orange-300" />
+            )}
           </div>
           <h1 className="text-4xl font-bold mb-2">
             {isPass ? 'Great Job!' : 'Keep Practicing!'}
