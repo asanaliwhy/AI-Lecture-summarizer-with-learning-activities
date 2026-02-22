@@ -163,8 +163,8 @@ export function DashboardPage() {
 
   const formatStudyHours = (value: number) => {
     const safe = Number.isFinite(value) ? Math.max(0, value) : 0
-    const truncated = Math.floor(safe * 100) / 100
-    return truncated.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
+    const rounded = Math.round(safe * 10) / 10
+    return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}h`
   }
 
   const stats = [
