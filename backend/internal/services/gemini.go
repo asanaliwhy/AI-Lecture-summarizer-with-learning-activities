@@ -1301,6 +1301,7 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("   - Function: <what it does>\n")
 		b.WriteString("   - Examples: <brief, specific examples; short phrase list, not long sentences>\n")
 		b.WriteString("   - Key Takeaway: <why this structure matters in plain language>\n")
+		b.WriteString("   - Key Takeaway rule (strengthened): state a specific real-world consequence/lasting impact/surprising implication, not purpose restatement; add info beyond Definition/Function. WRONG: 'This doctrine established the fundamental US approach to counter Soviet influence.' WRONG: 'This structure became an important part of the Cold War.' RIGHT: 'Without the Truman Doctrine, Greece and Turkey may have fallen to communism, potentially triggering wider domino effects.' RIGHT: 'SDI exerted immense economic pressure on the Soviet Union, contributing to its eventual collapse.' Must answer: what would differ without it?\n")
 		b.WriteString("5) Keep labels consistent. Prefer Definition, Function, Examples, Key Takeaway, and Fact. Integrate size/location details into Definition instead of a separate 'Size:' bullet.\n")
 		b.WriteString("6) In Interesting Facts, do NOT prefix each bullet with 'Fact:'; the heading already provides context.\n")
 		b.WriteString("7) Merge related facts into one bullet when they describe the same point (e.g., wattage + LED example).\n")
