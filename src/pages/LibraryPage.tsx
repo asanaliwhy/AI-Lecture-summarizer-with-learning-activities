@@ -665,6 +665,11 @@ export function LibraryPage() {
                               <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
                             </div>
                           )}
+                          <div className="absolute bottom-3 left-3 z-10">
+                            <Badge variant="outline" className={cn('text-[11px] font-medium bg-background/85 shadow-sm', typeMeta.badgeClass)}>
+                              {typeMeta.label}
+                            </Badge>
+                          </div>
                           <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-md bg-background/85 p-1 shadow-sm">
                             <Checkbox
                               checked={selectedItems.includes(item.id)}
@@ -674,16 +679,13 @@ export function LibraryPage() {
                             />
                           </div>
                           <CardContent
-                            className="p-6 pt-7"
+                            className="p-6 pt-7 pb-14"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-start mb-4">
                               <div className={cn('p-2 rounded-lg', typeMeta.iconClass)}>
                                 <TypeIcon className="h-5 w-5" />
                               </div>
-                              <Badge variant="outline" className={cn('text-[11px] font-medium', typeMeta.badgeClass)}>
-                                {typeMeta.label}
-                              </Badge>
                             </div>
                             <h3 className="font-semibold text-lg mb-2 line-clamp-1 group-hover:text-primary transition-colors">
                               {item.title}
