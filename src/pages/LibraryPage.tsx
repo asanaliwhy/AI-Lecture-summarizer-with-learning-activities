@@ -669,6 +669,7 @@ export function LibraryPage() {
                             <Checkbox
                               checked={selectedItems.includes(item.id)}
                               aria-label={`Select ${item.title}`}
+                              onClick={(e) => e.stopPropagation()}
                               onCheckedChange={() => toggleSelection(item.id)}
                             />
                           </div>
@@ -731,6 +732,7 @@ export function LibraryPage() {
                           <Checkbox
                             checked={selectedItems.includes(item.id)}
                             aria-label={`Select ${item.title}`}
+                            onClick={(e) => e.stopPropagation()}
                             onCheckedChange={() => toggleSelection(item.id)}
                           />
                           <div className={cn('p-2 rounded-lg shrink-0', typeMeta.iconClass)}>
