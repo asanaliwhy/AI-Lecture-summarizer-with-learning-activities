@@ -434,7 +434,10 @@ export function QuizResultsPage() {
             <div className="text-sm font-medium text-muted-foreground">Time Taken</div>
           </Card>
           <Card className="text-center py-6">
-            <div className="text-4xl font-bold text-purple-600 mb-1">
+            <div className={cn(
+              'text-4xl font-bold mb-1',
+              isPass ? 'text-green-600 dark:text-green-300' : 'text-red-600 dark:text-red-300',
+            )}>
               {isPass ? '✓ Pass' : '✗ Fail'}
             </div>
             <div className="text-sm font-medium text-muted-foreground">Result</div>
