@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -30,11 +32,28 @@ func NewQuizHandler(quizRepo *repository.QuizRepo, summaryRepo *repository.Summa
 }
 
 func (h *QuizHandler) Generate(w http.ResponseWriter, r *http.Request) {
-	var req models.GenerateQuizRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
 		return
 	}
+
+	var req models.GenerateQuizRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
+
+	var rawConfig struct {
+		QuestionTypes []string `json:"question_types"`
+	}
+	_ = json.Unmarshal(body, &rawConfig)
+
+	config := req
+	if rawConfig.QuestionTypes != nil {
+		config.QuestionTypes = append([]string(nil), rawConfig.QuestionTypes...)
+	}
+	log.Printf("Saving quiz config question_types: %v", config.QuestionTypes)
 
 	userID := middleware.GetUserID(r.Context())
 
@@ -51,7 +70,7 @@ func (h *QuizHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		Title:         req.Title,
 		QuestionCount: req.NumQuestions,
 	}
-	configBytes, _ := json.Marshal(req)
+	configBytes, _ := json.Marshal(config)
 	quiz.ConfigJSON = configBytes
 	quiz.QuestionsJSON = json.RawMessage("[]")
 

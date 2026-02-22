@@ -111,10 +111,20 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		Language       string   `json:"language"`
 	}
 	json.Unmarshal(job.ConfigJSON, &config)
+	metadataOnlyMode := isMetadataOnlyContent(transcript)
+
+	summaryModel := s.model
+	if metadataOnlyMode {
+		metadataModel := s.client.GenerativeModel("gemini-2.5-flash")
+		metadataModel.SetTemperature(0.3)
+		metadataModel.SetTopP(0.95)
+		metadataModel.SetMaxOutputTokens(3072)
+		summaryModel = metadataModel
+	}
 
 	// Build layered prompt
 	prompt := buildSummaryPrompt(config.Format, config.Length, config.FocusAreas,
-		config.TargetAudience, config.Language, transcript)
+		config.TargetAudience, config.Language, transcript, metadataOnlyMode)
 
 	// Publish status update
 	s.PublishUpdate(ctx, job.UserID, models.WSMessage{
@@ -126,7 +136,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	})
 
 	// Call Gemini
-	resp, err := s.model.GenerateContent(ctx, genai.Text(prompt))
+	resp, err := summaryModel.GenerateContent(ctx, genai.Text(prompt))
 	if err != nil {
 		return fmt.Errorf("Gemini API error: %w", err)
 	}
@@ -150,7 +160,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		qualityFallbackReason = &reason
 	}
 
-	if strings.Contains(strings.ToLower(transcript), "transcript is unavailable for this content") {
+	if metadataOnlyMode {
 		isQualityFallback = true
 		if qualityFallbackReason == nil {
 			reason := "metadata_only_transcript"
@@ -158,9 +168,15 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		}
 	}
 
-	if config.Format == "smart" && !containsMarkdownTable(rawText) {
-		restructurePrompt := "Rewrite this Smart Summary in clean Markdown. Preserve all key information, preserve source terminology, and include at least one markdown table with 2+ columns and 3+ data rows. If entities are not obvious, create a table with columns: Concept | Explanation. In the section 'Additional Interesting Facts', output 3-6 markdown bullet points (each line must start with '- '). Do NOT invent new coined terms that are not present in the source transcript. If a claim is uncertain, say: Not explicitly stated in transcript. Return markdown only:\n\n" + rawText
-		resp2, err := s.model.GenerateContent(ctx, genai.Text(restructurePrompt))
+	if config.Format == "smart" && !hasValidSmartSummaryTable(rawText) {
+		isQualityFallback = true
+		if qualityFallbackReason == nil {
+			reason := "smart_summary_structure_fallback"
+			qualityFallbackReason = &reason
+		}
+
+		restructurePrompt := buildSmartSummaryStructureFallbackPrompt(rawText, metadataOnlyMode)
+		resp2, err := summaryModel.GenerateContent(ctx, genai.Text(restructurePrompt))
 		if err == nil {
 			rawText2 := extractText(resp2)
 			if strings.TrimSpace(rawText2) != "" {
@@ -168,7 +184,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 			}
 		}
 
-		if !containsMarkdownTable(rawText) {
+		if !hasValidSmartSummaryTable(rawText) {
 			rawText = ensureSmartSummaryTable(rawText)
 		}
 	}
@@ -177,6 +193,9 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		rawText = normalizeSmartLabels(rawText)
 		rawText = removeWeakExampleLines(rawText)
 		rawText = pruneSmartRedundantSections(rawText)
+		if metadataOnlyMode {
+			rawText = enforceMetadataOnlyKeyInsightsSection(rawText)
+		}
 		if repairedText, repaired := enforceSmartAdditionalFactsBullets(rawText); repaired {
 			rawText = repairedText
 			log.Println("INFO: Smart summary Additional Interesting Facts auto-repaired to markdown bullets")
@@ -638,6 +657,11 @@ func isAdditionalFactsHeading(line string) bool {
 	return strings.Contains(normalized, "additional interesting facts")
 }
 
+func isKeyInsightsHeading(line string) bool {
+	normalized := normalizeSmartHeadingCandidate(line)
+	return strings.Contains(normalized, "key insights and core concepts")
+}
+
 func isSmartSectionBoundary(line string) bool {
 	t := strings.TrimSpace(line)
 	if t == "" {
@@ -651,9 +675,56 @@ func isSmartSectionBoundary(line string) bool {
 	return strings.Contains(normalized, "summary of video content") ||
 		strings.Contains(normalized, "key insights and core concepts") ||
 		strings.Contains(normalized, "brain structure and functions") ||
+		strings.Contains(normalized, "key concepts table") ||
+		strings.Contains(normalized, "summary table") ||
 		strings.Contains(normalized, "additional interesting facts") ||
 		strings.Contains(normalized, "conclusions") ||
 		strings.Contains(normalized, "summary highlights")
+}
+
+func enforceMetadataOnlyKeyInsightsSection(text string) string {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+
+	start := -1
+	for i, line := range lines {
+		if isKeyInsightsHeading(line) {
+			start = i
+			break
+		}
+	}
+	if start == -1 {
+		return text
+	}
+
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if isSmartSectionBoundary(lines[i]) {
+			end = i
+			break
+		}
+	}
+
+	replacement := []string{
+		lines[start],
+		"",
+		"Key Insights cannot be generated from metadata alone. Please provide a video with an available transcript.",
+	}
+
+	rebuilt := make([]string, 0, len(lines)-max(0, end-start-1)+len(replacement)-1)
+	rebuilt = append(rebuilt, lines[:start]...)
+	rebuilt = append(rebuilt, replacement...)
+	if end < len(lines) {
+		rebuilt = append(rebuilt, "")
+		rebuilt = append(rebuilt, lines[end:]...)
+	}
+
+	cleaned := strings.Join(rebuilt, "\n")
+	for strings.Contains(cleaned, "\n\n\n") {
+		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+	}
+
+	return strings.TrimSpace(cleaned)
 }
 
 func isOrderedListLine(line string) bool {
@@ -937,9 +1008,112 @@ func containsMarkdownTable(text string) bool {
 	return false
 }
 
+func hasValidSmartSummaryTable(text string) bool {
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+
+	for i := 0; i < len(lines)-1; i++ {
+		header := strings.TrimSpace(lines[i])
+		separator := strings.TrimSpace(lines[i+1])
+		if !strings.HasPrefix(header, "|") || !strings.HasSuffix(header, "|") {
+			continue
+		}
+
+		headerCells := parseMarkdownTableCells(header)
+		if len(headerCells) < 2 {
+			continue
+		}
+
+		if !isMarkdownSeparatorRow(separator, len(headerCells)) {
+			continue
+		}
+
+		dataRows := 0
+		for j := i + 2; j < len(lines); j++ {
+			row := strings.TrimSpace(lines[j])
+			if !strings.HasPrefix(row, "|") || !strings.HasSuffix(row, "|") {
+				break
+			}
+
+			cells := parseMarkdownTableCells(row)
+			if len(cells) != len(headerCells) {
+				return false
+			}
+
+			for _, cell := range cells {
+				trimmedCell := strings.TrimSpace(cell)
+				if trimmedCell == "" || isDashPlaceholderCell(trimmedCell) {
+					return false
+				}
+			}
+
+			dataRows++
+		}
+
+		if dataRows > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func parseMarkdownTableCells(row string) []string {
+	trimmed := strings.TrimSpace(row)
+	trimmed = strings.TrimPrefix(trimmed, "|")
+	trimmed = strings.TrimSuffix(trimmed, "|")
+	parts := strings.Split(trimmed, "|")
+
+	cells := make([]string, 0, len(parts))
+	for _, part := range parts {
+		cells = append(cells, strings.TrimSpace(part))
+	}
+
+	return cells
+}
+
+func isMarkdownSeparatorRow(row string, expectedColumns int) bool {
+	cells := parseMarkdownTableCells(row)
+	if expectedColumns < 2 || len(cells) != expectedColumns {
+		return false
+	}
+
+	for _, cell := range cells {
+		normalized := strings.TrimSpace(cell)
+		if strings.HasPrefix(normalized, ":") {
+			normalized = normalized[1:]
+		}
+		if strings.HasSuffix(normalized, ":") {
+			normalized = normalized[:len(normalized)-1]
+		}
+		if len(normalized) < 3 {
+			return false
+		}
+		for _, ch := range normalized {
+			if ch != '-' {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func isDashPlaceholderCell(cell string) bool {
+	normalized := strings.ReplaceAll(strings.TrimSpace(cell), " ", "")
+	if normalized == "" {
+		return false
+	}
+	for _, ch := range normalized {
+		if ch != '-' {
+			return false
+		}
+	}
+	return true
+}
+
 func ensureSmartSummaryTable(text string) string {
 	normalized := strings.ReplaceAll(text, "\r\n", "\n")
-	if containsMarkdownTable(normalized) {
+	if hasValidSmartSummaryTable(normalized) {
 		return normalized
 	}
 
@@ -970,7 +1144,7 @@ func ensureSmartSummaryTable(text string) string {
 
 	var b strings.Builder
 	b.WriteString(strings.TrimSpace(normalized))
-	b.WriteString("\n\n## Summary Table\n")
+	b.WriteString("\n\n## Key Concepts Table\n")
 	b.WriteString("| Concept | Explanation |\n")
 	b.WriteString("| --- | --- |\n")
 	for i, row := range rows {
@@ -1001,6 +1175,8 @@ func pruneSmartRedundantSections(text string) string {
 		return strings.Contains(lower, "summary of video content") ||
 			strings.Contains(lower, "key insights and core concepts") ||
 			strings.Contains(lower, "brain structure and functions") ||
+			strings.Contains(lower, "key concepts table") ||
+			strings.Contains(lower, "summary table") ||
 			strings.Contains(lower, "additional interesting facts") ||
 			strings.Contains(lower, "conclusions") ||
 			strings.Contains(lower, "summary highlights")
@@ -1010,7 +1186,7 @@ func pruneSmartRedundantSections(text string) string {
 		trimmed := strings.TrimSpace(strings.TrimPrefix(line, "#"))
 		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "-"))
 		lower := strings.ToLower(trimmed)
-		return strings.Contains(lower, "conclusions") || strings.Contains(lower, "summary highlights")
+		return strings.Contains(lower, "conclusions") || strings.Contains(lower, "summary highlights") || strings.Contains(lower, "summary table")
 	}
 
 	out := make([]string, 0, len(lines))
@@ -1069,7 +1245,7 @@ Rules:
    - 1-2 sentence insight explaining implication/connection (not dictionary-style definition).
    - Include an Example line ONLY when there is an explicit transcript example; otherwise omit Example line entirely.
 5) Ensure each triple is genuinely distinct and non-redundant.
-6) Keep brain-part descriptions ONLY in "Brain Structure and Functions" table; avoid repeating those details in Key Insights.
+6) Keep entity/concept descriptions ONLY in the topic-appropriate table section; avoid repeating those details in Key Insights.
 7) Remove redundant sections; do NOT include "Conclusions" or "Summary Highlights".
 8) Additional Interesting Facts must exclude trivial/silly statements and focus on substantial facts with concrete value.
 9) For "Additional Interesting Facts", output 3-6 markdown bullets (each line starts with '- '). Do NOT output that section as a paragraph.
@@ -1095,17 +1271,25 @@ Current summary:
 	return text
 }
 
-func buildSummaryPrompt(format, length string, focusAreas []string, audience, language, transcript string) string {
+func buildSummaryPrompt(format, length string, focusAreas []string, audience, language, transcript string, metadataOnlyMode bool) string {
 	var b strings.Builder
 
 	// Layer 1 — Role
 	b.WriteString("You are an expert educational content analyst. Your task is to create a structured summary of the following lecture transcript.\n\n")
+	b.WriteString("Universal rule: Cross-section uniqueness rule: Each fact or insight must be expressed with unique phrasing. If the same information appears in multiple sections, vary the angle, vocabulary, or implication. Never copy-paste the same sentence across sections. Maintain consistent academic-but-accessible vocabulary throughout all sections.\n\n")
 
 	// Layer 2 — Format
 	switch format {
 	case "cornell":
 		b.WriteString("Format: Use the Cornell Method. Provide three clearly labeled sections with these exact headers and order:\n[CUES]\n[NOTES]\n[SUMMARY]\n")
-		b.WriteString("Output rules for Cornell: plain text only; DO NOT use markdown tables; DO NOT use pipes (|); DO NOT use HTML tags; keep CUES as short prompt lines and NOTES as readable bullet paragraphs.\n\n")
+		b.WriteString("Output rules for Cornell: plain text only; DO NOT use markdown tables; DO NOT use pipes (|); DO NOT use HTML tags; keep CUES as short prompt lines and NOTES as readable bullet paragraphs.\n")
+		b.WriteString("Cue formatting rule: Each cue MUST be a specific retrieval question, not a topic label.\n")
+		b.WriteString("WRONG: \"Cerebrum's role?\"\n")
+		b.WriteString("RIGHT: \"What percentage of brain mass does the cerebrum occupy?\"\n")
+		b.WriteString("Additional cue rules: people cues must target one action/date/policy/decision; not broad traits. WRONG: 'What characterized Khrushchev's leadership?' RIGHT: 'What provocative structure did Khrushchev build in 1961 to stop East German defections?' Each cue must have one specific answer; split multi-aspect topics into separate cues.\n")
+		b.WriteString("Notes alignment rule: each NOTES bullet must directly answer its matching CUE; first sentence answers immediately; do not broaden scope. WRONG: Cue asks 'How did Cold War extend to Asia?' but note is generic domino-theory policy. RIGHT: Cue asks that and note states China's 1949 revolution plus Korean War (1950-1953) brought Cold War conflict to Asia.\n")
+		b.WriteString("Cues should function as self-quiz questions a student could test themselves with.\n")
+		b.WriteString("The Summary section must synthesize — do not paraphrase the Notes section. Write the Summary as if explaining to someone who has not read the Notes.\n\n")
 	case "bullets":
 		b.WriteString("Format: Use structured bullet points with clear headings and concise bullets.\n")
 		b.WriteString("Bullets output rules:\n")
@@ -1116,11 +1300,14 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("   - Definition: <what it is>\n")
 		b.WriteString("   - Function: <what it does>\n")
 		b.WriteString("   - Examples: <brief, specific examples; short phrase list, not long sentences>\n")
-		b.WriteString("5) Keep labels consistent. Prefer Definition, Function, Examples, and Fact. Integrate size/location details into Definition instead of a separate 'Size:' bullet.\n")
+		b.WriteString("   - Key Takeaway: <why this structure matters in plain language>\n")
+		b.WriteString("5) Keep labels consistent. Prefer Definition, Function, Examples, Key Takeaway, and Fact. Integrate size/location details into Definition instead of a separate 'Size:' bullet.\n")
 		b.WriteString("6) In Interesting Facts, do NOT prefix each bullet with 'Fact:'; the heading already provides context.\n")
 		b.WriteString("7) Merge related facts into one bullet when they describe the same point (e.g., wattage + LED example).\n")
 		b.WriteString("8) Keep bullets non-redundant and compact; one idea per bullet.\n")
-		b.WriteString("9) Return plain text bullets only (no markdown tables, no HTML).\n\n")
+		b.WriteString("9) Return plain text bullets only (no markdown tables, no HTML).\n")
+		b.WriteString("10) Include 4-5 Interesting Facts minimum, each expressing a unique angle. Do not reuse phrasing from the Core Structures section. Vary sentence openings — avoid starting every fact with the same structure.\n")
+		b.WriteString("11) For each Core Structure item, add a one-sentence 'Key Takeaway' after Examples.\n\n")
 	case "paragraph":
 		b.WriteString("Format: Write in flowing, readable prose with clear subheadings.\n")
 		b.WriteString("Paragraph output rules:\n")
@@ -1129,9 +1316,15 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("3) STRICTLY FORBIDDEN labels in output: 'Key Concept:', 'Definition:', 'Example:', 'Case Study:', 'Dates & Figures:'.\n")
 		b.WriteString("4) Weave those ideas naturally into prose (e.g., 'Energybending is ...'), without meta-prefixes.\n")
 		b.WriteString("5) Avoid repetitive phrasing and repeated sentence templates.\n")
-		b.WriteString("6) Do not use bullet-list study-note formatting unless explicitly requested by format.\n\n")
+		b.WriteString("6) Do not use bullet-list study-note formatting unless explicitly requested by format.\n")
+		b.WriteString("7) Use only one central metaphor per section — do not open with two competing analogies.\n")
+		b.WriteString("8) End the final section with a sentence connecting the content to real-world significance or application.\n\n")
 	case "smart":
 		b.WriteString("Format: Create a Smart Summary in Markdown with clear section headings and concise high-value synthesis.\n")
+		if metadataOnlyMode {
+			b.WriteString("CRITICAL: This summary is based on metadata only, not a real transcript. For Key Insights and Core Concepts, DO NOT generate custom insights. Replace the entire section body with exactly this sentence: 'Key Insights cannot be generated from metadata alone. Please provide a video with an available transcript.'\n")
+			b.WriteString("For Additional Interesting Facts: Only include facts directly stated in the metadata. Do not speculate about content, themes, or implications.\n")
+		}
 		b.WriteString("Required sections (in this EXACT order, ALL sections are MANDATORY — never omit any):\n")
 		b.WriteString("1) Summary of Video Content — ALWAYS include this as the FIRST section. Write one concise narrative paragraph summarizing the overall topic and main points.\n")
 		b.WriteString("2) Key Insights and Core Concepts — deeper insights, implications, and connections.\n")
@@ -1142,18 +1335,35 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Anti-redundancy rules: each fact appears once in the most appropriate section. Do NOT repeat the same fact across Summary, Insights, Table, and Facts.\n")
 		b.WriteString("Section-specific rules:\n")
 		b.WriteString("- Summary of Video Content: MANDATORY — always include this section. Write one concise narrative paragraph summarizing the overall video/document.\n")
+		b.WriteString("  The Summary of Video Content section must answer \"so what\" — not list topics covered.\n")
+		b.WriteString("  WRONG: \"This video covers the cerebrum, cerebellum, brain stem, and amygdala\"\n")
+		b.WriteString("  RIGHT: \"The brain's hierarchical structure allows simultaneous conscious and unconscious processing\"\n")
 		b.WriteString("- Key Insights and Core Concepts: 3-5 deeper insights (implications/connections), not dictionary-like repetition.\n")
+		b.WriteString("  Each Key Insight must name specific details from the transcript, never vague generalizations.\n")
+		b.WriteString("  WRONG: \"Different parts of the brain handle different tasks\"\n")
+		b.WriteString("  RIGHT: \"The cerebrum's 85% mass dominance reflects its role as the primary seat of conscious thought\"\n")
+		b.WriteString("  Each Key Insight must include one practical real-world application or implication.\n")
 		b.WriteString("  Format each insight EXACTLY like this example (note the blank lines and spacing):\n")
 		b.WriteString("  **Key Concept: Concept Title Here**\n")
 		b.WriteString("  Explanation paragraph here with 1-2 sentences.\n\n")
 		b.WriteString("  CRITICAL: Always put a space after the colon in 'Key Concept: Title'. Always put the explanation on a SEPARATE line (not on the same line as the title).\n")
 		b.WriteString("  Do NOT output repetitive 'Definition' lines for every item.\n")
 		b.WriteString("  Include 'Example:' ONLY if explicitly present in transcript; otherwise omit the Example line entirely.\n")
+		if metadataOnlyMode {
+			b.WriteString("  CRITICAL: In metadata-only mode, this section must contain exactly one line: 'Key Insights cannot be generated from metadata alone. Please provide a video with an available transcript.'\n")
+		}
 		b.WriteString("- Table section: use a topic-appropriate title; this is the ONLY place for entity/concept descriptions in table form.\n")
-		b.WriteString("  The table MUST be a proper markdown table with header, separator, and at least 3 data rows. Example:\n")
-		b.WriteString("  | Column A | Column B |\n  | --- | --- |\n  | Value 1 | Description 1 |\n  | Value 2 | Description 2 |\n  | Value 3 | Description 3 |\n\n")
+		b.WriteString("  The table MUST be a proper markdown table with header, separator, and at least 3 data rows.\n")
+		b.WriteString("  CRITICAL: Every table cell MUST contain actual content. Never use dashes (---), empty strings, or placeholder text in data cells. If information is unknown, write 'Not specified' instead.\n")
+		b.WriteString("  The separator row (| --- | --- |) MUST appear exactly once, immediately after the header row, before any data rows. It must NEVER appear as a data row.\n")
+		b.WriteString("  Example of correct table format:\n")
+		b.WriteString("  | Brain Part | Primary Function | Key Characteristics |\n  | --- | --- | --- |\n  | Cerebrum | Thinking and learning | Largest part and supports conscious processing |\n  | Cerebellum | Balance and motor coordination | Fine-tunes movement and posture |\n  | Brain Stem | Involuntary regulation | Links brain to spinal cord and controls breathing |\n")
+		b.WriteString("  Before outputting the table, verify: (1) separator row exists after header, (2) every data cell has real content, (3) all rows have the same number of columns.\n\n")
 		b.WriteString("- Additional Interesting Facts: output ONLY as a markdown bullet list (3-6 bullets, each line starts with '- '). Include only non-duplicated noteworthy facts, with numbers/evidence when present; avoid trivial or playful statements.\n")
-		b.WriteString("Forbidden sections: DO NOT output 'Conclusions' or 'Summary Highlights'.\n")
+		if metadataOnlyMode {
+			b.WriteString("  Only include facts directly stated in the metadata. Do not speculate about content, themes, or implications.\n")
+		}
+		b.WriteString("Forbidden sections: DO NOT output 'Conclusions', 'Summary Highlights', or 'Summary Table'.\n")
 		b.WriteString("For section 'Key Insights and Core Concepts', keep concept names faithful to transcript terminology and avoid invented terms.\n")
 		b.WriteString("If transcript evidence is weak, explicitly mark uncertainty instead of fabricating details.\n")
 		b.WriteString("Markdown structure rule for Additional Interesting Facts: this section MUST be a markdown unordered list ('- item'). Do NOT write it as a paragraph.\n\n")
@@ -1202,9 +1412,9 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 	}
 
 	b.WriteString(fmt.Sprintf("Length preset: %s.\n", lengthLabel))
-	b.WriteString(fmt.Sprintf("Output MUST be between %d and %d words.\n", minWords, maxWords))
+	b.WriteString(fmt.Sprintf("CRITICAL LENGTH CONSTRAINT: Output MUST be between %d and %d words.\n", minWords, maxWords))
 	b.WriteString(fmt.Sprintf("Target about %d words (%d%% of %d source words, clamped to preset range).\n", targetWords, targetPercent, sourceWords))
-	b.WriteString("Do not output less than the minimum or more than the maximum for this preset.\n\n")
+	b.WriteString(fmt.Sprintf("UNDER NO CIRCUMSTANCES should your output exceed %d words. Cut non-essential details to fit.\n\n", maxWords))
 
 	// Layer 4 — Focus areas
 	for _, area := range focusAreas {
@@ -1229,6 +1439,29 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 	b.WriteString(transcript)
 	b.WriteString("\n---TRANSCRIPT END---\n")
 
+	return b.String()
+}
+
+func isMetadataOnlyContent(transcript string) bool {
+	normalized := strings.TrimSpace(transcript)
+	lower := strings.ToLower(normalized)
+	return len(normalized) < 200 || strings.Contains(lower, "transcript is unavailable for this content")
+}
+
+func buildSmartSummaryStructureFallbackPrompt(rawText string, metadataOnlyMode bool) string {
+	var b strings.Builder
+	b.WriteString("Rewrite this Smart Summary in clean Markdown (Smart Summary Structure Fallback). Preserve all key information, preserve source terminology, and include at least one markdown table with 2+ columns and 3+ data rows. If entities are not obvious, create a table with columns: Concept | Explanation. ")
+	b.WriteString("CRITICAL: Every table cell MUST contain actual content. Never use dashes (---), empty strings, or placeholder text in data cells. If information is unknown, write 'Not specified' instead. ")
+	b.WriteString("The separator row (| --- | --- |) MUST appear exactly once, immediately after the header row, before any data rows. It must NEVER appear as a data row. ")
+	b.WriteString("Correct table example:\n| Brain Part | Primary Function | Key Characteristics |\n| --- | --- | --- |\n| Cerebrum | Thinking and learning | Largest part and supports conscious processing |\n| Cerebellum | Balance and motor coordination | Fine-tunes movement and posture |\n| Brain Stem | Involuntary regulation | Links brain to spinal cord and controls breathing |\n")
+	b.WriteString("Before outputting the table, verify: (1) separator row exists after header, (2) every data cell has real content, (3) all rows have the same number of columns. ")
+	if metadataOnlyMode {
+		b.WriteString("CRITICAL: This summary is based on metadata only, not a real transcript. For Key Insights and Core Concepts, DO NOT generate custom insights. Replace the entire section body with exactly this sentence: 'Key Insights cannot be generated from metadata alone. Please provide a video with an available transcript.' ")
+		b.WriteString("For Additional Interesting Facts: Only include facts directly stated in the metadata. Do not speculate about content, themes, or implications. ")
+	}
+	b.WriteString("Do NOT output sections named 'Summary Table', 'Conclusions', or 'Summary Highlights'. ")
+	b.WriteString("In the section 'Additional Interesting Facts', output 3-6 markdown bullet points (each line must start with '- '). Do NOT invent new coined terms that are not present in the source transcript. If a claim is uncertain, say: Not explicitly stated in transcript. Return markdown only:\n\n")
+	b.WriteString(rawText)
 	return b.String()
 }
 
@@ -1354,7 +1587,10 @@ func buildFlashcardPrompt(config models.GenerateFlashcardsRequest, content strin
 	}
 
 	if config.IncludeMnemonics {
-		b.WriteString("Mnemonic setting: include a mnemonic on most cards when useful.\n")
+		b.WriteString("Mnemonic rule: Generate a genuine memory anchor using association, imagery, or wordplay.\n")
+		b.WriteString("WRONG: \"WITB — acronym of the question\"\n")
+		b.WriteString("RIGHT: \"Think of the Cerebellum as the brain's GPS — it doesn't decide where to go, it smooths the route\"\n")
+		b.WriteString("Mnemonics must create a memorable mental image or story, not just abbreviate the term.\n")
 	} else {
 		b.WriteString("Mnemonic setting: set mnemonic to null for all cards.\n")
 	}
