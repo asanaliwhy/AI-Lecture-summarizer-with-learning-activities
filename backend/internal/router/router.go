@@ -47,6 +47,10 @@ func New(
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"status":"ok"}`))
+		})
 
 		// ──── Auth Routes (public) ────
 		r.Route("/auth", func(r chi.Router) {

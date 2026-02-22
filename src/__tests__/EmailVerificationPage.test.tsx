@@ -2,6 +2,8 @@ import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 
+    ; (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
 const mocked = vi.hoisted(() => ({
     navigate: vi.fn(),
     searchParams: new URLSearchParams(),
@@ -67,7 +69,8 @@ describe('EmailVerificationPage', () => {
 
     const flush = async () => {
         await act(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 0))
+            await Promise.resolve()
+            await Promise.resolve()
         })
     }
 
@@ -86,7 +89,6 @@ describe('EmailVerificationPage', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
-        vi.useFakeTimers({ shouldAdvanceTime: true })
         // Default: no token in URL
         mocked.searchParams.delete('token')
         localStorage.clear()
@@ -101,13 +103,12 @@ describe('EmailVerificationPage', () => {
             root.unmount()
         })
         container.remove()
-        vi.useRealTimers()
     })
 
     // ─── Idle state (no token) ───
 
     it('renders check-your-email screen when no token is present', async () => {
-        await act(async () => {
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
         await flush()
@@ -120,7 +121,7 @@ describe('EmailVerificationPage', () => {
     it('pre-fills email from localStorage', async () => {
         localStorage.setItem('pending_verification_email', 'test@example.com')
 
-        await act(async () => {
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
         await flush()
@@ -136,7 +137,7 @@ describe('EmailVerificationPage', () => {
         mocked.searchParams.set('token', 'test-token')
         mocked.authApi.verifyEmail.mockImplementation(() => new Promise(() => { })) // Never resolves
 
-        await act(async () => {
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
         await flush()
@@ -145,15 +146,17 @@ describe('EmailVerificationPage', () => {
     })
 
     it('handles successful verification with tokens', async () => {
+        vi.useFakeTimers()
         mocked.searchParams.set('token', 'valid-token')
         mocked.authApi.verifyEmail.mockResolvedValue({
             access_token: 'at-123',
             refresh_token: 'rt-456',
         })
 
-        await act(async () => {
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
+        await flush()
         await flush()
 
         expect(mocked.authApi.verifyEmail).toHaveBeenCalledWith('valid-token')
@@ -166,15 +169,17 @@ describe('EmailVerificationPage', () => {
             vi.advanceTimersByTime(2100)
         })
         expect(mocked.navigate).toHaveBeenCalledWith('/dashboard')
+        vi.useRealTimers()
     })
 
     it('handles verification failure', async () => {
         mocked.searchParams.set('token', 'invalid-token')
         mocked.authApi.verifyEmail.mockRejectedValue(new Error('Token expired'))
 
-        await act(async () => {
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
+        await flush()
         await flush()
 
         expect(container.textContent).toContain('Verification Failed')
@@ -186,7 +191,7 @@ describe('EmailVerificationPage', () => {
     // ─── Resend flow ───
 
     it('validates empty email on resend', async () => {
-        await act(async () => {
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
         await flush()
@@ -205,7 +210,7 @@ describe('EmailVerificationPage', () => {
     })
 
     it('validates invalid email format on resend', async () => {
-        await act(async () => {
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
         await flush()
@@ -228,7 +233,7 @@ describe('EmailVerificationPage', () => {
     it('handles successful resend and starts countdown', async () => {
         mocked.authApi.resendVerification.mockResolvedValue({ message: 'ok' })
 
-        await act(async () => {
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
         await flush()
@@ -254,7 +259,7 @@ describe('EmailVerificationPage', () => {
         const { ApiError } = await import('../lib/api')
         mocked.authApi.resendVerification.mockRejectedValue(new ApiError(429, 'Please wait 60 seconds'))
 
-        await act(async () => {
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
         await flush()
@@ -277,9 +282,19 @@ describe('EmailVerificationPage', () => {
     // ─── Max resend attempts ───
 
     it('blocks resend after max attempts reached', async () => {
+        vi.useFakeTimers()
         mocked.authApi.resendVerification.mockResolvedValue({ message: 'ok' })
 
-        await act(async () => {
+        const advanceCountdown = async () => {
+            for (let s = 0; s < 60; s++) {
+                await act(async () => {
+                    vi.advanceTimersByTime(1000)
+                })
+            }
+            await flush()
+        }
+
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
         await flush()
@@ -301,13 +316,8 @@ describe('EmailVerificationPage', () => {
             })
             await flush()
 
-            // Advance past the 60s countdown
-            for (let s = 0; s < 61; s++) {
-                act(() => {
-                    vi.advanceTimersByTime(1000)
-                })
-            }
-            await flush()
+            // Finish countdown so next resend becomes available
+            await advanceCountdown()
         }
 
         // After 5 attempts, try clicking resend again
@@ -324,6 +334,7 @@ describe('EmailVerificationPage', () => {
 
         // Should show max attempts message
         expect(container.textContent).toContain('Maximum resend attempts reached')
+        vi.useRealTimers()
     })
 
     // ─── Navigation buttons on error ───
@@ -332,7 +343,7 @@ describe('EmailVerificationPage', () => {
         mocked.searchParams.set('token', 'bad-token')
         mocked.authApi.verifyEmail.mockRejectedValue(new Error('expired'))
 
-        await act(async () => {
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
         await flush()
@@ -351,7 +362,7 @@ describe('EmailVerificationPage', () => {
         mocked.searchParams.set('token', 'bad-token')
         mocked.authApi.verifyEmail.mockRejectedValue(new Error('expired'))
 
-        await act(async () => {
+        act(() => {
             root.render(<EmailVerificationPage />)
         })
         await flush()

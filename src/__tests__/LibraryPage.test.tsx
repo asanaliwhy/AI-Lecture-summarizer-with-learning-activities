@@ -2,6 +2,8 @@ import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 
+    ; (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
 const mocked = vi.hoisted(() => ({
     navigate: vi.fn(),
     locationSearch: '',
@@ -58,11 +60,16 @@ vi.mock('../components/ui/Toast', () => ({
 }))
 
 vi.mock('../components/ui/Checkbox', () => ({
-    Checkbox: ({ checked, onCheckedChange, ...props }: any) => (
+    Checkbox: ({ checked, onCheckedChange, onClick, ...props }: any) => (
         <button
             type="button"
             aria-pressed={Boolean(checked)}
-            onClick={() => onCheckedChange?.(!checked)}
+            onClick={(event) => {
+                onClick?.(event)
+                if (!event.defaultPrevented) {
+                    onCheckedChange?.(!checked)
+                }
+            }}
             {...props}
         />
     ),
@@ -148,7 +155,7 @@ describe('LibraryPage production behaviors', () => {
     }
 
     const clickByAriaLabel = (label: string) => {
-        const button = container.querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement | null
+        const button = container.querySelector(`[aria-label="${label}"]`) as HTMLElement | null
         expect(button).toBeTruthy()
         act(() => {
             button!.click()
@@ -273,6 +280,11 @@ describe('LibraryPage production behaviors', () => {
         clickButtonByText('Delete')
         await flush()
 
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 0))
+        })
+        await flush()
+
         expect(mocked.toast.warning).toHaveBeenCalledWith('Deleted 1 item, 1 failed')
     })
 
@@ -325,7 +337,7 @@ describe('LibraryPage production behaviors', () => {
         })
         await flush()
 
-        const gridItem = container.querySelector('div[role="button"][aria-label="Open Keyboard Summary"]') as HTMLDivElement | null
+        const gridItem = container.querySelector('[role="button"][aria-label="Open Keyboard Summary"]') as HTMLDivElement | null
         expect(gridItem).toBeTruthy()
 
         act(() => {

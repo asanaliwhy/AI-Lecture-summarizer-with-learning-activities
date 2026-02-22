@@ -21,7 +21,7 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 COPY --from=builder /lectura-server .
-COPY --from=builder /app/internal/database/migrations ./internal/database/migrations
+COPY --from=builder /app/migrations ./migrations
 
 # Create uploads directory
 RUN mkdir -p /app/uploads
