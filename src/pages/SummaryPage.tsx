@@ -1489,8 +1489,8 @@ export function SummaryPage() {
                     Export
                   </Button>
                   <Button
-                    variant="destructive"
-                    className="w-full justify-start"
+                    variant="outline"
+                    className="w-full justify-start hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
                     size="sm"
                     disabled={isDeleting}
                     onClick={handleDelete}
