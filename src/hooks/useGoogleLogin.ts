@@ -80,7 +80,7 @@ export function useGoogleLogin(
 
         // Load the Google Identity Services script
         const script = document.createElement('script')
-        script.src = 'https://accounts.google.com/gsi/client'
+        script.src = 'https://accounts.google.com/gsi/client?hl=en'
         script.async = true
         script.defer = true
         script.onload = initGoogle
