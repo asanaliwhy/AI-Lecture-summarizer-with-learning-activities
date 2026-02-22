@@ -113,3 +113,23 @@ jobs:
         run: |
           docker images | grep lectura
           echo "✅ All images built successfully"
+
+  # ─── Deploy Gate (all required jobs must be green) ───
+  deploy-gate:
+    name: Deploy Gate
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test, docker-build]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Enforce green required jobs
+        run: |
+          echo "backend-test:  ${{ needs.backend-test.result }}"
+          echo "frontend-test: ${{ needs.frontend-test.result }}"
+          echo "docker-build:  ${{ needs.docker-build.result }}"
+
+          test "${{ needs.backend-test.result }}" = "success"
+          test "${{ needs.frontend-test.result }}" = "success"
+          test "${{ needs.docker-build.result }}" = "success"
+
+          echo "✅ Deploy gate passed. Safe to deploy."
