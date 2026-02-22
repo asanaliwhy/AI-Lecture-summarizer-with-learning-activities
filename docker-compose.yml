@@ -5,9 +5,9 @@ services:
     container_name: lectura-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-lectura}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -40,12 +40,25 @@ services:
       dockerfile: Dockerfile
     container_name: lectura-backend
     restart: unless-stopped
-    env_file:
-      - ./backend/.env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-lectura}?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      ENV: ${ENV:-production}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
+      GEMINI_REQUESTS_PER_MINUTE: ${GEMINI_REQUESTS_PER_MINUTE:-30}
+      GEMINI_TOKENS_PER_MINUTE: ${GEMINI_TOKENS_PER_MINUTE:-500000}
+      GEMINI_CONCURRENT_REQUESTS: ${GEMINI_CONCURRENT_REQUESTS:-3}
+      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      STORAGE_PATH: /app/uploads
+      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST is required}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:?SMTP_USER is required}
+      SMTP_PASS: ${SMTP_PASS:?SMTP_PASS is required}
+      SMTP_FROM: ${SMTP_FROM:?SMTP_FROM is required}
+      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      PORT: "8081"
     ports:
       - "${BACKEND_PORT:-8081}:8081"
     volumes:
@@ -72,7 +85,8 @@ services:
       - "${FRONTEND_PORT:-3000}:80"
       - "${FRONTEND_SSL_PORT:-3443}:443"
     volumes:
-      - ./ssl:/etc/nginx/ssl:ro
+      - ${TLS_CERT_PATH:?TLS_CERT_PATH is required}:/etc/nginx/ssl/cert.pem:ro
+      - ${TLS_KEY_PATH:?TLS_KEY_PATH is required}:/etc/nginx/ssl/key.pem:ro
     depends_on:
       backend:
         condition: service_healthy

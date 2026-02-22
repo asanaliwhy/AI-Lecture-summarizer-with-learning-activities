@@ -207,21 +207,25 @@ npm run dev
 | `backend` | Go multi-stage build | 8081 | REST API + WebSocket |
 | `frontend` | Vite + Nginx | 3000 (80) | Static SPA + reverse proxy |
 
-### Production with HTTPS
+### Production with HTTPS and secret management
 
 ```bash
-# 1. Generate SSL certificates
-bash scripts/generate-ssl.sh
-# Or use Let's Encrypt: certbot certonly --standalone -d your-domain.com
+# 1. Provision real certificates (recommended: Let's Encrypt)
+certbot certonly --standalone -d your-domain.com
 
-# 2. Update nginx.conf → nginx.ssl.conf in Dockerfile
-# 3. Mount certs in docker-compose.yml:
-#    volumes:
-#      - ./ssl:/etc/nginx/ssl:ro
+# 2. Fill .env.production with production secrets and cert paths:
+#    - DATABASE_URL, REDIS_URL, JWT_SECRET, GEMINI_API_KEY, SMTP_*
+#    - TLS_CERT_PATH=/etc/letsencrypt/live/your-domain.com/fullchain.pem
+#    - TLS_KEY_PATH=/etc/letsencrypt/live/your-domain.com/privkey.pem
 
-# 4. Deploy
-docker compose up -d --build
+# 3. Deploy with explicit production env
+docker compose --env-file .env.production up -d --build
 ```
+
+Security notes:
+- Do not use placeholder/default passwords in production.
+- Do not commit real secrets to git; keep them in deployment environment or a secret manager.
+- `docker-compose.yml` fails fast via `${VAR:?error}` when required secrets/certs are missing.
 
 The SSL config includes modern TLS (1.2/1.3), HSTS, `X-Content-Type-Options`, `X-Frame-Options`, and `X-XSS-Protection` headers.
 
