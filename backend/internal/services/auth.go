@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -124,7 +125,13 @@ func (s *AuthService) Register(ctx context.Context, req models.RegisterRequest) 
 	}
 
 	// Send verification email
-	go s.email.SendVerificationEmail(user.Email, token)
+	go func(email, verificationToken string) {
+		if err := s.email.SendVerificationEmail(email, verificationToken); err != nil {
+			log.Printf("✗ verification email send failed (register) to %s: %v", email, err)
+		} else {
+			log.Printf("✓ verification email queued (register) to %s", email)
+		}
+	}(user.Email, token)
 
 	return user, token, nil
 }
@@ -242,7 +249,13 @@ func (s *AuthService) ResendVerification(ctx context.Context, email string) (str
 	s.redis.Set(ctx, rateLimitKey, "1", 60*time.Second)
 
 	// Send verification email
-	go s.email.SendVerificationEmail(user.Email, token)
+	go func(email, verificationToken string) {
+		if err := s.email.SendVerificationEmail(email, verificationToken); err != nil {
+			log.Printf("✗ verification email send failed (resend) to %s: %v", email, err)
+		} else {
+			log.Printf("✓ verification email queued (resend) to %s", email)
+		}
+	}(user.Email, token)
 
 	return token, nil
 }
