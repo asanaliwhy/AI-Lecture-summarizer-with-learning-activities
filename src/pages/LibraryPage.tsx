@@ -287,6 +287,626 @@ export function LibraryPage() {
         state.y += gap
       }
 
+      const stripInlineMarkdown = (value: string): string =>
+        String(value || '')
+          .replace(/<br\s*\/?>/gi, ' ')
+          .replace(/\*\*(.*?)\*\*/g, '$1')
+          .replace(/__(.*?)__/g, '$1')
+          .replace(/`([^`]+)`/g, '$1')
+          .replace(/\s+/g, ' ')
+          .trim()
+
+      const isTableSeparator = (line: string): boolean => /^\|\s*:?-{3,}.*\|$/.test(line.trim())
+
+      const parseTableRow = (line: string): string[] =>
+        line
+          .trim()
+          .replace(/^\|/, '')
+          .replace(/\|$/, '')
+          .split('|')
+          .map((cell) => stripInlineMarkdown(cell))
+
+      const parseSmartSections = (markdown: string): Array<{ heading: string; lines: string[] }> => {
+        const lines = String(markdown || '').replace(/\r\n/g, '\n').split('\n')
+        const sections: Array<{ heading: string; lines: string[] }> = []
+
+        let heading = 'Summary'
+        let buffer: string[] = []
+
+        const flush = () => {
+          const cleaned = buffer.map((line) => line.trim()).filter(Boolean)
+          if (cleaned.length > 0) {
+            sections.push({ heading: stripInlineMarkdown(heading), lines: cleaned })
+          }
+          buffer = []
+        }
+
+        for (const raw of lines) {
+          const line = raw.trim()
+          const headingMatch = line.match(/^#{1,6}\s+(.+)$/)
+          if (headingMatch) {
+            flush()
+            heading = headingMatch[1]
+            continue
+          }
+
+          const numberedHeading = line.match(/^\d+[.)]\s+(.+)$/)
+          if (numberedHeading) {
+            flush()
+            heading = numberedHeading[1]
+            continue
+          }
+
+          buffer.push(raw)
+        }
+
+        flush()
+        return sections
+      }
+
+      const formatPdfDate = (value?: string): string => {
+        if (!value) return '-'
+        const parsed = new Date(value)
+        if (Number.isNaN(parsed.getTime())) return '-'
+        const dd = String(parsed.getDate()).padStart(2, '0')
+        const mm = String(parsed.getMonth() + 1).padStart(2, '0')
+        const yyyy = String(parsed.getFullYear())
+        return `${dd}.${mm}.${yyyy}`
+      }
+
+      const drawSmartSummaryPdf = (
+        doc: any,
+        state: { y: number; pageHeight: number; margin: number; width: number },
+        payload: {
+          title: string
+          sourceLabel: string
+          generatedAt: string
+          tags: string[]
+          markdown: string
+        },
+      ) => {
+        const ensurePage = (needed: number) => {
+          if (state.y + needed > state.pageHeight - state.margin) {
+            doc.addPage()
+            state.y = state.margin
+          }
+        }
+
+        const setFill = (r: number, g: number, b: number) => {
+          if (typeof doc.setFillColor === 'function') doc.setFillColor(r, g, b)
+        }
+
+        const setDraw = (r: number, g: number, b: number) => {
+          if (typeof doc.setDrawColor === 'function') doc.setDrawColor(r, g, b)
+        }
+
+        const drawRect = (x: number, y: number, w: number, h: number, mode: 'F' | 'FD' | undefined = undefined) => {
+          if (typeof doc.rect === 'function') {
+            doc.rect(x, y, w, h, mode)
+          }
+        }
+
+        // Badge strip
+        ensurePage(22)
+        setFill(232, 236, 247)
+        drawRect(state.margin, state.y, state.width, 16, 'F')
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.text('SMART SUMMARY', state.margin + 8, state.y + 11)
+        state.y += 30
+
+        // Large title
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(25)
+        const titleLines = doc.splitTextToSize(payload.title, state.width) as string[]
+        for (const line of titleLines) {
+          ensurePage(26)
+          doc.text(line, state.margin, state.y)
+          state.y += 26
+        }
+        state.y += 2
+
+        // Meta line
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(11)
+        ensurePage(14)
+        doc.text(`Source: ${payload.sourceLabel} · Generated: ${payload.generatedAt}`, state.margin, state.y)
+        state.y += 12
+
+        // Chips row
+        const tags = payload.tags.filter(Boolean).slice(0, 5)
+        if (tags.length > 0) {
+          const chipGap = 6
+          const chipW = (state.width - chipGap * (tags.length - 1)) / tags.length
+          const chipH = 18
+          ensurePage(chipH + 10)
+
+          tags.forEach((tag, index) => {
+            const x = state.margin + index * (chipW + chipGap)
+            setFill(209, 250, 229)
+            drawRect(x, state.y, chipW, chipH, 'F')
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(10)
+            const chipText = stripInlineMarkdown(tag)
+            const line = (doc.splitTextToSize(chipText, chipW - 10) as string[])[0] || chipText
+            doc.text(line, x + 5, state.y + 12)
+          })
+
+          state.y += chipH + 10
+        }
+
+        // Accent divider
+        ensurePage(2)
+        setFill(79, 70, 229)
+        drawRect(state.margin, state.y, state.width, 1.4, 'F')
+        state.y += 14
+
+        const sections = parseSmartSections(payload.markdown)
+
+        const drawParagraph = (text: string) => {
+          const wrapped = doc.splitTextToSize(stripInlineMarkdown(text), state.width) as string[]
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(12)
+          for (const line of wrapped) {
+            ensurePage(16)
+            doc.text(line, state.margin, state.y)
+            state.y += 16
+          }
+          state.y += 4
+        }
+
+        const drawBullet = (text: string) => {
+          const wrapped = doc.splitTextToSize(stripInlineMarkdown(text), state.width - 16) as string[]
+          if (wrapped.length === 0) return
+
+          ensurePage(16)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(12)
+          doc.text('•', state.margin, state.y)
+          doc.text(wrapped[0], state.margin + 12, state.y)
+          state.y += 16
+
+          for (const line of wrapped.slice(1)) {
+            ensurePage(16)
+            doc.text(line, state.margin + 12, state.y)
+            state.y += 16
+          }
+        }
+
+        const drawKeyCard = (label: string, title: string, detail: string) => {
+          const cardX = state.margin + 6
+          const cardW = state.width - 6
+          const padX = 10
+
+          const titleText = `${label}: ${title}`
+          const titleLines = doc.splitTextToSize(stripInlineMarkdown(titleText), cardW - padX * 2 - 6) as string[]
+          const detailLines = detail
+            ? (doc.splitTextToSize(stripInlineMarkdown(detail), cardW - padX * 2 - 6) as string[])
+            : []
+
+          const titleH = Math.max(14, titleLines.length * 14)
+          const detailH = detailLines.length > 0 ? detailLines.length * 13 + 4 : 0
+          const cardH = Math.max(42, 10 + titleH + detailH + 8)
+
+          ensurePage(cardH + 8)
+          setFill(238, 242, 255)
+          drawRect(cardX, state.y, cardW, cardH, 'F')
+          setFill(79, 70, 229)
+          drawRect(cardX + cardW - 2, state.y, 2, cardH, 'F')
+
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(12)
+          doc.text(titleLines, cardX + padX, state.y + 16, { maxWidth: cardW - padX * 2 - 6 })
+
+          if (detailLines.length > 0) {
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(11)
+            doc.text(detailLines, cardX + padX, state.y + 16 + titleH + 2, { maxWidth: cardW - padX * 2 - 6 })
+          }
+
+          state.y += cardH + 8
+        }
+
+        const drawMarkdownTable = (headers: string[], rows: string[][]) => {
+          const colCount = Math.max(headers.length, ...rows.map((r) => r.length), 2)
+          const colWidth = state.width / colCount
+
+          const normalizeRow = (row: string[]): string[] => {
+            const normalized = [...row]
+            while (normalized.length < colCount) normalized.push('')
+            return normalized.slice(0, colCount)
+          }
+
+          const headerRow = normalizeRow(headers)
+          const dataRows = rows.map(normalizeRow)
+
+          const getLayout = (cells: string[]) => {
+            const cellLines = cells.map((cell) =>
+              doc.splitTextToSize(stripInlineMarkdown(cell || '—'), Math.max(colWidth - 10, 24)) as string[],
+            )
+            const rowHeight = Math.max(22, Math.max(...cellLines.map((group) => group.length)) * 13 + 8)
+            return { cellLines, rowHeight }
+          }
+
+          const drawRow = (cells: string[], isHeader: boolean) => {
+            const { cellLines, rowHeight } = getLayout(cells)
+            ensurePage(rowHeight)
+
+            for (let c = 0; c < colCount; c += 1) {
+              const x = state.margin + c * colWidth
+              setDraw(203, 213, 225)
+              if (isHeader) {
+                setFill(241, 245, 249)
+                drawRect(x, state.y, colWidth, rowHeight, 'FD')
+              } else {
+                drawRect(x, state.y, colWidth, rowHeight)
+              }
+
+              doc.setFont('helvetica', isHeader ? 'bold' : 'normal')
+              doc.setFontSize(isHeader ? 10.5 : 10)
+              doc.text(cellLines[c], x + 5, state.y + 14, { maxWidth: Math.max(colWidth - 10, 24) })
+            }
+
+            state.y += rowHeight
+          }
+
+          state.y += 2
+          drawRow(headerRow, true)
+          dataRows.forEach((row) => drawRow(row, false))
+          state.y += 10
+        }
+
+        sections.forEach((section, sectionIndex) => {
+          ensurePage(20)
+          if (typeof doc.setFillColor === 'function') {
+            doc.setFillColor(79, 70, 229)
+          }
+          if (typeof doc.circle === 'function') {
+            doc.circle(state.margin + 3.2, state.y - 4.6, 3.2, 'F')
+          } else {
+            drawRect(state.margin, state.y - 8, 6, 6, 'F')
+          }
+
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(16)
+          const headingLines = doc.splitTextToSize(stripInlineMarkdown(section.heading), state.width - 16) as string[]
+          doc.text(headingLines, state.margin + 13, state.y)
+          state.y += Math.max(18, headingLines.length * 16)
+
+          let i = 0
+          while (i < section.lines.length) {
+            const line = section.lines[i].trim()
+            if (!line) {
+              i += 1
+              continue
+            }
+
+            const next = (section.lines[i + 1] || '').trim()
+            const isTableHeader = line.startsWith('|') && line.endsWith('|') && isTableSeparator(next)
+            if (isTableHeader) {
+              const headers = parseTableRow(line)
+              const rows: string[][] = []
+              i += 2
+              while (i < section.lines.length) {
+                const rowLine = (section.lines[i] || '').trim()
+                if (!(rowLine.startsWith('|') && rowLine.endsWith('|'))) break
+                rows.push(parseTableRow(rowLine))
+                i += 1
+              }
+              if (headers.length > 0 && rows.length > 0) {
+                drawMarkdownTable(headers, rows)
+              }
+              continue
+            }
+
+            if (/^[-*+]\s+/.test(line)) {
+              while (i < section.lines.length) {
+                const bulletLine = (section.lines[i] || '').trim()
+                if (!/^[-*+]\s+/.test(bulletLine)) break
+                drawBullet(bulletLine.replace(/^[-*+]\s+/, ''))
+                i += 1
+              }
+              state.y += 4
+              continue
+            }
+
+            const keyMatch = stripInlineMarkdown(line).match(/^(Key Concept|Definition|Figure)\s*:\s*(.+)$/i)
+            if (keyMatch) {
+              const label = keyMatch[1]
+              const title = keyMatch[2]
+              const details: string[] = []
+              i += 1
+              while (i < section.lines.length) {
+                const d = (section.lines[i] || '').trim()
+                if (!d) {
+                  i += 1
+                  if (details.length > 0) break
+                  continue
+                }
+                if (/^[-*+]\s+/.test(d) || d.match(/^(#{1,6}|\d+[.)])\s+/) || stripInlineMarkdown(d).match(/^(Key Concept|Definition|Figure)\s*:/i)) {
+                  break
+                }
+                if (d.startsWith('|') && d.endsWith('|')) break
+                details.push(stripInlineMarkdown(d))
+                i += 1
+              }
+              drawKeyCard(label, title, details.join(' '))
+              continue
+            }
+
+            const paragraphLines: string[] = [stripInlineMarkdown(line)]
+            i += 1
+            while (i < section.lines.length) {
+              const candidate = (section.lines[i] || '').trim()
+              if (!candidate) {
+                i += 1
+                break
+              }
+              if (
+                /^[-*+]\s+/.test(candidate) ||
+                stripInlineMarkdown(candidate).match(/^(Key Concept|Definition|Figure)\s*:/i) ||
+                candidate.match(/^(#{1,6}|\d+[.)])\s+/) ||
+                (candidate.startsWith('|') && candidate.endsWith('|'))
+              ) {
+                break
+              }
+              paragraphLines.push(stripInlineMarkdown(candidate))
+              i += 1
+            }
+
+            drawParagraph(paragraphLines.join(' '))
+          }
+
+          if (sectionIndex < sections.length - 1) {
+            ensurePage(12)
+            setFill(229, 231, 235)
+            drawRect(state.margin, state.y, state.width, 1, 'F')
+            state.y += 14
+          }
+        })
+      }
+
+      const drawStyledQuizPdf = (
+        doc: any,
+        state: { y: number; pageHeight: number; margin: number; width: number },
+        payload: {
+          title: string
+          generatedAt: string
+          questions: Array<{ question: string; options: string[]; correctAnswer: string }>
+        },
+      ) => {
+        const ensurePage = (needed: number) => {
+          if (state.y + needed > state.pageHeight - state.margin) {
+            doc.addPage()
+            state.y = state.margin
+          }
+        }
+
+        const setFill = (r: number, g: number, b: number) => {
+          if (typeof doc.setFillColor === 'function') doc.setFillColor(r, g, b)
+        }
+
+        const setDraw = (r: number, g: number, b: number) => {
+          if (typeof doc.setDrawColor === 'function') doc.setDrawColor(r, g, b)
+        }
+
+        const drawRect = (x: number, y: number, w: number, h: number, mode: 'F' | 'FD' | undefined = undefined) => {
+          if (typeof doc.rect === 'function') {
+            doc.rect(x, y, w, h, mode)
+          }
+        }
+
+        ensurePage(22)
+        setFill(209, 250, 229)
+        drawRect(state.margin, state.y, state.width, 16, 'F')
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.text('QUIZ', state.margin + 8, state.y + 11)
+        state.y += 30
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(24)
+        const titleLines = doc.splitTextToSize(payload.title, state.width) as string[]
+        for (const line of titleLines) {
+          ensurePage(24)
+          doc.text(line, state.margin, state.y)
+          state.y += 24
+        }
+        state.y += 2
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(11)
+        ensurePage(14)
+        doc.text(`Questions: ${payload.questions.length} · Generated: ${payload.generatedAt}`, state.margin, state.y)
+        state.y += 12
+
+        ensurePage(2)
+        setFill(16, 185, 129)
+        drawRect(state.margin, state.y, state.width, 1.4, 'F')
+        state.y += 14
+
+        if (payload.questions.length === 0) {
+          writeWrapped(doc, 'No questions available.', state, { size: 11 })
+          return
+        }
+
+        payload.questions.forEach((question, index) => {
+          const cardX = state.margin
+          const cardW = state.width
+          const bodyW = cardW - 20
+          const qLabel = `Question ${index + 1}`
+          const questionLines = doc.splitTextToSize(stripInlineMarkdown(question.question), bodyW) as string[]
+          const optionGroups = question.options.map((option, optionIdx) => {
+            const prefix = `${String.fromCharCode(65 + optionIdx)}. `
+            const wrapped = doc.splitTextToSize(stripInlineMarkdown(option), bodyW - 12) as string[]
+            if (wrapped.length === 0) return [`${prefix}—`]
+            return [`${prefix}${wrapped[0]}`, ...wrapped.slice(1).map((line) => `   ${line}`)]
+          })
+          const correctLines = doc.splitTextToSize(`Correct answer: ${stripInlineMarkdown(question.correctAnswer || 'N/A')}`, bodyW) as string[]
+
+          const cardH = Math.max(
+            80,
+            14 +
+            14 +
+            questionLines.length * 14 +
+            optionGroups.reduce((sum, group) => sum + group.length * 13 + 2, 0) +
+            correctLines.length * 13 +
+            16,
+          )
+
+          ensurePage(cardH + 8)
+          setFill(236, 253, 245)
+          setDraw(167, 243, 208)
+          drawRect(cardX, state.y, cardW, cardH, 'FD')
+
+          let cursorY = state.y + 16
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(11)
+          doc.text(qLabel, cardX + 10, cursorY)
+          cursorY += 16
+
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(12)
+          questionLines.forEach((line) => {
+            doc.text(line, cardX + 10, cursorY)
+            cursorY += 14
+          })
+          cursorY += 2
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10.5)
+          optionGroups.forEach((group) => {
+            group.forEach((line) => {
+              doc.text(line, cardX + 10, cursorY)
+              cursorY += 13
+            })
+            cursorY += 2
+          })
+
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(10.5)
+          correctLines.forEach((line) => {
+            doc.text(line, cardX + 10, cursorY)
+            cursorY += 13
+          })
+
+          state.y += cardH + 8
+        })
+      }
+
+      const drawStyledFlashcardsPdf = (
+        doc: any,
+        state: { y: number; pageHeight: number; margin: number; width: number },
+        payload: {
+          title: string
+          generatedAt: string
+          cards: Array<{ front: string; back: string }>
+        },
+      ) => {
+        const ensurePage = (needed: number) => {
+          if (state.y + needed > state.pageHeight - state.margin) {
+            doc.addPage()
+            state.y = state.margin
+          }
+        }
+
+        const setFill = (r: number, g: number, b: number) => {
+          if (typeof doc.setFillColor === 'function') doc.setFillColor(r, g, b)
+        }
+
+        const setDraw = (r: number, g: number, b: number) => {
+          if (typeof doc.setDrawColor === 'function') doc.setDrawColor(r, g, b)
+        }
+
+        const drawRect = (x: number, y: number, w: number, h: number, mode: 'F' | 'FD' | undefined = undefined) => {
+          if (typeof doc.rect === 'function') {
+            doc.rect(x, y, w, h, mode)
+          }
+        }
+
+        ensurePage(22)
+        setFill(254, 243, 199)
+        drawRect(state.margin, state.y, state.width, 16, 'F')
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.text('FLASHCARDS', state.margin + 8, state.y + 11)
+        state.y += 30
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(24)
+        const titleLines = doc.splitTextToSize(payload.title, state.width) as string[]
+        for (const line of titleLines) {
+          ensurePage(24)
+          doc.text(line, state.margin, state.y)
+          state.y += 24
+        }
+        state.y += 2
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(11)
+        ensurePage(14)
+        doc.text(`Cards: ${payload.cards.length} · Generated: ${payload.generatedAt}`, state.margin, state.y)
+        state.y += 12
+
+        ensurePage(2)
+        setFill(245, 158, 11)
+        drawRect(state.margin, state.y, state.width, 1.4, 'F')
+        state.y += 14
+
+        if (payload.cards.length === 0) {
+          writeWrapped(doc, 'No flashcards available.', state, { size: 11 })
+          return
+        }
+
+        payload.cards.forEach((card, index) => {
+          const cardX = state.margin
+          const cardW = state.width
+          const bodyW = cardW - 24
+          const frontLines = doc.splitTextToSize(stripInlineMarkdown(card.front || `Card ${index + 1}`), bodyW) as string[]
+          const backLines = doc.splitTextToSize(stripInlineMarkdown(card.back || 'N/A'), bodyW) as string[]
+
+          const blockH = Math.max(88, 18 + frontLines.length * 14 + 10 + 14 + backLines.length * 13 + 12)
+          ensurePage(blockH + 8)
+
+          setFill(255, 251, 235)
+          setDraw(252, 211, 77)
+          drawRect(cardX, state.y, cardW, blockH, 'FD')
+          setFill(245, 158, 11)
+          drawRect(cardX + cardW - 3, state.y, 3, blockH, 'F')
+
+          let cursorY = state.y + 16
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(11)
+          doc.text(`Card ${index + 1}`, cardX + 12, cursorY)
+          cursorY += 16
+
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(12)
+          doc.text('Front', cardX + 12, cursorY)
+          cursorY += 14
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(11)
+          frontLines.forEach((line) => {
+            doc.text(line, cardX + 12, cursorY)
+            cursorY += 14
+          })
+
+          cursorY += 2
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(12)
+          doc.text('Back', cardX + 12, cursorY)
+          cursorY += 14
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(11)
+          backLines.forEach((line) => {
+            doc.text(line, cardX + 12, cursorY)
+            cursorY += 13
+          })
+
+          state.y += blockH + 8
+        })
+      }
+
       let successCount = 0
       let failureCount = 0
 
@@ -314,10 +934,26 @@ export function LibraryPage() {
                 : '') ||
               'No content available.'
 
-            writeWrapped(doc, title, state, { size: 17, bold: true, gap: 3 })
-            writeWrapped(doc, `Type: Summary`, state, { size: 10, gap: 2 })
-            writeWrapped(doc, `Generated: ${createdAt ? new Date(createdAt).toLocaleString() : '-'}`, state, { size: 10, gap: 10 })
-            writeWrapped(doc, summaryText, state, { size: 11, gap: 6 })
+            if (String(data?.format || '').toLowerCase() === 'smart') {
+              const sourceRaw = String((data as { source?: string; source_type?: string })?.source || (data as { source?: string; source_type?: string })?.source_type || '').toLowerCase()
+              const sourceLabel = sourceRaw.includes('youtube') || sourceRaw.includes('youtu') ? 'YouTube' : 'Document'
+              const tags = Array.isArray((data as { tags?: string[] })?.tags)
+                ? ((data as { tags?: string[] }).tags || [])
+                : (Array.isArray(item.tags) ? item.tags : [])
+
+              drawSmartSummaryPdf(doc as any, state, {
+                title,
+                sourceLabel,
+                generatedAt: formatPdfDate(createdAt),
+                tags,
+                markdown: summaryText,
+              })
+            } else {
+              writeWrapped(doc, title, state, { size: 17, bold: true, gap: 3 })
+              writeWrapped(doc, `Type: Summary`, state, { size: 10, gap: 2 })
+              writeWrapped(doc, `Generated: ${createdAt ? new Date(createdAt).toLocaleString() : '-'}`, state, { size: 10, gap: 10 })
+              writeWrapped(doc, summaryText, state, { size: 11, gap: 6 })
+            }
 
             doc.save(`${title}-${id.slice(0, 8)}.pdf`)
           } else if (item.type === 'quiz') {
@@ -345,38 +981,36 @@ export function LibraryPage() {
               }
             }
 
-            writeWrapped(doc, title, state, { size: 17, bold: true, gap: 3 })
-            writeWrapped(doc, `Type: Quiz`, state, { size: 10, gap: 2 })
-            writeWrapped(doc, `Generated: ${createdAt ? new Date(createdAt).toLocaleString() : '-'}`, state, { size: 10, gap: 10 })
+            const exportQuestions = questions.map((q, index: number) => {
+              const qText = String((q?.question as string) || (q?.text as string) || `Question ${index + 1}`)
+              const options = Array.isArray(q?.options)
+                ? (q.options as unknown[]).map((opt) => String(opt))
+                : Array.isArray(q?.answers)
+                  ? (q.answers as unknown[]).map((opt) => String(opt))
+                  : []
+              const correctIdx = Number.isInteger(q?.correct_index)
+                ? Number(q.correct_index)
+                : Number.isInteger(q?.correctIndex)
+                  ? Number(q.correctIndex)
+                  : null
+              const hasValidCorrectIdx = correctIdx !== null && correctIdx >= 0 && correctIdx < options.length
+              const correctAnswer =
+                hasValidCorrectIdx
+                  ? options[correctIdx]
+                  : String((q?.correct_answer as string) || (q?.correctAnswer as string) || 'N/A')
 
-            if (questions.length === 0) {
-              writeWrapped(doc, 'No questions available.', state, { size: 11 })
-            } else {
-              questions.forEach((q, index: number) => {
-                const qText = String((q?.question as string) || (q?.text as string) || `Question ${index + 1}`)
-                const options = Array.isArray(q?.options)
-                  ? (q.options as unknown[]).map((opt) => String(opt))
-                  : Array.isArray(q?.answers)
-                    ? (q.answers as unknown[]).map((opt) => String(opt))
-                    : []
-                const correctIdx = Number.isInteger(q?.correct_index)
-                  ? Number(q.correct_index)
-                  : Number.isInteger(q?.correctIndex)
-                    ? Number(q.correctIndex)
-                    : null
-                const hasValidCorrectIdx = correctIdx !== null && correctIdx >= 0 && correctIdx < options.length
-                const correctAnswer =
-                  hasValidCorrectIdx
-                    ? options[correctIdx]
-                    : String((q?.correct_answer as string) || (q?.correctAnswer as string) || 'N/A')
+              return {
+                question: qText,
+                options,
+                correctAnswer,
+              }
+            })
 
-                writeWrapped(doc, `${index + 1}. ${qText}`, state, { size: 12, bold: true, gap: 2 })
-                options.forEach((opt: string, optIdx: number) => {
-                  writeWrapped(doc, `- ${String.fromCharCode(65 + optIdx)}. ${opt}`, state, { size: 11, gap: 1 })
-                })
-                writeWrapped(doc, `Correct answer: ${correctAnswer}`, state, { size: 10, gap: 7 })
-              })
-            }
+            drawStyledQuizPdf(doc as any, state, {
+              title,
+              generatedAt: formatPdfDate(createdAt),
+              questions: exportQuestions,
+            })
 
             doc.save(`${title}-${id.slice(0, 8)}.pdf`)
           } else if (item.type === 'flashcard') {
@@ -391,21 +1025,16 @@ export function LibraryPage() {
             const createdAt = item.created_at || data?.deck?.created_at
             const cards = Array.isArray(data?.cards) ? (data.cards as Array<Record<string, unknown>>) : []
 
-            writeWrapped(doc, title, state, { size: 17, bold: true, gap: 3 })
-            writeWrapped(doc, `Type: Flashcards`, state, { size: 10, gap: 2 })
-            writeWrapped(doc, `Generated: ${createdAt ? new Date(createdAt).toLocaleString() : '-'}`, state, { size: 10, gap: 10 })
+            const exportCards = cards.map((card: Record<string, unknown>, index: number) => ({
+              front: String((card?.front as string) || (card?.question as string) || (card?.term as string) || `Card ${index + 1}`),
+              back: String((card?.back as string) || (card?.answer as string) || (card?.definition as string) || ''),
+            }))
 
-            if (cards.length === 0) {
-              writeWrapped(doc, 'No flashcards available.', state, { size: 11 })
-            } else {
-              cards.forEach((card: Record<string, unknown>, index: number) => {
-                const front = String((card?.front as string) || (card?.question as string) || (card?.term as string) || `Card ${index + 1}`)
-                const back = String((card?.back as string) || (card?.answer as string) || (card?.definition as string) || '')
-
-                writeWrapped(doc, `${index + 1}. Front: ${front}`, state, { size: 12, bold: true, gap: 2 })
-                writeWrapped(doc, `Back: ${back || 'N/A'}`, state, { size: 11, gap: 8 })
-              })
-            }
+            drawStyledFlashcardsPdf(doc as any, state, {
+              title,
+              generatedAt: formatPdfDate(createdAt),
+              cards: exportCards,
+            })
 
             doc.save(`${title}-${id.slice(0, 8)}.pdf`)
           }

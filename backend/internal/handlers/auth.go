@@ -116,6 +116,27 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tokens)
 }
 
+func (h *AuthHandler) GoogleCodeLogin(w http.ResponseWriter, r *http.Request) {
+	var req models.GoogleCodeLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
+
+	if req.Code == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "code is required", r))
+		return
+	}
+
+	tokens, err := h.authService.GoogleCodeLogin(r.Context(), req.Code)
+	if err != nil {
+		handleServiceError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, tokens)
+}
+
 func (h *AuthHandler) ResendVerification(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email string `json:"email"`

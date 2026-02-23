@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -21,9 +22,33 @@ func RequestID(next http.Handler) http.Handler {
 
 // CORS handles cross-origin requests
 func CORS(frontendURL string) func(http.Handler) http.Handler {
+	allowedOrigins := make([]string, 0)
+	for _, origin := range strings.Split(frontendURL, ",") {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed != "" {
+			allowedOrigins = append(allowedOrigins, trimmed)
+		}
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", frontendURL)
+			requestOrigin := r.Header.Get("Origin")
+			allowOrigin := ""
+
+			for _, origin := range allowedOrigins {
+				if origin == requestOrigin {
+					allowOrigin = requestOrigin
+					break
+				}
+			}
+
+			if allowOrigin == "" && len(allowedOrigins) > 0 {
+				allowOrigin = allowedOrigins[0]
+			}
+
+			if allowOrigin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+			}
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Request-ID")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")

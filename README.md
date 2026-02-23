@@ -184,6 +184,8 @@ npm run dev
 | `SMTP_USER` / `SMTP_PASS` | Email credentials (Gmail App Password) | ✅ |
 | `FRONTEND_URL` | Frontend URL for CORS & email links | ✅ |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | Optional |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret (for authorization code exchange) | Optional |
+| `GOOGLE_REDIRECT_URI` | OAuth callback URI (must match Google Console exactly) | Optional |
 | `GEMINI_REQUESTS_PER_MINUTE` | AI rate limit | Default: `60` |
 | `GEMINI_TOKENS_PER_MINUTE` | AI token rate limit | Default: `1000000` |
 
@@ -193,6 +195,7 @@ npm run dev
 |----------|-------------|---------|
 | `VITE_API_BASE_URL` | Backend API URL (`/api/v1` in Docker) | `http://localhost:8081/api/v1` |
 | `VITE_GOOGLE_CLIENT_ID` | Google OAuth client ID | `123...apps.googleusercontent.com` |
+| `VITE_GOOGLE_REDIRECT_URI` | Frontend callback URI | `http://localhost:5173/auth/callback` |
 
 ---
 

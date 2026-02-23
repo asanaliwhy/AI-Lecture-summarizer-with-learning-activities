@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"time"
 	"unicode"
@@ -23,20 +25,32 @@ import (
 )
 
 type AuthService struct {
-	userRepo       *repository.UserRepo
-	redis          *redis.Client
-	jwt            *middleware.JWTAuth
-	email          *EmailService
-	googleClientID string
+	userRepo           *repository.UserRepo
+	redis              *redis.Client
+	jwt                *middleware.JWTAuth
+	email              *EmailService
+	googleClientID     string
+	googleClientSecret string
+	googleRedirectURI  string
 }
 
-func NewAuthService(userRepo *repository.UserRepo, redisClient *redis.Client, jwt *middleware.JWTAuth, email *EmailService, googleClientID string) *AuthService {
+func NewAuthService(
+	userRepo *repository.UserRepo,
+	redisClient *redis.Client,
+	jwt *middleware.JWTAuth,
+	email *EmailService,
+	googleClientID string,
+	googleClientSecret string,
+	googleRedirectURI string,
+) *AuthService {
 	return &AuthService{
-		userRepo:       userRepo,
-		redis:          redisClient,
-		jwt:            jwt,
-		email:          email,
-		googleClientID: googleClientID,
+		userRepo:           userRepo,
+		redis:              redisClient,
+		jwt:                jwt,
+		email:              email,
+		googleClientID:     googleClientID,
+		googleClientSecret: googleClientSecret,
+		googleRedirectURI:  googleRedirectURI,
 	}
 }
 
@@ -249,14 +263,73 @@ func (s *AuthService) issueTokens(ctx context.Context, user *models.User) (*mode
 	}, nil
 }
 
+type googleTokenInfo struct {
+	Sub           string `json:"sub"`
+	Email         string `json:"email"`
+	EmailVerified string `json:"email_verified"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
+	Aud           string `json:"aud"`
+}
+
+// GoogleCodeLogin exchanges an OAuth authorization code for an ID token and logs in the user.
+func (s *AuthService) GoogleCodeLogin(ctx context.Context, code string) (*models.AuthTokens, error) {
+	if s.googleClientID == "" || s.googleClientSecret == "" || s.googleRedirectURI == "" {
+		return nil, &ValidationError{Fields: map[string]string{"google": "Google OAuth code flow is not configured"}}
+	}
+
+	form := url.Values{}
+	form.Set("code", code)
+	form.Set("client_id", s.googleClientID)
+	form.Set("client_secret", s.googleClientSecret)
+	form.Set("redirect_uri", s.googleRedirectURI)
+	form.Set("grant_type", "authorization_code")
+
+	resp, err := http.PostForm("https://oauth2.googleapis.com/token", form)
+	if err != nil {
+		return nil, fmt.Errorf("failed to exchange Google authorization code: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return nil, &UnauthorizedError{Message: "Invalid Google authorization code"}
+	}
+
+	var tokenResponse struct {
+		IDToken string `json:"id_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
+		return nil, fmt.Errorf("failed to decode Google token response: %w", err)
+	}
+
+	if tokenResponse.IDToken == "" {
+		return nil, &UnauthorizedError{Message: "Google token response missing id_token"}
+	}
+
+	return s.loginWithGoogleIDToken(ctx, tokenResponse.IDToken)
+}
+
 // GoogleLogin verifies a Google ID token and logs in or creates the user.
 func (s *AuthService) GoogleLogin(ctx context.Context, idToken string) (*models.AuthTokens, error) {
 	if s.googleClientID == "" {
 		return nil, &ValidationError{Fields: map[string]string{"google": "Google sign-in is not configured"}}
 	}
 
-	// Verify the ID token using Google's tokeninfo endpoint
-	resp, err := http.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken)
+	return s.loginWithGoogleIDToken(ctx, idToken)
+}
+
+func (s *AuthService) loginWithGoogleIDToken(ctx context.Context, idToken string) (*models.AuthTokens, error) {
+	tokenInfo, err := s.verifyGoogleIDToken(idToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.loginOrCreateGoogleUser(ctx, tokenInfo)
+}
+
+func (s *AuthService) verifyGoogleIDToken(idToken string) (*googleTokenInfo, error) {
+	resp, err := http.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + url.QueryEscape(idToken))
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify Google token: %w", err)
 	}
@@ -266,19 +339,11 @@ func (s *AuthService) GoogleLogin(ctx context.Context, idToken string) (*models.
 		return nil, &UnauthorizedError{Message: "Invalid Google token"}
 	}
 
-	var tokenInfo struct {
-		Sub           string `json:"sub"`
-		Email         string `json:"email"`
-		EmailVerified string `json:"email_verified"`
-		Name          string `json:"name"`
-		Picture       string `json:"picture"`
-		Aud           string `json:"aud"`
-	}
+	var tokenInfo googleTokenInfo
 	if err := json.NewDecoder(resp.Body).Decode(&tokenInfo); err != nil {
 		return nil, fmt.Errorf("failed to decode Google token info: %w", err)
 	}
 
-	// Verify audience matches our client ID
 	if tokenInfo.Aud != s.googleClientID {
 		return nil, &UnauthorizedError{Message: "Google token audience mismatch"}
 	}
@@ -287,10 +352,13 @@ func (s *AuthService) GoogleLogin(ctx context.Context, idToken string) (*models.
 		return nil, &ValidationError{Fields: map[string]string{"google": "Google account missing email"}}
 	}
 
+	return &tokenInfo, nil
+}
+
+func (s *AuthService) loginOrCreateGoogleUser(ctx context.Context, tokenInfo *googleTokenInfo) (*models.AuthTokens, error) {
 	// Try to find existing user by Google ID
 	user, err := s.userRepo.GetByGoogleID(ctx, tokenInfo.Sub)
 	if err == nil {
-		// Existing Google user — update last login and issue tokens
 		if !user.IsActive {
 			return nil, &UnauthorizedError{Message: "Account is deactivated"}
 		}
@@ -305,11 +373,9 @@ func (s *AuthService) GoogleLogin(ctx context.Context, idToken string) (*models.
 	// Try to find existing user by email
 	user, err = s.userRepo.GetByEmail(ctx, tokenInfo.Email)
 	if err == nil {
-		// Existing email user — link Google account
 		if !user.IsActive {
 			return nil, &UnauthorizedError{Message: "Account is deactivated"}
 		}
-		// Update the user to link their Google account
 		s.userRepo.LinkGoogle(ctx, user.ID, tokenInfo.Sub)
 		s.userRepo.UpdateLastLogin(ctx, user.ID)
 		return s.issueTokens(ctx, user)
@@ -326,9 +392,14 @@ func (s *AuthService) GoogleLogin(ctx context.Context, idToken string) (*models.
 		avatarURL = &tokenInfo.Picture
 	}
 
+	fullName := tokenInfo.Name
+	if fullName == "" {
+		fullName = tokenInfo.Email
+	}
+
 	newUser := &models.User{
 		Email:        tokenInfo.Email,
-		FullName:     tokenInfo.Name,
+		FullName:     fullName,
 		AvatarURL:    avatarURL,
 		IsVerified:   true, // Google accounts are pre-verified
 		AuthProvider: "google",
@@ -339,7 +410,6 @@ func (s *AuthService) GoogleLogin(ctx context.Context, idToken string) (*models.
 		return nil, err
 	}
 
-	// Create default settings
 	s.userRepo.CreateSettings(ctx, newUser.ID)
 
 	return s.issueTokens(ctx, newUser)

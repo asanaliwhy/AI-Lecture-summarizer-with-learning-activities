@@ -395,6 +395,12 @@ export const api = {
                 method: 'POST',
                 body: JSON.stringify({ id_token: idToken }),
             }),
+
+        googleCodeLogin: (code: string) =>
+            apiFetch<{ access_token: string; refresh_token: string }>('/auth/google/code', {
+                method: 'POST',
+                body: JSON.stringify({ code }),
+            }),
     },
 
     // Content
@@ -457,6 +463,45 @@ export const api = {
                 method: 'POST',
                 body: JSON.stringify({ message, history }),
             }),
+
+        exportPdf: async (id: string): Promise<{ blob: Blob; filename: string }> => {
+            const request = async () => {
+                const token = getAccessToken()
+                const headers: Record<string, string> = {}
+                if (token) headers['Authorization'] = `Bearer ${token}`
+                return fetch(`${API_BASE}/summaries/${id}/export`, {
+                    method: 'GET',
+                    headers,
+                })
+            }
+
+            let res = await request()
+            if (res.status === 401 && getRefreshToken()) {
+                const refreshed = await tryRefresh()
+                if (refreshed) {
+                    res = await request()
+                }
+            }
+
+            if (!res.ok) {
+                let message = 'Failed to export PDF'
+                try {
+                    const err = await res.json()
+                    message = err?.error?.message || message
+                } catch {
+                    // keep fallback message
+                }
+                throw new ApiError(res.status, message)
+            }
+
+            const disposition = res.headers.get('content-disposition') || ''
+            const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i)
+            const rawName = decodeURIComponent((match?.[1] || match?.[2] || '').trim())
+            const filename = rawName || `summary-${id}.pdf`
+
+            const blob = await res.blob()
+            return { blob, filename }
+        },
     },
 
     // Quizzes

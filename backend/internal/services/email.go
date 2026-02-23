@@ -23,13 +23,17 @@ func NewEmailService(host, port, user, pass, from, frontendURL string) *EmailSer
 	if devMode {
 		log.Println("⚠ Email service running in DEV MODE (logging to console)")
 	}
+	primaryFrontendURL := strings.TrimSpace(strings.Split(frontendURL, ",")[0])
+	if primaryFrontendURL == "" {
+		primaryFrontendURL = "http://localhost:5173"
+	}
 	return &EmailService{
 		host:        host,
 		port:        port,
 		user:        user,
 		pass:        pass,
 		from:        from,
-		frontendURL: frontendURL,
+		frontendURL: primaryFrontendURL,
 		devMode:     devMode,
 	}
 }

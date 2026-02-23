@@ -7,11 +7,31 @@ import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
 import { useToast } from '../components/ui/Toast'
 import { Eye, EyeOff } from 'lucide-react'
-import { useGoogleLogin } from '../hooks/useGoogleLogin'
+
+function buildGoogleAuthURL(): string | null {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim()
+  const configuredRedirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI?.trim()
+  const redirectUri = import.meta.env.DEV
+    ? `${window.location.origin}/auth/callback`
+    : configuredRedirectUri || `${window.location.origin}/auth/callback`
+
+  if (!clientId) return null
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'offline',
+    prompt: 'select_account',
+  })
+
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
+}
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const { login, googleLogin } = useAuth()
+  const { login } = useAuth()
   const { success: toastSuccess, error: toastError } = useToast()
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
@@ -20,27 +40,15 @@ export function LoginPage() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
-  const handleGoogleCredential = useCallback(async (idToken: string) => {
-    try {
-      setIsLoading(true)
-      setError('')
-      await googleLogin(idToken)
-      toastSuccess('Welcome!')
-      navigate('/dashboard')
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message)
-        toastError(err.message)
-      } else {
-        setError('Google sign-in failed')
-        toastError('Google sign-in failed. Please try again.')
-      }
-    } finally {
-      setIsLoading(false)
+  const handleGoogleSignIn = useCallback(() => {
+    const authURL = buildGoogleAuthURL()
+    if (!authURL) {
+      setError('Google OAuth is not configured')
+      toastError('Google OAuth is not configured')
+      return
     }
-  }, [googleLogin, navigate, toastSuccess, toastError])
-
-  const googleBtnRef = useGoogleLogin(handleGoogleCredential, 'signin_with')
+    window.location.href = authURL
+  }, [toastError])
 
   const validateForm = () => {
     const errors: Record<string, string> = {}
@@ -179,7 +187,15 @@ export function LoginPage() {
             </div>
           </div>
 
-          <div ref={googleBtnRef} className="w-full flex justify-center" />
+          <Button type="button" variant="outline" className="w-full gap-2" onClick={handleGoogleSignIn}>
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" role="img">
+              <path fill="#EA4335" d="M12 10.2v3.9h5.4c-.2 1.3-1.6 3.9-5.4 3.9-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.2.8 4 1.5l2.7-2.6C17.1 3.5 14.8 2.5 12 2.5 6.8 2.5 2.5 6.8 2.5 12S6.8 21.5 12 21.5c6.9 0 9.2-4.8 9.2-7.3 0-.5 0-.9-.1-1.3H12z" />
+              <path fill="#34A853" d="M3.6 7.6l3.2 2.4C7.7 8 9.7 6.5 12 6.5c1.9 0 3.2.8 4 1.5l2.7-2.6C17.1 3.5 14.8 2.5 12 2.5 8.4 2.5 5.4 4.5 3.6 7.6z" />
+              <path fill="#FBBC05" d="M12 21.5c2.7 0 5-1 6.7-2.6l-3.1-2.5c-.8.6-2 1.1-3.6 1.1-3.1 0-5.7-2.1-6.6-4.9l-3.3 2.5C4 18.4 7.7 21.5 12 21.5z" />
+              <path fill="#4285F4" d="M21.2 14.2c.1-.4.1-.8.1-1.2s0-.8-.1-1.2H12v2.4h5.3c-.2 1.2-.9 2.2-1.9 2.9l3.1 2.5c1.8-1.7 2.7-4.1 2.7-6.4z" />
+            </svg>
+            <span>Continue with Google</span>
+          </Button>
 
           <p className="text-center text-sm text-muted-foreground">
             Don't have an account?{' '}
