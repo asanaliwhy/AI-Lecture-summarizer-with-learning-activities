@@ -234,6 +234,93 @@ The SSL config includes modern TLS (1.2/1.3), HSTS, `X-Content-Type-Options`, `X
 
 ---
 
+## 🚂 Deploy on Railway
+
+This repo is deployed on Railway as **4 services**:
+
+1. **Postgres** (Railway managed database)
+2. **Redis** (Railway managed Redis)
+3. **Backend API** (from `backend/`)
+4. **Frontend SPA** (from repo root)
+
+### 1) Create services
+
+- Create a new Railway project.
+- Add **Postgres** and **Redis** plugins.
+- Add 2 GitHub-backed services from this same repository:
+  - **Backend service** → set Root Directory to `backend`
+  - **Frontend service** → set Root Directory to `/` (repo root)
+
+The repo includes Railway config files:
+
+- `backend/railway.toml` for backend service build/deploy
+- `railway.toml` for frontend service build/deploy
+
+### 2) Backend service settings
+
+Backend uses `backend/Dockerfile` and runs Go + Python (for ReportLab PDF export).
+
+Set these environment variables in the **backend** Railway service:
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `PORT` | ✅ | Use `8081` |
+| `ENV` | ✅ | `production` |
+| `DATABASE_URL` | ✅ | Reference Railway Postgres connection string |
+| `REDIS_URL` | ✅ | Reference Railway Redis connection string |
+| `JWT_SECRET` | ✅ | Strong random secret |
+| `GEMINI_API_KEY` | ✅ | Google Gemini API key |
+| `FRONTEND_URL` | ✅ | Public Railway URL of frontend service |
+| `GOOGLE_CLIENT_ID` | Optional | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | Optional | e.g. `https://<frontend-domain>/auth/callback` |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Optional | Needed for production email verification flows |
+| `STORAGE_TYPE` | Optional | Default `local` |
+| `STORAGE_PATH` | Optional | Default `./uploads` |
+| `GEMINI_REQUESTS_PER_MINUTE` | Optional | Default `60` |
+| `GEMINI_TOKENS_PER_MINUTE` | Optional | Default `1000000` |
+| `GEMINI_CONCURRENT_REQUESTS` | Optional | Default `5` |
+
+Backend health endpoints:
+
+- `/health`
+- `/api/v1/health`
+
+### 3) Frontend service settings
+
+Frontend uses `Dockerfile.railway` + `nginx.railway.conf` (HTTP on internal Railway port 8080; TLS is handled by Railway edge).
+
+Set this environment variable in the **frontend** Railway service:
+
+| Variable | Required | Example |
+|----------|----------|---------|
+| `VITE_API_BASE_URL` | ✅ | `https://<backend-domain>` or `https://<backend-domain>/api/v1` |
+
+> `VITE_API_BASE_URL` can be just the backend domain. The frontend client normalizes it to `/api/v1` automatically.
+
+### 4) Google OAuth values for Railway domains
+
+In Google Cloud Console OAuth credentials:
+
+- **Authorized JavaScript origins**: `https://<frontend-domain>`
+- **Authorized redirect URI**: `https://<frontend-domain>/auth/callback`
+
+And set backend/frontend env values consistently:
+
+- `FRONTEND_URL=https://<frontend-domain>`
+- `GOOGLE_REDIRECT_URI=https://<frontend-domain>/auth/callback`
+- `VITE_GOOGLE_REDIRECT_URI=https://<frontend-domain>/auth/callback` (if used in frontend env)
+
+### 5) Deploy order
+
+1. Deploy Postgres + Redis
+2. Deploy Backend (verify `/health`)
+3. Deploy Frontend
+4. Update backend `FRONTEND_URL` with final frontend domain
+5. Recheck OAuth redirect/origins in Google Console
+
+---
+
 ## 📡 API Reference
 
 All protected endpoints require `Authorization: Bearer <access_token>` header.
