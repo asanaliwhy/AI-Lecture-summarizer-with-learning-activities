@@ -1,10 +1,20 @@
 const DEFAULT_API_BASE = 'http://localhost:8081/api/v1'
 
+function getProductionFallbackApiBase(): string {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+        return `${window.location.origin.replace(/\/+$/, '')}/api/v1`
+    }
+
+    return DEFAULT_API_BASE
+}
+
 function normalizeApiBase(raw: string | undefined): string {
     const value = (raw || '').trim()
     if (!value) {
         if (import.meta.env.PROD) {
-            throw new Error('VITE_API_BASE_URL is required in production')
+            const fallback = getProductionFallbackApiBase()
+            console.warn('VITE_API_BASE_URL is missing in production, falling back to', fallback)
+            return fallback
         }
         return DEFAULT_API_BASE
     }
@@ -21,7 +31,9 @@ function normalizeApiBase(raw: string | undefined): string {
         return `${url.protocol}//${url.host}${normalizedPath}`
     } catch {
         if (import.meta.env.PROD) {
-            throw new Error('VITE_API_BASE_URL is invalid in production')
+            const fallback = getProductionFallbackApiBase()
+            console.warn('VITE_API_BASE_URL is invalid in production, falling back to', fallback)
+            return fallback
         }
         return DEFAULT_API_BASE
     }
