@@ -47,3 +47,7 @@ type RefreshRequest struct {
 type GoogleLoginRequest struct {
 	IDToken string `json:"id_token"`
 }
+
+type GoogleCodeLoginRequest struct {
+	Code string `json:"code"`
+}

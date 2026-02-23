@@ -80,7 +80,15 @@ func main() {
 	emailService := services.NewEmailService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom, cfg.FrontendURL)
 	youtubeService := services.NewYouTubeService()
 	fileExtractService := services.NewFileExtractService()
-	authService := services.NewAuthService(userRepo, redisClients.Queue, jwtAuth, emailService, cfg.GoogleClientID)
+	authService := services.NewAuthService(
+		userRepo,
+		redisClients.Queue,
+		jwtAuth,
+		emailService,
+		cfg.GoogleClientID,
+		cfg.GoogleClientSecret,
+		cfg.GoogleRedirectURI,
+	)
 
 	// ──── Initialize Handlers ────
 	authHandler := handlers.NewAuthHandler(authService, cfg.FrontendURL)

@@ -326,6 +326,38 @@ function normalizeSmartSummaryMarkdown(value: string): string {
     // Strip bold/italic markers for heading detection (Gemini often wraps headings in **)
     const cleanRaw = cleanInlineMarkdown(raw)
 
+    // If a regular text line is immediately followed by a table header,
+    // always treat that line as the table section title.
+    // This keeps table titles consistently styled across all smart summaries.
+    const nextLineRaw = (lines[i + 1] || '').trim()
+    const nextNextLineRaw = (lines[i + 2] || '').trim()
+    const rawHasColumnSpacing = /\s{2,}/.test(addImplicitSpaces(raw).trim())
+    const rawLooksLikeTableHeader = parseHeaderColumns(raw).length >= 2 || /^\|.*\|$/.test(raw)
+    const nextLooksLikeTableHeader = parseHeaderColumns(nextLineRaw).length >= 2 || /^\|.*\|$/.test(nextLineRaw)
+    const nextNextLooksLikeTableSeparator = /^\|\s*:?-{3,}.*\|$/.test(nextNextLineRaw)
+    const nextNextLooksLikeTableRow =
+      (parseSmartTableRow(nextNextLineRaw, Math.max(parseHeaderColumns(nextLineRaw).length, 2)) || []).length >= 2 ||
+      /^\|.*\|$/.test(nextNextLineRaw)
+    const isLikelyTitleBeforeTable =
+      cleanRaw.length > 0 &&
+      !/^\d+[.)]\s+/.test(raw) &&
+      !/^[-*+]\s+/.test(raw) &&
+      !raw.startsWith('• ') &&
+      !rawHasColumnSpacing &&
+      !rawLooksLikeTableHeader &&
+      nextLooksLikeTableHeader &&
+      (nextNextLooksLikeTableSeparator || nextNextLooksLikeTableRow)
+
+    if (isLikelyTitleBeforeTable) {
+      if (out.length > 0 && out[out.length - 1] !== '') out.push('')
+      const headingText = cleanRaw.replace(/:\s*$/, '')
+      out.push(`## ${headingText}`)
+      out.push('')
+      currentSmartSection = headingText.toLowerCase()
+      i += 1
+      continue
+    }
+
     const knownSectionHeading = cleanRaw.match(/^(Summary(?:\s+of\s+[A-Za-z\s]+)?|Key Insights and Core Concepts|Brain Structure and Functions|Brain Parts and Functions|Additional Interesting Facts|Conclusions|Summary Highlights):?$/i)
     if (knownSectionHeading) {
       if (out.length > 0 && out[out.length - 1] !== '') out.push('')
@@ -340,8 +372,16 @@ function normalizeSmartSummaryMarkdown(value: string): string {
     // Also detect any generic section heading (e.g. "Key Historical Events", "Algorithm Comparison")
     // that the topic-adaptive table section might use
     const genericWords = cleanRaw.split(/\s+/)
+    const nextHeadingCandidateRaw = (lines[i + 1] || '').trim()
+    const nextHeadingCandidateCols = parseHeaderColumns(nextHeadingCandidateRaw)
+    const followedByTableLikeHeader =
+      nextHeadingCandidateCols.length >= 2 || /^\|.+\|$/.test(nextHeadingCandidateRaw)
     const genericSectionHeading = cleanRaw.match(/^([A-Z][A-Za-z\s,&-]{3,60}):?$/)
-    if (genericSectionHeading && genericWords.length <= 8 && !cleanRaw.match(/^(Key Concept|Definition|Example|Figure)\s*:/i)) {
+    if (
+      genericSectionHeading &&
+      (genericWords.length <= 12 || followedByTableLikeHeader) &&
+      !cleanRaw.match(/^(Key Concept|Definition|Example|Figure)\s*:/i)
+    ) {
       if (out.length > 0 && out[out.length - 1] !== '') out.push('')
       const headingText = genericSectionHeading[1].replace(/:\s*$/, '')
       out.push(`## ${headingText}`)
@@ -729,6 +769,17 @@ type PdfContentBlock =
   | { type: 'text'; text: string }
   | { type: 'table'; headers: string[]; rows: string[][] }
 
+type SmartPdfPart =
+  | { type: 'paragraph'; text: string }
+  | { type: 'table'; headers: string[]; rows: string[][] }
+  | { type: 'bullets'; items: string[] }
+  | { type: 'key'; label: string; title: string; detail: string }
+
+type SmartPdfSection = {
+  heading: string
+  parts: SmartPdfPart[]
+}
+
 function isMarkdownTableSeparator(line: string): boolean {
   return /^\|\s*:?-{3,}.*\|$/.test(line.trim())
 }
@@ -803,6 +854,169 @@ function parsePdfBlocks(markdown: string): PdfContentBlock[] {
   flushText()
 
   return blocks
+}
+
+function parseSmartSectionParts(rawLines: string[]): SmartPdfPart[] {
+  const parts: SmartPdfPart[] = []
+  const lines = rawLines.map((line) => line.replace(/\r\n/g, '\n'))
+  const paragraphBuffer: string[] = []
+
+  const flushParagraph = () => {
+    const text = paragraphBuffer.join(' ').replace(/\s+/g, ' ').trim()
+    if (text) parts.push({ type: 'paragraph', text })
+    paragraphBuffer.length = 0
+  }
+
+  const isTableHeaderAt = (index: number): boolean => {
+    const current = (lines[index] || '').trim()
+    const next = (lines[index + 1] || '').trim()
+    return current.startsWith('|') && current.endsWith('|') && isMarkdownTableSeparator(next)
+  }
+
+  const isPartBoundary = (value: string, index: number): boolean => {
+    const line = value.trim()
+    if (!line) return true
+    if (/^[-*+]\s+/.test(line)) return true
+    if (/^(Key Concept|Definition|Figure)\s*:\s*/i.test(line)) return true
+    if (/^#{1,6}\s+/.test(line)) return true
+    if (isTableHeaderAt(index)) return true
+    return false
+  }
+
+  let i = 0
+  while (i < lines.length) {
+    const raw = lines[i]
+    const line = raw.trim()
+
+    if (!line) {
+      flushParagraph()
+      i += 1
+      continue
+    }
+
+    if (isTableHeaderAt(i)) {
+      flushParagraph()
+
+      const headers = parseMarkdownTableRow(line)
+      const rows: string[][] = []
+      i += 2
+
+      while (i < lines.length) {
+        const rowLine = (lines[i] || '').trim()
+        if (!(rowLine.startsWith('|') && rowLine.endsWith('|'))) break
+        const row = parseMarkdownTableRow(rowLine)
+        if (row.length > 0) rows.push(row)
+        i += 1
+      }
+
+      if (headers.length > 0 && rows.length > 0) {
+        parts.push({ type: 'table', headers, rows })
+      }
+      continue
+    }
+
+    if (/^[-*+]\s+/.test(line)) {
+      flushParagraph()
+      const items: string[] = []
+      while (i < lines.length) {
+        const bulletLine = (lines[i] || '').trim()
+        if (!/^[-*+]\s+/.test(bulletLine)) break
+        const item = cleanInlineMarkdown(bulletLine.replace(/^[-*+]\s+/, ''))
+        if (item) items.push(item)
+        i += 1
+      }
+      if (items.length > 0) parts.push({ type: 'bullets', items })
+      continue
+    }
+
+    const keyMatch = line.match(/^(Key Concept|Definition|Figure)\s*:\s*(.+)$/i)
+    if (keyMatch) {
+      flushParagraph()
+
+      const label = cleanInlineMarkdown(keyMatch[1])
+      const title = cleanInlineMarkdown(keyMatch[2])
+      const detailLines: string[] = []
+
+      i += 1
+      while (i < lines.length) {
+        const detailCandidate = (lines[i] || '').trim()
+        if (!detailCandidate) {
+          if (detailLines.length > 0) {
+            i += 1
+            break
+          }
+          i += 1
+          continue
+        }
+        if (isPartBoundary(detailCandidate, i)) break
+        detailLines.push(cleanInlineMarkdown(detailCandidate))
+        i += 1
+      }
+
+      parts.push({
+        type: 'key',
+        label,
+        title,
+        detail: detailLines.join(' ').replace(/\s+/g, ' ').trim(),
+      })
+      continue
+    }
+
+    paragraphBuffer.push(cleanInlineMarkdown(line))
+    i += 1
+  }
+
+  flushParagraph()
+  return parts
+}
+
+function parseSmartPdfSections(markdown: string): SmartPdfSection[] {
+  const normalized = normalizeSmartSummaryMarkdown(markdown)
+  if (!normalized) return []
+
+  const lines = normalized.replace(/\r\n/g, '\n').split('\n')
+  const sections: Array<{ heading: string; lines: string[] }> = []
+  let heading = 'Summary'
+  let buffer: string[] = []
+
+  const flush = () => {
+    const normalizedLines = buffer.map((line) => line.trim()).filter(Boolean)
+    if (normalizedLines.length > 0) {
+      sections.push({ heading, lines: normalizedLines })
+    }
+    buffer = []
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    const headingMatch = line.match(/^##\s+(.+)$/)
+    if (headingMatch) {
+      flush()
+      heading = cleanInlineMarkdown(headingMatch[1])
+      continue
+    }
+    buffer.push(rawLine)
+  }
+
+  flush()
+
+  return sections
+    .map((section) => ({
+      heading: section.heading,
+      parts: parseSmartSectionParts(section.lines),
+    }))
+    .filter((section) => section.parts.length > 0)
+}
+
+function formatPdfDate(value?: string): string {
+  if (!value) return 'Unknown date'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Unknown date'
+
+  const day = String(parsed.getDate()).padStart(2, '0')
+  const month = String(parsed.getMonth() + 1).padStart(2, '0')
+  const year = String(parsed.getFullYear())
+  return `${day}.${month}.${year}`
 }
 
 export function SummaryPage() {
@@ -970,6 +1184,22 @@ export function SummaryPage() {
     if (!summary) return
 
     try {
+      const { blob, filename } = await api.summaries.exportPdf(summary.id)
+      const objectUrl = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = objectUrl
+      anchor.download = filename || `${sanitizeFileName(title || summary?.title || 'summary')}.pdf`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(objectUrl)
+      toast.success('PDF exported')
+      return
+    } catch {
+      // Fallback to legacy client-side export if backend export fails
+    }
+
+    try {
       const { jsPDF } = await import('jspdf')
       const doc = new jsPDF({ unit: 'pt', format: 'a4' })
 
@@ -991,16 +1221,18 @@ export function SummaryPage() {
 
       let y = margin
 
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(18)
-      doc.text(fileTitle, margin, y)
-      y += 22
+      if (summary?.format !== 'smart') {
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(18)
+        doc.text(fileTitle, margin, y)
+        y += 22
 
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(11)
-      const dateLabel = summary?.created_at ? new Date(summary.created_at).toLocaleDateString() : 'Unknown date'
-      doc.text(`Generated: ${dateLabel}`, margin, y)
-      y += 24
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(11)
+        const dateLabel = summary?.created_at ? new Date(summary.created_at).toLocaleDateString() : 'Unknown date'
+        doc.text(`Generated: ${dateLabel}`, margin, y)
+        y += 24
+      }
 
       const ensurePageSpace = (heightNeeded: number) => {
         if (y + heightNeeded > pageHeight - margin) {
@@ -1097,6 +1329,193 @@ export function SummaryPage() {
         }
 
         y += 12
+      }
+
+      if (summary?.format === 'smart') {
+        const ensurePageSpace = (heightNeeded: number) => {
+          if (y + heightNeeded > pageHeight - margin) {
+            doc.addPage()
+            y = margin
+          }
+        }
+
+        const drawParagraph = (value: string) => {
+          const wrapped = doc.splitTextToSize(value, contentWidth) as string[]
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(12)
+          for (const row of wrapped) {
+            ensurePageSpace(16)
+            doc.text(row, margin, y)
+            y += 16
+          }
+          y += 4
+        }
+
+        const drawBullets = (items: string[]) => {
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(12)
+
+          for (const item of items) {
+            const wrapped = doc.splitTextToSize(item, contentWidth - 16) as string[]
+            if (wrapped.length === 0) continue
+
+            ensurePageSpace(16)
+            doc.text('•', margin, y)
+            doc.text(wrapped[0], margin + 12, y)
+            y += 16
+
+            for (const extra of wrapped.slice(1)) {
+              ensurePageSpace(16)
+              doc.text(extra, margin + 12, y)
+              y += 16
+            }
+          }
+
+          y += 4
+        }
+
+        const drawKeyCard = (label: string, title: string, detail: string) => {
+          const cardX = margin + 6
+          const cardWidth = contentWidth - 6
+          const cardPadX = 10
+          const titleText = `${label}: ${title}`
+          const titleLines = doc.splitTextToSize(titleText, cardWidth - cardPadX * 2 - 6) as string[]
+          const detailLines = detail
+            ? (doc.splitTextToSize(detail, cardWidth - cardPadX * 2 - 6) as string[])
+            : []
+          const titleHeight = titleLines.length * 14
+          const detailHeight = detailLines.length * 13
+          const cardHeight = Math.max(42, 10 + titleHeight + (detailLines.length > 0 ? 6 : 0) + detailHeight + 10)
+
+          ensurePageSpace(cardHeight + 8)
+
+          doc.setFillColor(238, 242, 255)
+          doc.rect(cardX, y, cardWidth, cardHeight, 'F')
+
+          doc.setFillColor(79, 70, 229)
+          doc.rect(cardX + cardWidth - 2, y, 2, cardHeight, 'F')
+
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(12)
+          doc.text(titleLines, cardX + cardPadX, y + 16, { maxWidth: cardWidth - cardPadX * 2 - 6 })
+
+          if (detailLines.length > 0) {
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(11)
+            doc.text(detailLines, cardX + cardPadX, y + 16 + titleHeight + 4, {
+              maxWidth: cardWidth - cardPadX * 2 - 6,
+            })
+          }
+
+          y += cardHeight + 8
+        }
+
+        const smartSourceRaw = String(summary.source || summary.source_type || '').toLowerCase()
+        const smartSourceLabel = smartSourceRaw.includes('youtube') || smartSourceRaw.includes('youtu') ? 'YouTube' : 'Document'
+        const smartDateLabel = formatPdfDate(summary.created_at)
+        const smartTags = (summary.tags || []).filter(Boolean).slice(0, 5)
+        const smartSections = parseSmartPdfSections(rawSmart)
+
+        // Badge
+        ensurePageSpace(20)
+        doc.setFillColor(232, 236, 247)
+        doc.rect(margin, y, contentWidth, 16, 'F')
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.text('SMART SUMMARY', margin + 8, y + 11)
+        y += 28
+
+        // Title
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(25)
+        const titleLines = doc.splitTextToSize(fileTitle, contentWidth) as string[]
+        for (const line of titleLines) {
+          ensurePageSpace(26)
+          doc.text(line, margin, y)
+          y += 26
+        }
+        y += 2
+
+        // Meta
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(11)
+        ensurePageSpace(16)
+        doc.text(`Source: ${smartSourceLabel} · Generated: ${smartDateLabel}`, margin, y)
+        y += 12
+
+        // Tag chips
+        if (smartTags.length > 0) {
+          const gap = 6
+          const chipWidth = (contentWidth - gap * (smartTags.length - 1)) / smartTags.length
+          const chipHeight = 18
+          ensurePageSpace(chipHeight + 12)
+
+          smartTags.forEach((tag, idx) => {
+            const x = margin + idx * (chipWidth + gap)
+            doc.setFillColor(209, 250, 229)
+            doc.rect(x, y, chipWidth, chipHeight, 'F')
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(10)
+            const chipText = cleanInlineMarkdown(tag)
+            const chipLines = doc.splitTextToSize(chipText, chipWidth - 10) as string[]
+            doc.text(chipLines.slice(0, 1), x + 5, y + 12, { maxWidth: chipWidth - 10 })
+          })
+
+          y += chipHeight + 10
+        }
+
+        // Accent divider
+        ensurePageSpace(2)
+        doc.setFillColor(79, 70, 229)
+        doc.rect(margin, y, contentWidth, 1.5, 'F')
+        y += 14
+
+        // Sections
+        smartSections.forEach((section, index) => {
+          ensurePageSpace(20)
+          if (typeof (doc as unknown as { setFillColor?: (...args: number[]) => void }).setFillColor === 'function') {
+            doc.setFillColor(79, 70, 229)
+          }
+          if (typeof (doc as unknown as { circle?: (...args: number[]) => void }).circle === 'function') {
+            doc.circle(margin + 3.2, y - 4.6, 3.2, 'F')
+          } else {
+            doc.rect(margin, y - 8, 6, 6, 'F')
+          }
+
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(16)
+          const headingLines = doc.splitTextToSize(section.heading, contentWidth - 16) as string[]
+          doc.text(headingLines, margin + 13, y)
+          y += Math.max(18, headingLines.length * 16)
+
+          section.parts.forEach((part) => {
+            if (part.type === 'paragraph') {
+              drawParagraph(part.text)
+              return
+            }
+            if (part.type === 'bullets') {
+              drawBullets(part.items)
+              return
+            }
+            if (part.type === 'key') {
+              drawKeyCard(part.label, part.title, part.detail)
+              return
+            }
+
+            renderMarkdownTable(part.headers, part.rows)
+          })
+
+          if (index < smartSections.length - 1) {
+            ensurePageSpace(12)
+            doc.setFillColor(229, 231, 235)
+            doc.rect(margin, y, contentWidth, 1, 'F')
+            y += 14
+          }
+        })
+
+        doc.save(`${fileTitle}.pdf`)
+        toast.success('PDF exported')
+        return
       }
 
       const exportSource =

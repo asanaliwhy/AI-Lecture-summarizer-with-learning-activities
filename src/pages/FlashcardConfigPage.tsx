@@ -100,7 +100,7 @@ export function FlashcardConfigPage() {
     }
   }, [summaryId])
 
-  const quickCardCounts = [10, 20, 30, 40, 50]
+  const quickCardCounts = [5, 10, 15, 20, 30, 40, 50]
   const hasTopicOptions = availableTopics.length > 0
   const selectedTopicCount = selectedTopics.length
   const trimmedDeckName = deckName.trim()

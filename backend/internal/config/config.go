@@ -43,7 +43,9 @@ type Config struct {
 	FrontendURL string
 
 	// Google OAuth
-	GoogleClientID string
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURI  string
 }
 
 func Load() *Config {
@@ -69,6 +71,8 @@ func Load() *Config {
 		SMTPFrom:             getEnvOrDefault("SMTP_FROM", "noreply@lectura.app"),
 		FrontendURL:          getEnvOrDefault("FRONTEND_URL", "http://localhost:5173"),
 		GoogleClientID:       getEnvOrDefault("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret:   getEnvOrDefault("GOOGLE_CLIENT_SECRET", ""),
+		GoogleRedirectURI:    getEnvOrDefault("GOOGLE_REDIRECT_URI", ""),
 	}
 
 	return cfg

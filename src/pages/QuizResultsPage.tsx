@@ -300,26 +300,79 @@ export function QuizResultsPage() {
         }
       }
 
-      const writeWrapped = (text: string, size = 11, bold = false, gap = 6) => {
-        doc.setFont('helvetica', bold ? 'bold' : 'normal')
-        doc.setFontSize(size)
-        const lines = doc.splitTextToSize(text, contentWidth) as string[]
-        lines.forEach((line) => {
-          ensureSpace(size + 6)
-          doc.text(line, margin, y)
-          y += size + 4
-        })
-        y += gap
+      const formatPdfDate = (value?: string): string => {
+        if (!value) return '-'
+        const parsed = new Date(value)
+        if (Number.isNaN(parsed.getTime())) return '-'
+        const dd = String(parsed.getDate()).padStart(2, '0')
+        const mm = String(parsed.getMonth() + 1).padStart(2, '0')
+        const yyyy = String(parsed.getFullYear())
+        return `${dd}.${mm}.${yyyy}`
+      }
+
+      const stripInlineMarkdown = (value: string): string =>
+        String(value || '')
+          .replace(/<br\s*\/?>/gi, ' ')
+          .replace(/\*\*(.*?)\*\*/g, '$1')
+          .replace(/__(.*?)__/g, '$1')
+          .replace(/`([^`]+)`/g, '$1')
+          .replace(/\s+/g, ' ')
+          .trim()
+
+      const setFill = (r: number, g: number, b: number) => {
+        if (typeof (doc as any).setFillColor === 'function') (doc as any).setFillColor(r, g, b)
+      }
+
+      const setDraw = (r: number, g: number, b: number) => {
+        if (typeof (doc as any).setDrawColor === 'function') (doc as any).setDrawColor(r, g, b)
+      }
+
+      const drawRect = (x: number, yPos: number, w: number, h: number, mode: 'F' | 'FD' | undefined = undefined) => {
+        if (typeof (doc as any).rect === 'function') {
+          (doc as any).rect(x, yPos, w, h, mode)
+        }
       }
 
       const fileTitle = sanitizeFileName(`${quizTitle} quiz results`)
 
-      writeWrapped(`${quizTitle} — Quiz Results`, 18, true, 4)
-      writeWrapped(`Score: ${score}% (${correctCount}/${totalQuestions})`, 12, true, 2)
-      writeWrapped(`Result: ${isPass ? 'Pass' : 'Fail'}   Time: ${timeTaken ? formatTime(timeTaken) : '-'}`, 11, false, 10)
+      ensureSpace(22)
+      setFill(209, 250, 229)
+      drawRect(margin, y, contentWidth, 16, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.text('QUIZ RESULTS', margin + 8, y + 11)
+      y += 30
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(24)
+      const titleLines = doc.splitTextToSize(`${quizTitle}`, contentWidth) as string[]
+      for (const line of titleLines) {
+        ensureSpace(24)
+        doc.text(line, margin, y)
+        y += 24
+      }
+      y += 2
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(11)
+      ensureSpace(14)
+      doc.text(`Score: ${score}% (${correctCount}/${totalQuestions}) · Time: ${timeTaken ? formatTime(timeTaken) : '-'} · ${isPass ? 'Pass' : 'Fail'}`, margin, y)
+      y += 12
+      ensureSpace(14)
+      doc.text(`Generated: ${formatPdfDate(new Date().toISOString())}`, margin, y)
+      y += 12
+
+      ensureSpace(2)
+      setFill(16, 185, 129)
+      drawRect(margin, y, contentWidth, 1.4, 'F')
+      y += 14
 
       if (questions.length > 0) {
-        writeWrapped('Detailed Review', 14, true, 6)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(14)
+        ensureSpace(18)
+        doc.text('Detailed Review', margin, y)
+        y += 20
       }
 
       questions.forEach((questionItem, index: number) => {
@@ -375,16 +428,60 @@ export function QuizResultsPage() {
             ? selectedIdx === correctIdx
             : userAnswerText !== 'No answer' && correctAnswerText !== 'N/A' && userAnswerText === correctAnswerText)
 
-        writeWrapped(`${index + 1}. ${q.question || q.text || `Question ${index + 1}`}`, 12, true, 2)
-        writeWrapped(`Your answer: ${userAnswerText}`, 11, false, 2)
-        writeWrapped(`Correct answer: ${correctAnswerText}`, 11, false, 2)
-        writeWrapped(`Result: ${isCorrectAnswer ? 'Correct' : 'Incorrect'}`, 11, false, 4)
+        const questionText = stripInlineMarkdown(q.question || q.text || `Question ${index + 1}`)
+        const questionLines = doc.splitTextToSize(questionText, contentWidth - 20) as string[]
+        const yourAnswerLines = doc.splitTextToSize(`Your answer: ${stripInlineMarkdown(userAnswerText)}`, contentWidth - 20) as string[]
+        const correctAnswerLines = doc.splitTextToSize(`Correct answer: ${stripInlineMarkdown(correctAnswerText)}`, contentWidth - 20) as string[]
+        const resultLines = doc.splitTextToSize(`Result: ${isCorrectAnswer ? 'Correct' : 'Incorrect'}`, contentWidth - 20) as string[]
+        const explanationLines = q.explanation
+          ? (doc.splitTextToSize(`Explanation: ${stripInlineMarkdown(q.explanation)}`, contentWidth - 20) as string[])
+          : []
 
-        if (q.explanation) {
-          writeWrapped(`Explanation: ${q.explanation}`, 10, false, 8)
-        } else {
-          y += 6
+        const cardHeight = Math.max(
+          84,
+          16 +
+          questionLines.length * 14 +
+          yourAnswerLines.length * 13 +
+          correctAnswerLines.length * 13 +
+          resultLines.length * 13 +
+          explanationLines.length * 13 +
+          22,
+        )
+
+        ensureSpace(cardHeight + 8)
+        setFill(isCorrectAnswer ? 236 : 254, isCorrectAnswer ? 253 : 242, isCorrectAnswer ? 245 : 242)
+        setDraw(isCorrectAnswer ? 167 : 254, isCorrectAnswer ? 243 : 202, isCorrectAnswer ? 208 : 202)
+        drawRect(margin, y, contentWidth, cardHeight, 'FD')
+
+        let cursorY = y + 16
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.text(`Question ${index + 1}`, margin + 10, cursorY)
+        cursorY += 16
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(12)
+        questionLines.forEach((line) => {
+          doc.text(line, margin + 10, cursorY)
+          cursorY += 14
+        })
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10.5)
+          ;[...yourAnswerLines, ...correctAnswerLines, ...resultLines].forEach((line) => {
+            doc.text(line, margin + 10, cursorY)
+            cursorY += 13
+          })
+
+        if (explanationLines.length > 0) {
+          cursorY += 2
+          explanationLines.forEach((line) => {
+            doc.text(line, margin + 10, cursorY)
+            cursorY += 13
+          })
         }
+
+        y += cardHeight + 8
       })
 
       doc.save(`${fileTitle}.pdf`)

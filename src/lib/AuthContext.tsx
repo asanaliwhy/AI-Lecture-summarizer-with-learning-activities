@@ -20,6 +20,7 @@ interface AuthContextType {
     logout: () => Promise<void>
     refreshUser: () => Promise<void>
     googleLogin: (idToken: string) => Promise<void>
+    googleCodeLogin: (code: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -77,6 +78,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await refreshUser()
     }
 
+    const googleCodeLogin = async (code: string) => {
+        const data = await api.auth.googleCodeLogin(code)
+        setTokens(data.access_token, data.refresh_token)
+        await refreshUser()
+    }
+
     return (
         <AuthContext.Provider
             value={{
@@ -88,6 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 logout,
                 refreshUser,
                 googleLogin,
+                googleCodeLogin,
             }}
         >
             {children}
