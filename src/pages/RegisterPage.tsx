@@ -2,33 +2,13 @@ import React, { useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { ApiError } from '../lib/api'
+import { buildGoogleAuthURL } from '../lib/googleOAuth'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
 import { useToast } from '../components/ui/Toast'
 import { Eye, EyeOff, Check, X, Sparkles } from 'lucide-react'
 import { cn } from '../lib/utils'
-
-function buildGoogleAuthURL(): string | null {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim()
-  const configuredRedirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI?.trim()
-  const redirectUri = import.meta.env.DEV
-    ? `${window.location.origin}/auth/callback`
-    : configuredRedirectUri || `${window.location.origin}/auth/callback`
-
-  if (!clientId) return null
-
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: 'openid email profile',
-    access_type: 'offline',
-    prompt: 'select_account',
-  })
-
-  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
-}
 export function RegisterPage() {
   const navigate = useNavigate()
   const { register } = useAuth()
@@ -43,8 +23,8 @@ export function RegisterPage() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
-  const handleGoogleSignUp = useCallback(() => {
-    const authURL = buildGoogleAuthURL()
+  const handleGoogleSignUp = useCallback(async () => {
+    const authURL = await buildGoogleAuthURL()
     if (!authURL) {
       setError('Google OAuth is not configured')
       toastError('Google OAuth is not configured')

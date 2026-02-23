@@ -137,6 +137,16 @@ func (h *AuthHandler) GoogleCodeLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tokens)
 }
 
+func (h *AuthHandler) GoogleConfig(w http.ResponseWriter, r *http.Request) {
+	clientID, redirectURI, configured := h.authService.GoogleOAuthConfig()
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"configured":   configured,
+		"client_id":    clientID,
+		"redirect_uri": redirectURI,
+	})
+}
+
 func (h *AuthHandler) ResendVerification(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Email string `json:"email"`

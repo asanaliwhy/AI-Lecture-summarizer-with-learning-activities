@@ -59,6 +59,7 @@ func New(
 			r.Use(authLimiter.Middleware)
 			r.Post("/register", authHandler.Register)
 			r.Post("/login", authHandler.Login)
+			r.Get("/google/config", authHandler.GoogleConfig)
 			r.Post("/google", authHandler.GoogleLogin)
 			r.Post("/google/code", authHandler.GoogleCodeLogin)
 			r.Post("/refresh", authHandler.Refresh)

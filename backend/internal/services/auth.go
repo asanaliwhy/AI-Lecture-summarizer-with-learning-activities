@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
 	"unicode"
 
@@ -52,6 +53,13 @@ func NewAuthService(
 		googleClientSecret: googleClientSecret,
 		googleRedirectURI:  googleRedirectURI,
 	}
+}
+
+func (s *AuthService) GoogleOAuthConfig() (clientID string, redirectURI string, configured bool) {
+	clientID = strings.TrimSpace(s.googleClientID)
+	redirectURI = strings.TrimSpace(s.googleRedirectURI)
+	configured = clientID != "" && redirectURI != ""
+	return
 }
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
