@@ -18,8 +18,6 @@ export function AuthCallbackPage() {
         }
         authAttemptedRef.current = true
 
-        let cancelled = false
-
         const completeAuth = async () => {
             const params = new URLSearchParams(window.location.search)
             const oauthError = params.get('error')
@@ -27,41 +25,34 @@ export function AuthCallbackPage() {
 
             if (oauthError) {
                 const message = 'Google authentication was cancelled or denied'
-                if (!cancelled) {
-                    setError(message)
-                    toastError(message)
-                }
+                setError(message)
+                toastError(message)
                 return
             }
 
             if (!code) {
                 const message = 'Missing authorization code from Google'
-                if (!cancelled) {
-                    setError(message)
-                    toastError(message)
-                }
+                setError(message)
+                toastError(message)
                 return
             }
 
             try {
-                await googleCodeLogin(code)
-                if (!cancelled) {
-                    navigate('/dashboard', { replace: true })
-                }
+                await Promise.race([
+                    googleCodeLogin(code),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('Google sign-in timed out. Please try again.')), 15000),
+                    ),
+                ])
+                navigate('/dashboard', { replace: true })
             } catch (err) {
                 const message = err instanceof ApiError ? err.message : 'Google sign-in failed'
-                if (!cancelled) {
-                    setError(message)
-                    toastError(message)
-                }
+                setError(message)
+                toastError(message)
             }
         }
 
         completeAuth()
-
-        return () => {
-            cancelled = true
-        }
     }, [googleCodeLogin, navigate, toastError])
 
     if (!error) {
