@@ -11,6 +11,13 @@
   <img src="https://img.shields.io/badge/Database-PostgreSQL%2016-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
   <img src="https://img.shields.io/badge/Cache-Redis%207-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis"/>
   <img src="https://img.shields.io/badge/Deploy-Railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white" alt="Railway"/>
+  <img src="https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge" alt="MIT License"/>
+</p>
+
+<p>
+  <a href="https://easygoing-vitality-production-f7c4.up.railway.app"><strong>🌐 Live Demo</strong></a> •
+  <a href="#-guided-user-journey-page-by-page"><strong>🧭 Product Tour</strong></a> •
+  <a href="#-flow-deep-dive-how-everything-works"><strong>🔄 End-to-End Flows</strong></a>
 </p>
 
 <p>
@@ -22,8 +29,11 @@
   <a href="#-tech-stack">Tech Stack</a> •
   <a href="#-api-surface">API</a> •
   <a href="#-quick-start">Quick Start</a> •
+  <a href="#-environment-variables-scannable-tables">Env Vars</a> •
   <a href="#-railway-deployment-guide">Railway Deploy</a> •
-  <a href="#-testing--quality">Testing</a>
+  <a href="#-testing--quality">Testing</a> •
+  <a href="#-contributing">Contributing</a> •
+  <a href="#-license">License</a>
 </p>
 
 </div>
@@ -393,7 +403,8 @@ Health:
 git clone https://github.com/asanaliwhy/AI-Lecture-summarizer-with-learning-activities.git
 cd AI-Lecture-summarizer-with-learning-activities
 
-# configure backend env from template
+# configure frontend + backend env from templates
+cp .env.example .env
 cp .env.production backend/.env
 # edit backend/.env with real values
 
@@ -421,6 +432,42 @@ npm run dev
 
 ---
 
+## ⚙️ Environment Variables (Scannable Tables)
+
+### Frontend (`.env`)
+
+> You can bootstrap from `.env.example`.
+
+| Variable | Required | Description | Example |
+|---|---|---|---|
+| `VITE_API_BASE_URL` | Recommended | Backend API base URL (auto-normalized to `/api/v1`) | `http://localhost:8081/api/v1` |
+| `VITE_GOOGLE_CLIENT_ID` | Optional | Google OAuth client id | `123...apps.googleusercontent.com` |
+| `VITE_GOOGLE_REDIRECT_URI` | Optional | OAuth callback URL used by frontend | `http://localhost:5173/auth/callback` |
+
+### Backend (`backend/.env`)
+
+> You can bootstrap from `.env.production`.
+
+| Variable | Required | Description |
+|---|---|---|
+| `PORT` | ✅ | Backend HTTP port (typically `8081`) |
+| `ENV` | ✅ | Environment (`production` / `development`) |
+| `DATABASE_URL` | ✅ | PostgreSQL connection string |
+| `REDIS_URL` | ✅ | Redis connection string |
+| `JWT_SECRET` | ✅ | JWT signing secret |
+| `GEMINI_API_KEY` | ✅ | Google Gemini API key |
+| `FRONTEND_URL` | ✅ | Allowed frontend origin(s) for CORS and links |
+| `GOOGLE_CLIENT_ID` | Optional | Google OAuth client id |
+| `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth secret |
+| `GOOGLE_REDIRECT_URI` | Optional | OAuth callback URI |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Optional* | Required for production email flows |
+| `STORAGE_TYPE` / `STORAGE_PATH` | Optional | Upload storage strategy/path |
+| `GEMINI_REQUESTS_PER_MINUTE` | Optional | AI request rate limits |
+| `GEMINI_TOKENS_PER_MINUTE` | Optional | AI token rate limits |
+| `GEMINI_CONCURRENT_REQUESTS` | Optional | AI concurrency level |
+
+---
+
 ## 🚂 Railway Deployment Guide
 
 This repository is intended to run as **4 Railway services**:
@@ -430,21 +477,27 @@ This repository is intended to run as **4 Railway services**:
 4. Frontend (repo root)
 
 ### Backend essentials
-Set in backend Railway variables:
-- `PORT=8081`
-- `ENV=production`
-- `DATABASE_URL`
-- `REDIS_URL`
-- `JWT_SECRET`
-- `GEMINI_API_KEY`
-- `FRONTEND_URL=https://<frontend-domain>`
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
-- SMTP settings for verification emails
+
+| Variable | Required | Example / Notes |
+|---|---|---|
+| `PORT` | ✅ | `8081` |
+| `ENV` | ✅ | `production` |
+| `DATABASE_URL` | ✅ | Railway Postgres connection string |
+| `REDIS_URL` | ✅ | Railway Redis connection string |
+| `JWT_SECRET` | ✅ | Long random secret |
+| `GEMINI_API_KEY` | ✅ | From Google AI Studio |
+| `FRONTEND_URL` | ✅ | `https://easygoing-vitality-production-f7c4.up.railway.app` |
+| `GOOGLE_CLIENT_ID` | Optional | OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Optional | OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | Optional | `https://<frontend-domain>/auth/callback` |
+| `SMTP_*` | Optional* | Required for email verification/reset flows |
 
 ### Frontend essentials
-Set in frontend Railway variables:
-- `BACKEND_UPSTREAM=https://<backend-domain>`
-- optional: `VITE_API_BASE_URL=https://<backend-domain>`
+
+| Variable | Required | Example / Notes |
+|---|---|---|
+| `BACKEND_UPSTREAM` | ✅ | `https://<backend-domain>.up.railway.app` |
+| `VITE_API_BASE_URL` | Optional | Can be omitted when same-origin proxy is used |
 
 ### Google OAuth values
 In Google Cloud OAuth credentials:
@@ -531,11 +584,32 @@ npm run smoke
 
 ## 🛣 Roadmap Ideas
 
-- Multi-language AI explanations by user locale.
-- Team/classroom shared workspaces.
-- Advanced spaced-repetition scheduling.
-- Mobile app client (React Native).
-- Observability stack (metrics dashboard + traces).
+- [ ] Multi-language AI explanations by user locale.
+- [ ] Team/classroom shared workspaces.
+- [ ] Advanced spaced-repetition scheduling.
+- [ ] Mobile app client (React Native).
+- [ ] Observability stack (metrics dashboard + traces).
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome.
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- local setup,
+- branch/commit conventions,
+- pull request checklist.
+
+For major feature work, open an issue first to align scope.
+
+---
+
+## 📜 License
+
+This project is licensed under the MIT License.
+
+See [LICENSE](LICENSE).
 
 ---
 
