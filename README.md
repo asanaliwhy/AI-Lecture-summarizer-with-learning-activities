@@ -15,7 +15,8 @@
 
 <p>
   <a href="#-overview">Overview</a> •
-  <a href="#-live-product-tour-screenshots">Screenshots</a> •
+  <a href="#-guided-user-journey-page-by-page">Guided Tour</a> •
+  <a href="#-flow-deep-dive-how-everything-works">Flows</a> •
   <a href="#-architecture">Architecture</a> •
   <a href="#-features">Features</a> •
   <a href="#-tech-stack">Tech Stack</a> •
@@ -48,39 +49,200 @@ The system is designed around:
 
 ---
 
-## 🖼 Live Product Tour (Screenshots)
+## 🗺 Guided User Journey (Page-by-Page)
 
-> Screenshots are sourced from `docs/images/`.
+> All images are loaded from `docs/images/` and mapped to real product flows.
 
-### Authentication
+### 1) Login — Start session securely
 
-<table>
-<tr>
-<td width="50%"><strong>Login</strong><br/><img src="docs/images/login-page.png" alt="Login page"/></td>
-<td width="50%"><strong>Register</strong><br/><img src="docs/images/register-page.png" alt="Register page"/></td>
-</tr>
-</table>
+![Login page](docs/images/login-page.png)
 
-### Core Workspace
+**What you do**
+- Enter email/password, or choose Google sign-in.
 
-<table>
-<tr>
-<td width="50%"><strong>Dashboard</strong><br/><img src="docs/images/dashboard.png" alt="Dashboard"/></td>
-<td width="50%"><strong>Content Upload / Input</strong><br/><img src="docs/images/content-upload.png" alt="Content upload"/></td>
-</tr>
-<tr>
-<td width="50%"><strong>Summary Result</strong><br/><img src="docs/images/summary-result-page.png" alt="Summary result page"/></td>
-<td width="50%"><strong>Quiz Experience</strong><br/><img src="docs/images/quiz-page.png" alt="Quiz page"/></td>
-</tr>
-<tr>
-<td width="50%"><strong>Flashcard Study</strong><br/><img src="docs/images/flashcard-study-page.png" alt="Flashcard study page"/></td>
-<td width="50%"><strong>Library</strong><br/><img src="docs/images/library-page.png" alt="Library page"/></td>
-</tr>
-<tr>
-<td width="50%"><strong>Settings</strong><br/><img src="docs/images/settings-page.png" alt="Settings page"/></td>
-<td width="50%"></td>
-</tr>
-</table>
+**What happens in the system**
+- Calls auth endpoints (`/auth/login` or `/auth/google/code`).
+- Access + refresh tokens are issued and stored.
+- App loads user profile and routes to dashboard.
+
+**Why this matters**
+- Fast onboarding with secure token lifecycle and Google OAuth fallback.
+
+---
+
+### 2) Register — Create account + verification flow
+
+![Register page](docs/images/register-page.png)
+
+**What you do**
+- Submit name, email, password.
+
+**What happens in the system**
+- Backend validates fields and creates user.
+- Verification token is created in Redis.
+- Verification email is sent via SMTP service.
+
+**Why this matters**
+- Prevents fake accounts, enables trust, and secures study history.
+
+---
+
+### 3) Content Input — Bring source material
+
+![Content upload page](docs/images/content-upload.png)
+
+**What you do**
+- Paste YouTube URL or upload document.
+
+**What happens in the system**
+- Content metadata/extraction pipeline runs.
+- A processing job is pushed into Redis queues.
+- Worker pool picks job and updates progress.
+
+**Why this matters**
+- Converts raw content into a normalized source for all downstream AI generation.
+
+---
+
+### 4) Summary Result — Your knowledge base artifact
+
+![Summary result page](docs/images/summary-result-page.png)
+
+**What you do**
+- Read/edit generated summary, regenerate if needed, start chat or export.
+
+**What happens in the system**
+- Gemini generates structure-aware summaries (`cornell`, `bullets`, `paragraph`, `smart`).
+- Summary is persisted and becomes source for quiz/flashcards.
+
+**Why this matters**
+- Summary becomes the central node for revision, testing, and spaced learning.
+
+---
+
+### 5) Quiz Page — Active recall loop
+
+![Quiz page](docs/images/quiz-page.png)
+
+**What you do**
+- Take auto-generated quizzes, submit, review results.
+
+**What happens in the system**
+- Quiz and attempts are saved with progress and scoring.
+- Results feed dashboard metrics and help identify weak areas.
+
+**Why this matters**
+- Moves learning from passive reading to measurable recall.
+
+---
+
+### 6) Flashcard Study — Spaced repetition workflow
+
+![Flashcard study page](docs/images/flashcard-study-page.png)
+
+**What you do**
+- Study card-by-card, rate confidence.
+
+**What happens in the system**
+- Ratings are stored to model confidence over time.
+- Deck stats evolve and support long-term retention cycles.
+
+**Why this matters**
+- Builds durable memory, not short-term cramming.
+
+---
+
+### 7) Library — Unified knowledge inventory
+
+![Library page](docs/images/library-page.png)
+
+**What you do**
+- Search/filter summaries, quizzes, flashcards in one place.
+
+**What happens in the system**
+- Aggregated list endpoint returns cross-content items.
+- Favorites and metadata accelerate navigation.
+
+**Why this matters**
+- Keeps all learning artifacts discoverable as your content scales.
+
+---
+
+### 8) Dashboard + Settings — Optimization layer
+
+![Dashboard page](docs/images/dashboard.png)
+
+![Settings page](docs/images/settings-page.png)
+
+**What you do**
+- Track streaks/goals/activity and configure profile/preferences.
+
+**What happens in the system**
+- Dashboard endpoints aggregate productivity signals.
+- Settings endpoints persist defaults and notification preferences.
+
+**Why this matters**
+- Turns Lectura into a repeatable study system, not just a one-off generator.
+
+---
+
+## 🔄 Flow Deep Dive (How Everything Works)
+
+### A) Authentication Flow (Email + Google)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant FE as Frontend
+  participant BE as Backend /auth
+  participant R as Redis
+  participant M as SMTP
+
+  U->>FE: Register or Login
+  FE->>BE: POST /auth/register or /auth/login
+  BE->>R: store verification or refresh tokens
+  BE->>M: send verification email (register flow)
+  BE-->>FE: access_token + refresh_token (login/verified)
+  FE-->>U: authenticated session
+
+  U->>FE: Google Sign-In
+  FE->>BE: POST /auth/google/code
+  BE-->>FE: access_token + refresh_token
+  FE-->>U: redirect to dashboard
+```
+
+### B) Content-to-Summary Processing Flow
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant FE as Frontend
+  participant BE as Backend
+  participant Q as Redis Queue
+  participant W as Worker Pool
+  participant G as Gemini
+  participant DB as PostgreSQL
+  participant WS as WebSocket
+
+  U->>FE: Upload file / Paste YouTube URL
+  FE->>BE: POST /content/upload or /content/validate-youtube
+  FE->>BE: POST /summaries/generate
+  BE->>Q: enqueue job
+  W->>Q: dequeue job
+  W->>G: generate summary
+  W->>DB: save summary + job status
+  W->>WS: publish progress updates
+  FE-->>U: live status + final summary page
+```
+
+### C) Study Reinforcement Flow (Quiz + Flashcards)
+
+1. Summary becomes input for quiz/flashcard generators.
+2. User completes attempts/study sessions.
+3. Scores/ratings/study-time are persisted.
+4. Dashboard + streak logic use this data for feedback loops.
 
 ---
 
