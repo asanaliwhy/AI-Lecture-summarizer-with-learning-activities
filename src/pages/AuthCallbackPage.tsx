@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { ApiError } from '../lib/api'
@@ -10,8 +10,14 @@ export function AuthCallbackPage() {
     const { googleCodeLogin } = useAuth()
     const { error: toastError } = useToast()
     const [error, setError] = useState('')
+    const authAttemptedRef = useRef(false)
 
     useEffect(() => {
+        if (authAttemptedRef.current) {
+            return
+        }
+        authAttemptedRef.current = true
+
         let cancelled = false
 
         const completeAuth = async () => {
