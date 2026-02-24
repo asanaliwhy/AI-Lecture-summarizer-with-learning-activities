@@ -44,6 +44,8 @@
 
 **Lectura** is a full-stack AI learning platform built to help students transform raw lecture content into structured study artifacts.
 
+> **20+ frontend tests** · **30+ API routes** · **4 summary formats** · **Docker + Railway ready**
+
 You can:
 - paste a YouTube URL or upload files,
 - generate high-quality summaries in multiple formats,
@@ -257,6 +259,22 @@ sequenceDiagram
 ---
 
 ## 🧠 Architecture
+
+### Quick system map
+
+```mermaid
+flowchart LR
+    Client([🌐 Browser]) --> Nginx[Nginx Proxy]
+    Nginx --> React[React SPA]
+    Nginx --> API[Go API Server]
+    API --> PG[(PostgreSQL)]
+    API --> Redis[(Redis)]
+    API --> Gemini[Gemini AI]
+    API <--> WS[WebSocket]
+    Redis --> Worker[Worker Pool]
+    Worker --> PG
+    Worker --> Gemini
+```
 
 ### High-level flow
 

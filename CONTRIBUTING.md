@@ -1,5 +1,7 @@
 # Contributing to Lectura
 
+> By participating, you agree to maintain a respectful and inclusive environment.
+
 Thanks for your interest in improving Lectura.
 
 ## 1) Development Setup
