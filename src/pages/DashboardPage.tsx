@@ -56,7 +56,13 @@ export function DashboardPage() {
   const toast = useToast()
   const hour = new Date().getHours()
   const greeting =
-    hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+    hour < 5
+      ? 'Good late evening'
+      : hour < 12
+        ? 'Good morning'
+        : hour < 17
+          ? 'Good afternoon'
+          : 'Good evening'
   const [hoveredBar, setHoveredBar] = useState<number | null>(null)
   const [dashStats, setDashStats] = useState<DashboardStatsResponse | null>(null)
   const [recentItems, setRecentItems] = useState<DashboardRecentItemResponse[]>([])
