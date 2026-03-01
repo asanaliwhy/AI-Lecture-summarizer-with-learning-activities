@@ -228,6 +228,15 @@ function normalizeSmartSummaryMarkdown(value: string): string {
   const lines = value
     .replace(/\r\n/g, '\n')
     .replace(/^#{1,6}\s+/gm, '')
+    // Pre-split collapsed Key Concept blocks: when Gemini outputs all concepts
+    // in one paragraph like "**Key Concept: A** text **Key Concept: B** text",
+    // inject newlines so each concept gets its own line for proper parsing.
+    .replace(/\*{2}(Key Concept)\s*:\s*/gi, '\n$1: ')
+    // Strip trailing ** after concept titles: "Key Concept: Title** body" → "Key Concept: Title\nbody"
+    .replace(/(Key Concept:\s*[^*\n]+)\*{2}\s*/gi, '$1\n')
+    // Split at ALL "Key Concept:" boundaries — handles zero-space cases like "...peace.Key Concept:"
+    // and spaced cases like "...peace. Key Concept:"
+    .replace(/(?<=.)(?=Key Concept\s*:)/gi, '\n')
     .split('\n')
   const out: string[] = []
 

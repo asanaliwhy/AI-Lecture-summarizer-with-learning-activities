@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -701,14 +702,100 @@ func parseVideoSummary(content string) string {
 	return strings.TrimSpace(content)
 }
 
+// truncateConceptBody strips table data, section headings, and facts
+// from a concept body so it only contains the concept's own prose.
+func truncateConceptBody(body string) string {
+	lines := strings.Split(body, "\n")
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Stop at markdown tables (pipe rows)
+		if strings.HasPrefix(trimmed, "|") && strings.HasSuffix(trimmed, "|") {
+			break
+		}
+		// Stop at markdown section headings
+		if strings.HasPrefix(trimmed, "##") || strings.HasPrefix(trimmed, "###") {
+			break
+		}
+		// Stop at "Additional Interesting Facts" or similar section labels
+		lower := strings.ToLower(trimmed)
+		if strings.Contains(lower, "additional interesting facts") ||
+			strings.Contains(lower, "interesting facts") {
+			break
+		}
+		// Stop at table separator rows
+		if regexp.MustCompile(`^\|[\s\-:|]+\|$`).MatchString(trimmed) {
+			break
+		}
+		kept = append(kept, line)
+	}
+	return strings.TrimSpace(strings.Join(kept, "\n"))
+}
+
 func parseConcepts(content string) []map[string]string {
-	sections := parseSections(content)
+	content = strings.ReplaceAll(content, "\r\n", "\n")
 	concepts := make([]map[string]string, 0)
 
+	// Strategy 1: Look for individual Key Concept blocks using regex.
+	// Handles patterns like:
+	//   **Key Concept: Title**\nbody text
+	//   Key Concept: Title\nbody text
+	//   **Key Concept: Title** body text (inline)
+	kcRegex := regexp.MustCompile(`(?mi)\*{0,2}Key\s+Concept\s*:\s*`)
+	indices := kcRegex.FindAllStringIndex(content, -1)
+
+	if len(indices) >= 2 {
+		// Multiple Key Concept blocks found — split at each boundary
+		for k, loc := range indices {
+			var block string
+			if k+1 < len(indices) {
+				block = content[loc[1]:indices[k+1][0]]
+			} else {
+				block = content[loc[1]:]
+			}
+
+			// Clean trailing ** from titles and split title from body
+			block = strings.TrimSpace(block)
+			// Remove bold wrappers: "Title**\nbody" or "Title** body"
+			parts := regexp.MustCompile(`\*{2}\s*`).Split(block, 2)
+
+			title := strings.TrimSpace(parts[0])
+			body := ""
+			if len(parts) > 1 {
+				body = strings.TrimSpace(parts[1])
+			} else {
+				// Title and body on separate lines
+				lines := strings.SplitN(title, "\n", 2)
+				title = strings.TrimSpace(lines[0])
+				if len(lines) > 1 {
+					body = strings.TrimSpace(lines[1])
+				}
+			}
+
+			// Clean any markdown bold markers from title
+			title = strings.ReplaceAll(title, "**", "")
+			title = strings.TrimSpace(title)
+			if title == "" {
+				continue
+			}
+
+			// Truncate body at section/table boundaries
+			body = truncateConceptBody(body)
+
+			concepts = append(concepts, map[string]string{
+				"title": title,
+				"body":  body,
+			})
+		}
+		return concepts
+	}
+
+	// Strategy 2: Single Key Concept or section-based detection (original logic)
+	sections := parseSections(content)
 	for _, sec := range sections {
 		h := strings.ToLower(sec["heading"])
 		if strings.Contains(h, "key insight") || strings.Contains(h, "concept") {
-			body := strings.TrimSpace(sec["body"])
+			body := truncateConceptBody(strings.TrimSpace(sec["body"]))
 			if body == "" {
 				continue
 			}

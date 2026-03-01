@@ -1,12 +1,17 @@
 package services
 
 import (
+	"bytes"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"html"
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -40,18 +45,32 @@ func NewYouTubeService() *YouTubeService {
 	}
 }
 
-// GetTranscript fetches the auto-generated captions for a YouTube video
+// GetTranscript fetches the auto-generated captions for a YouTube video.
+// Primary: Python youtube-transcript-api (most reliable).
+// Fallback 1: Go transcript API library.
+// Fallback 2: timedtext XML scraping.
 func (s *YouTubeService) GetTranscript(videoID string) (string, error) {
+	// Try Python script first (most reliable)
+	pyTranscript, pyErr := s.getTranscriptViaPython(videoID)
+	if pyErr == nil && len(strings.TrimSpace(pyTranscript)) > 0 {
+		log.Printf("Got transcript via Python for %s (%d chars)", videoID, len(pyTranscript))
+		return pyTranscript, nil
+	}
+	if pyErr != nil {
+		log.Printf("Python transcript failed for %s: %v — trying Go fallbacks", videoID, pyErr)
+	}
+
+	// Fallback 1: Go transcript API
 	transcript, err := s.transcriptAPI.GetTranscript(videoID, []string{"en", "en-US", "en-GB"})
 	if err != nil {
-		// Fallback: request any available language
 		transcript, err = s.transcriptAPI.GetTranscript(videoID, nil)
 		if err != nil {
+			// Fallback 2: timedtext XML
 			legacyTranscript, legacyErr := s.getTranscriptViaTimedText(videoID)
 			if legacyErr == nil {
 				return legacyTranscript, nil
 			}
-			return "", fmt.Errorf("no subtitles available via transcript API (%v) and timedtext fallback failed (%v)", err, legacyErr)
+			return "", fmt.Errorf("all transcript methods failed — python: %v; go-api: %v; timedtext: %v", pyErr, err, legacyErr)
 		}
 	}
 
@@ -75,6 +94,57 @@ func (s *YouTubeService) GetTranscript(videoID string) (string, error) {
 	}
 
 	return cleaned, nil
+}
+
+// getTranscriptViaPython shells out to the Python youtube-transcript-api
+func (s *YouTubeService) getTranscriptViaPython(videoID string) (string, error) {
+	scriptPath := findPythonScript()
+	if scriptPath == "" {
+		return "", fmt.Errorf("fetch_transcript.py not found")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "python", scriptPath, videoID)
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("python script error: %s (exit: %v)", strings.TrimSpace(stderr.String()), err)
+	}
+
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+func findPythonScript() string {
+	// Try paths relative to the executable and cwd
+	candidates := []string{
+		"scripts/fetch_transcript.py",
+		"../scripts/fetch_transcript.py",
+		"backend/scripts/fetch_transcript.py",
+		"../backend/scripts/fetch_transcript.py",
+	}
+
+	// Also try relative to the executable location
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "scripts", "fetch_transcript.py"),
+			filepath.Join(exeDir, "..", "scripts", "fetch_transcript.py"),
+		)
+	}
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			abs, _ := filepath.Abs(p)
+			return abs
+		}
+	}
+	return ""
 }
 
 func (s *YouTubeService) getTranscriptViaTimedText(videoID string) (string, error) {

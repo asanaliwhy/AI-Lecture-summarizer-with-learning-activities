@@ -1372,7 +1372,7 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Markdown structure rule for Additional Interesting Facts: this section MUST be a markdown unordered list ('- item'). Do NOT write it as a paragraph.\n\n")
 	}
 
-	// Layer 3 — Length (strict bands)
+	// Layer 3 — Length (strict bands, adjusted per format)
 	sourceWords := len(strings.Fields(transcript))
 	var targetPercent int
 	var minWords int
@@ -1405,6 +1405,23 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		maxWords = 420
 		lengthLabel = "Medium"
 	}
+
+	// Format-specific multiplier: multi-section formats need more words
+	// to fill all required sections (Cornell: Cues+Notes+Summary, Smart: Summary+Insights+Table+Facts)
+	var formatMultiplier float64
+	switch format {
+	case "cornell":
+		formatMultiplier = 1.8 // 3 mandatory sections with structured content
+	case "smart":
+		formatMultiplier = 1.6 // 4 mandatory sections including a table
+	case "bullets":
+		formatMultiplier = 1.1 // structured bullets add some overhead
+	default:
+		formatMultiplier = 1.0 // paragraph stays as-is
+	}
+
+	minWords = int(float64(minWords) * formatMultiplier)
+	maxWords = int(float64(maxWords) * formatMultiplier)
 
 	targetWords := sourceWords * targetPercent / 100
 	if targetWords < minWords {
