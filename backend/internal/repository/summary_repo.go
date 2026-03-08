@@ -135,6 +135,14 @@ func (r *SummaryRepo) Update(ctx context.Context, s *models.Summary) error {
 	return err
 }
 
+func (r *SummaryRepo) UpdateTitle(ctx context.Context, id uuid.UUID, title string) error {
+	_, err := r.pool.Exec(ctx,
+		"UPDATE summaries SET title = $1 WHERE id = $2",
+		title, id,
+	)
+	return err
+}
+
 func (r *SummaryRepo) UpdateContent(
 	ctx context.Context,
 	id uuid.UUID,

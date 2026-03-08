@@ -40,6 +40,10 @@ func (s *stubSummaryRepo) Update(ctx context.Context, summary *models.Summary) e
 	return nil
 }
 
+func (s *stubSummaryRepo) UpdateTitle(ctx context.Context, id uuid.UUID, title string) error {
+	return nil
+}
+
 func (s *stubSummaryRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }

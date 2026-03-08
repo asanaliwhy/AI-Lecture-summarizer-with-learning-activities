@@ -367,12 +367,8 @@ Summary:
 	}
 
 	// Update title
-	summary, _ := s.summaryRepo.GetByID(ctx, job.ReferenceID)
-	if summary != nil {
-		summary.Title = title
-		summary.Tags = tags
-		summary.Description = description
-		s.summaryRepo.Update(ctx, summary)
+	if title != "" {
+		s.summaryRepo.UpdateTitle(ctx, job.ReferenceID, title)
 	}
 
 	return nil

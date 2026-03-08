@@ -35,6 +35,7 @@ type summaryRepository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID, search, sortBy string, limit, offset int) ([]*models.Summary, int, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Summary, error)
 	Update(ctx context.Context, s *models.Summary) error
+	UpdateTitle(ctx context.Context, id uuid.UUID, title string) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
 }
