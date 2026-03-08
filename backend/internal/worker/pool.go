@@ -392,7 +392,10 @@ func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
 		}
 
 		// Step 2: Save transcript
-		p.contentRepo.UpdateTranscript(ctx, content.ID, transcript)
+		if err := p.contentRepo.UpdateTranscript(ctx, content.ID, transcript); err != nil {
+			p.contentRepo.UpdateStatus(ctx, content.ID, "failed")
+			return fmt.Errorf("failed to save transcript for video %s: %w", videoID, err)
+		}
 
 		log.Printf("Fetched transcript for video %s (%d chars)", videoID, len(transcript))
 	}
@@ -454,6 +457,8 @@ func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
 
 		log.Printf("Extracted file text for content %s (%d chars)", content.ID, len(extracted))
 	}
+
+	p.contentRepo.UpdateStatus(ctx, content.ID, "completed")
 
 	return nil
 }
