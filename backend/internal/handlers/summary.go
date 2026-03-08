@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -722,14 +723,16 @@ func parseSections(content string) []map[string]string {
 			continue
 		}
 
-		if m := strings.Index(line, ":"); m > 0 && m < 80 {
-			left := strings.TrimSpace(line[:m])
-			right := strings.TrimSpace(line[m+1:])
-			if right == "" && !strings.Contains(strings.ToLower(left), "http") {
-				flush()
-				currentHeading = left
-				continue
-			}
+		if looksLikeAllCapsHeading(line) {
+			flush()
+			currentHeading = line
+			continue
+		}
+
+		if looksLikeColonHeading(line) {
+			flush()
+			currentHeading = strings.TrimSpace(strings.TrimSuffix(line, ":"))
+			continue
 		}
 
 		currentBody = append(currentBody, line)
@@ -745,6 +748,50 @@ func parseSections(content string) []map[string]string {
 	}
 
 	return out
+}
+
+func looksLikeAllCapsHeading(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	if len(strings.Fields(trimmed)) > 6 {
+		return false
+	}
+	if len([]rune(trimmed)) <= 2 {
+		return false
+	}
+	return trimmed == strings.ToUpper(trimmed)
+}
+
+func looksLikeColonHeading(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasSuffix(trimmed, ":") {
+		return false
+	}
+
+	beforeColon := strings.TrimSpace(strings.TrimSuffix(trimmed, ":"))
+	if beforeColon == "" {
+		return false
+	}
+	if strings.Contains(strings.ToLower(beforeColon), "http") {
+		return false
+	}
+	if strings.ContainsAny(beforeColon, ".!?") {
+		return false
+	}
+
+	words := strings.Fields(beforeColon)
+	if len(words) < 1 || len(words) > 5 {
+		return false
+	}
+
+	runes := []rune(beforeColon)
+	if len(runes) == 0 || !unicode.IsUpper(runes[0]) {
+		return false
+	}
+
+	return true
 }
 
 func parseVideoSummary(content string) string {
