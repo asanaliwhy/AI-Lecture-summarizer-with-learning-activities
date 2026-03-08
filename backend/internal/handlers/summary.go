@@ -353,6 +353,13 @@ func (h *SummaryHandler) Regenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Clear stale metadata so UI reflects processing state during regeneration
+	_ = h.summaryRepo.Update(r.Context(), &models.Summary{
+		ID:    id,
+		Title: "",
+		Tags:  []string{},
+	})
+
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"job_id":     job.ID,
 		"summary_id": id,
