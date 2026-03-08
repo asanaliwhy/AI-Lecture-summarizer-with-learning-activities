@@ -1808,9 +1808,8 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 }
 
 func isMetadataOnlyContent(transcript string) bool {
-	normalized := strings.TrimSpace(transcript)
-	lower := strings.ToLower(normalized)
-	return len(normalized) < 200 || strings.Contains(lower, "transcript is unavailable for this content")
+	lower := strings.ToLower(strings.TrimSpace(transcript))
+	return strings.Contains(lower, "transcript is unavailable for this content")
 }
 
 func buildSmartSummaryStructureFallbackPrompt(rawText string, metadataOnlyMode bool) string {
