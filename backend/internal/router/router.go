@@ -56,15 +56,19 @@ func New(
 
 		// ──── Auth Routes (public) ────
 		r.Route("/auth", func(r chi.Router) {
-			r.Use(authLimiter.Middleware)
-			r.Post("/register", authHandler.Register)
-			r.Post("/login", authHandler.Login)
-			r.Get("/google/config", authHandler.GoogleConfig)
-			r.Post("/google", authHandler.GoogleLogin)
-			r.Post("/google/code", authHandler.GoogleCodeLogin)
-			r.Post("/refresh", authHandler.Refresh)
+			// Verify-email must be outside auth rate limiter to avoid blocking legitimate link clicks.
 			r.Get("/verify-email", authHandler.VerifyEmail)
-			r.Post("/resend-verification", authHandler.ResendVerification)
+
+			r.Group(func(r chi.Router) {
+				r.Use(authLimiter.Middleware)
+				r.Post("/register", authHandler.Register)
+				r.Post("/login", authHandler.Login)
+				r.Get("/google/config", authHandler.GoogleConfig)
+				r.Post("/google", authHandler.GoogleLogin)
+				r.Post("/google/code", authHandler.GoogleCodeLogin)
+				r.Post("/refresh", authHandler.Refresh)
+				r.Post("/resend-verification", authHandler.ResendVerification)
+			})
 
 			// Logout requires auth
 			r.Group(func(r chi.Router) {
