@@ -1009,8 +1009,10 @@ func sanitizePDFFileName(value string) string {
 		return r
 	}, strings.TrimSpace(value))
 	cleaned = strings.Join(strings.Fields(cleaned), " ")
-	if len(cleaned) > 120 {
-		cleaned = cleaned[:120]
+	const maxFileNameRunes = 120
+	runes := []rune(cleaned)
+	if len(runes) > maxFileNameRunes {
+		cleaned = string(runes[:maxFileNameRunes])
 	}
 	return strings.TrimSpace(cleaned)
 }
