@@ -19,6 +19,7 @@ import (
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
 	"lectura-backend/internal/repository"
+	"lectura-backend/internal/services"
 )
 
 type ContentHandler struct {
@@ -26,9 +27,10 @@ type ContentHandler struct {
 	jobRepo     *repository.JobRepo
 	redis       *redis.Client
 	storagePath string
+	youtube     *services.YouTubeService
 }
 
-func NewContentHandler(contentRepo *repository.ContentRepo, jobRepo *repository.JobRepo, redisClient *redis.Client, storagePath string) *ContentHandler {
+func NewContentHandler(contentRepo *repository.ContentRepo, jobRepo *repository.JobRepo, redisClient *redis.Client, storagePath string, youtube *services.YouTubeService) *ContentHandler {
 	if redisClient == nil {
 		log.Println("CRITICAL: NewContentHandler received nil redisClient")
 	} else {
@@ -39,6 +41,7 @@ func NewContentHandler(contentRepo *repository.ContentRepo, jobRepo *repository.
 		jobRepo:     jobRepo,
 		redis:       redisClient,
 		storagePath: storagePath,
+		youtube:     youtube,
 	}
 }
 
@@ -94,16 +97,27 @@ func (h *ContentHandler) ValidateYouTube(w http.ResponseWriter, r *http.Request)
 		oembed.ThumbnailURL = "https://img.youtube.com/vi/" + videoID + "/maxresdefault.jpg"
 	}
 
+	// Fetch duration from YouTube page (oEmbed does not provide it)
+	duration := 0
+	if h.youtube != nil {
+		if _, _, _, _, durationSec, err := h.youtube.GetVideoMetadata(videoID); err == nil && durationSec > 0 {
+			duration = durationSec
+		}
+	}
+
 	metadata := models.YouTubeMetadata{
 		VideoID:      videoID,
 		Title:        oembed.Title,
 		ChannelName:  oembed.AuthorName,
 		ThumbnailURL: oembed.ThumbnailURL,
-		Duration:     0, // oEmbed doesn't provide duration
+		Duration:     duration,
 	}
 	metaBytes, _ := json.Marshal(metadata)
 	content.MetadataJSON = metaBytes
 	content.Title = oembed.Title
+	if duration > 0 {
+		content.DurationSeconds = &duration
+	}
 
 	if err := h.contentRepo.Create(r.Context(), content); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to create content record", r))

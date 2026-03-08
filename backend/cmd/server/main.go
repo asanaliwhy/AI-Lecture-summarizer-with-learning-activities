@@ -92,7 +92,7 @@ func main() {
 
 	// ──── Initialize Handlers ────
 	authHandler := handlers.NewAuthHandler(authService, cfg.FrontendURL)
-	contentHandler := handlers.NewContentHandler(contentRepo, jobRepo, redisClients.Queue, cfg.StoragePath)
+	contentHandler := handlers.NewContentHandler(contentRepo, jobRepo, redisClients.Queue, cfg.StoragePath, youtubeService)
 	summaryHandler := handlers.NewSummaryHandler(summaryRepo, contentRepo, jobRepo, redisClients.Queue)
 	quizHandler := handlers.NewQuizHandler(quizRepo, summaryRepo, jobRepo, redisClients.Queue)
 	flashcardHandler := handlers.NewFlashcardHandler(flashcardRepo, summaryRepo, jobRepo, redisClients.Queue)
