@@ -565,18 +565,27 @@ func extractText(resp *genai.GenerateContentResponse) string {
 func parseCornell(text string) (cues, notes, summary string) {
 	upper := strings.ToUpper(text)
 
-	cuesIdx := strings.Index(upper, "[CUES]")
-	notesIdx := strings.Index(upper, "[NOTES]")
-	summaryIdx := strings.Index(upper, "[SUMMARY]")
+	const (
+		cuesMarker    = "[CUES]"
+		notesMarker   = "[NOTES]"
+		summaryMarker = "[SUMMARY]"
+	)
+
+	// Use LastIndex to skip preamble mentions and repeated markers.
+	// For well-formed output LastIndex == Index; for malformed output
+	// LastIndex finds the actual section header.
+	cuesIdx := strings.LastIndex(upper, cuesMarker)
+	notesIdx := strings.LastIndex(upper, notesMarker)
+	summaryIdx := strings.LastIndex(upper, summaryMarker)
 
 	if cuesIdx >= 0 && notesIdx > cuesIdx {
-		cues = strings.TrimSpace(text[cuesIdx+6 : notesIdx])
+		cues = strings.TrimSpace(text[cuesIdx+len(cuesMarker) : notesIdx])
 	}
 	if notesIdx >= 0 && summaryIdx > notesIdx {
-		notes = strings.TrimSpace(text[notesIdx+7 : summaryIdx])
+		notes = strings.TrimSpace(text[notesIdx+len(notesMarker) : summaryIdx])
 	}
 	if summaryIdx >= 0 {
-		summary = strings.TrimSpace(text[summaryIdx+9:])
+		summary = strings.TrimSpace(text[summaryIdx+len(summaryMarker):])
 	}
 
 	return
