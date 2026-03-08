@@ -153,12 +153,24 @@ func findPythonScript() string {
 		)
 	}
 
+	checked := make([]string, 0, len(candidates))
 	for _, p := range candidates {
+		abs, absErr := filepath.Abs(p)
+		if absErr == nil {
+			checked = append(checked, abs)
+		} else {
+			checked = append(checked, p)
+		}
+
 		if _, err := os.Stat(p); err == nil {
-			abs, _ := filepath.Abs(p)
+			if absErr != nil {
+				return p
+			}
 			return abs
 		}
 	}
+
+	log.Printf("fetch_transcript.py not found; checked paths: %s", strings.Join(checked, ", "))
 	return ""
 }
 
