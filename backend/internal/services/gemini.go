@@ -2041,34 +2041,12 @@ func buildMnemonicFallback(front string) *string {
 }
 
 func buildExampleFallback(front, back string) *string {
-	front = strings.TrimSpace(front)
-	back = strings.TrimSpace(back)
-
-	if front == "" && back == "" {
-		return nil
-	}
-
-	if front == "" {
-		example := fmt.Sprintf("Example: %s", truncateSentence(back, 90))
-		return &example
-	}
-
-	if back == "" {
-		example := fmt.Sprintf("Example: apply \"%s\" in a realistic study scenario.", front)
-		return &example
-	}
-
-	example := fmt.Sprintf("Example: use \"%s\" when explaining \"%s\".", front, truncateSentence(back, 70))
-	return &example
-}
-
-func truncateSentence(text string, maxLen int) string {
-	normalized := strings.Join(strings.Fields(text), " ")
-	if maxLen <= 3 || len(normalized) <= maxLen {
-		return normalized
-	}
-
-	return strings.TrimSpace(normalized[:maxLen-3]) + "..."
+	// Template-based examples restate card content without contextual application.
+	// Returning nil is correct — no example is better than a mechanical filler string.
+	// If Gemini returned null for an example, respect that and omit it.
+	_ = front // parameters retained for signature compatibility
+	_ = back
+	return nil
 }
 
 func validateQuizQuestions(questions []models.QuizQuestion, config models.GenerateQuizRequest) []models.QuizQuestion {

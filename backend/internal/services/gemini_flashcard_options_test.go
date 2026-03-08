@@ -31,8 +31,8 @@ func TestValidateFlashcardCards_IncludeOptionsGenerateContent(t *testing.T) {
 		t.Fatalf("expected mnemonic to remain nil when include_mnemonics=true but fallback generation is disabled")
 	}
 
-	if got[0].Example == nil || *got[0].Example == "" {
-		t.Fatalf("expected example to be present when include_examples=true")
+	if got[0].Example != nil {
+		t.Fatalf("expected example to remain nil when include_examples=true but fallback generation is disabled")
 	}
 }
 
