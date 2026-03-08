@@ -184,7 +184,10 @@ func New(
 		})
 
 		// ──── WebSocket ────
-		r.Get("/ws", wsHub.HandleWebSocket)
+		r.Group(func(r chi.Router) {
+			r.Use(jwtAuth.Middleware)
+			r.Get("/ws", wsHub.HandleWebSocket)
+		})
 	})
 
 	return r
