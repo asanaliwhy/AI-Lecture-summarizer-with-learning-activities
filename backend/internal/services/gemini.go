@@ -200,14 +200,28 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 			rawText = repairedText
 			log.Println("INFO: Smart summary Additional Interesting Facts auto-repaired to markdown bullets")
 		}
+		if !metadataOnlyMode {
+			log.Println("INFO: Running Smart summary fidelity rewrite")
+			rawText = s.rewriteSmartSummaryForFidelity(ctx, rawText, transcript)
+			if !hasValidSmartSummaryTable(rawText) {
+				rawText = ensureSmartSummaryTable(rawText)
+				log.Println("INFO: Smart summary table restored after fidelity rewrite")
+			}
+		}
 	}
 
 	if config.Format == "bullets" {
 		rawText = normalizeBulletsSummary(rawText)
+		if metadataOnlyMode {
+			rawText = enforceMetadataOnlyBullets(rawText)
+		}
 	}
 
 	if config.Format == "paragraph" {
 		rawText = normalizeParagraphSummary(rawText)
+		if metadataOnlyMode {
+			rawText = enforceMetadataOnlyParagraph(rawText)
+		}
 	}
 
 	// Parse Cornell if applicable
@@ -217,11 +231,18 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		if c == "" || n == "" || st == "" {
 			// Follow-up call to restructure
 			restructurePrompt := "Restructure this text into Cornell Method format with clear [CUES], [NOTES], and [SUMMARY] sections. Return plain text only. Do NOT use markdown tables, pipes (|), or HTML:\n\n" + rawText
-			resp2, err := s.model.GenerateContent(ctx, genai.Text(restructurePrompt))
+			resp2, err := summaryModel.GenerateContent(ctx, genai.Text(restructurePrompt))
 			if err == nil {
 				rawText2 := extractText(resp2)
-				c, n, st = parseCornell(rawText2)
+				if strings.TrimSpace(rawText2) != "" {
+					rawText = rawText2
+				}
+				c, n, st = parseCornell(rawText)
 			}
+		}
+		if metadataOnlyMode {
+			rawText = enforceMetadataOnlyCornell(rawText)
+			c, n, st = parseCornell(rawText)
 		}
 		if c != "" {
 			cues = &c
@@ -249,8 +270,13 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	metaPrompt := fmt.Sprintf(`Given this summary, return ONLY a valid JSON object with these fields:
 {"suggested_title": "title under 60 chars", "tags": ["tag1","tag2","tag3","tag4","tag5"], "one_sentence_description": "description under 120 chars"}
 
+Rules:
+- suggested_title: concise, specific, reflects the main topic of the ENTIRE summary
+- tags: cover the full range of topics across ALL sections, not just the opening
+- one_sentence_description: summarizes the complete content in plain language
+
 Summary:
-%s`, rawText[:min(len(rawText), 2000)])
+%s`, rawText[:min(len(rawText), 6000)])
 
 	tags := []string{}
 	var description *string
@@ -725,6 +751,276 @@ func enforceMetadataOnlyKeyInsightsSection(text string) string {
 	}
 
 	return strings.TrimSpace(cleaned)
+}
+
+func containsMetadataHedgeLanguage(line string) bool {
+	lower := strings.ToLower(line)
+	hedgePhrases := []string{
+		"likely covers",
+		"likely discusses",
+		"likely explores",
+		"likely focuses",
+		"presumably",
+		"the video probably",
+		"probably covers",
+		"probably discusses",
+		"it can be assumed",
+		"hypothetically",
+		"may cover",
+		"may discuss",
+		"might cover",
+		"might discuss",
+		"appears to cover",
+		"seems to cover",
+		"is expected to",
+		"would likely",
+		"could cover",
+		"based on the title",
+		"based on the metadata",
+		"without access to the transcript",
+		"cannot be confirmed",
+	}
+
+	for _, phrase := range hedgePhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func enforceMetadataOnlyCornell(text string) string {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	upper := strings.ToUpper(normalized)
+
+	type section struct {
+		marker  string
+		idx     int
+		message string
+	}
+
+	sections := make([]section, 0, 3)
+	if idx := strings.Index(upper, "[CUES]"); idx >= 0 {
+		sections = append(sections, section{
+			marker:  "[CUES]",
+			idx:     idx,
+			message: "No cues available: transcript was not accessible for this video.",
+		})
+	}
+	if idx := strings.Index(upper, "[NOTES]"); idx >= 0 {
+		sections = append(sections, section{
+			marker:  "[NOTES]",
+			idx:     idx,
+			message: "No notes available: transcript was not accessible for this video.",
+		})
+	}
+	if idx := strings.Index(upper, "[SUMMARY]"); idx >= 0 {
+		sections = append(sections, section{
+			marker:  "[SUMMARY]",
+			idx:     idx,
+			message: "A summary cannot be generated from metadata alone. Please provide a video with an available transcript.",
+		})
+	}
+
+	if len(sections) == 0 {
+		cleaned := normalized
+		for strings.Contains(cleaned, "\n\n\n") {
+			cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+		}
+		return strings.TrimSpace(cleaned)
+	}
+
+	for i := 0; i < len(sections); i++ {
+		for j := i + 1; j < len(sections); j++ {
+			if sections[j].idx < sections[i].idx {
+				sections[i], sections[j] = sections[j], sections[i]
+			}
+		}
+	}
+
+	var rebuilt strings.Builder
+	if sections[0].idx > 0 {
+		rebuilt.WriteString(normalized[:sections[0].idx])
+	}
+
+	for i, sec := range sections {
+		rebuilt.WriteString(sec.marker)
+		rebuilt.WriteString("\n\n")
+		rebuilt.WriteString(sec.message)
+		if i < len(sections)-1 {
+			rebuilt.WriteString("\n\n")
+		}
+	}
+
+	cleaned := rebuilt.String()
+	for strings.Contains(cleaned, "\n\n\n") {
+		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+	}
+
+	return strings.TrimSpace(cleaned)
+}
+
+func enforceMetadataOnlyBullets(text string) string {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+	out := make([]string, 0, len(lines))
+
+	totalBullets := 0
+	replacedBullets := 0
+
+	for _, line := range lines {
+		t := strings.TrimSpace(line)
+		if t == "" {
+			out = append(out, "")
+			continue
+		}
+
+		prefix := ""
+		content := ""
+		switch {
+		case strings.HasPrefix(t, "- "):
+			prefix = "- "
+			content = strings.TrimSpace(t[2:])
+		case strings.HasPrefix(t, "• "):
+			prefix = "• "
+			content = strings.TrimSpace(t[2:])
+		case strings.HasPrefix(t, "* "):
+			prefix = "* "
+			content = strings.TrimSpace(t[2:])
+		}
+
+		if prefix == "" {
+			out = append(out, t)
+			continue
+		}
+
+		totalBullets++
+		if containsMetadataHedgeLanguage(content) {
+			replacedBullets++
+			out = append(out, prefix+"Content not available: transcript was not accessible for this video.")
+			continue
+		}
+
+		out = append(out, prefix+content)
+	}
+
+	if totalBullets > 0 && replacedBullets == totalBullets {
+		out = []string{
+			"Overview",
+			"- A summary cannot be generated from metadata alone. Please provide a video with an available transcript.",
+		}
+	}
+
+	cleaned := strings.Join(out, "\n")
+	for strings.Contains(cleaned, "\n\n\n") {
+		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+	}
+
+	return strings.TrimSpace(cleaned)
+}
+
+func enforceMetadataOnlyParagraph(text string) string {
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+
+	type paragraphSection struct {
+		heading string
+		body    []string
+	}
+
+	isHeading := func(lines []string, i int, line string) bool {
+		t := strings.TrimSpace(line)
+		if t == "" {
+			return false
+		}
+		if strings.HasPrefix(t, "#") {
+			return true
+		}
+		if len(t) < 80 && !strings.ContainsAny(t, ".!?") {
+			if i+1 < len(lines) && strings.TrimSpace(lines[i+1]) == "" {
+				return true
+			}
+		}
+		return false
+	}
+
+	sections := make([]paragraphSection, 0)
+	current := paragraphSection{}
+	hasAnyHeading := false
+
+	flushCurrent := func() {
+		if current.heading == "" && len(current.body) == 0 {
+			return
+		}
+		sections = append(sections, current)
+		current = paragraphSection{}
+	}
+
+	for i, line := range lines {
+		t := strings.TrimSpace(line)
+		if t == "" {
+			continue
+		}
+
+		if isHeading(lines, i, t) {
+			hasAnyHeading = true
+			flushCurrent()
+			current.heading = t
+			continue
+		}
+
+		if containsMetadataHedgeLanguage(t) {
+			continue
+		}
+
+		current.body = append(current.body, t)
+	}
+
+	flushCurrent()
+
+	if len(sections) == 0 {
+		return "A summary cannot be generated from metadata alone. Please provide a video with an available transcript."
+	}
+
+	out := make([]string, 0, len(lines))
+	nonHeadingLines := 0
+
+	for i, sec := range sections {
+		if sec.heading != "" {
+			out = append(out, sec.heading)
+		}
+
+		if len(sec.body) == 0 {
+			if hasAnyHeading {
+				out = append(out, "Content not available: transcript was not accessible for this video.")
+				nonHeadingLines++
+			}
+		} else {
+			out = append(out, sec.body...)
+			nonHeadingLines += len(sec.body)
+		}
+
+		if i < len(sections)-1 {
+			out = append(out, "")
+		}
+	}
+
+	if nonHeadingLines == 0 {
+		return "A summary cannot be generated from metadata alone. Please provide a video with an available transcript."
+	}
+
+	cleaned := strings.Join(out, "\n")
+	for strings.Contains(cleaned, "\n\n\n") {
+		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
+	}
+
+	cleaned = strings.TrimSpace(cleaned)
+	if cleaned == "" {
+		return "A summary cannot be generated from metadata alone. Please provide a video with an available transcript."
+	}
+
+	return cleaned
 }
 
 func isOrderedListLine(line string) bool {

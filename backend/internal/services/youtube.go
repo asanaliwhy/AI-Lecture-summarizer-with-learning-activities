@@ -103,10 +103,15 @@ func (s *YouTubeService) getTranscriptViaPython(videoID string) (string, error) 
 		return "", fmt.Errorf("fetch_transcript.py not found")
 	}
 
+	pythonBin, err := findPythonBin()
+	if err != nil {
+		return "", err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "python", scriptPath, videoID)
+	cmd := exec.CommandContext(ctx, pythonBin, scriptPath, videoID)
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 
 	var stdout, stderr bytes.Buffer
@@ -118,6 +123,16 @@ func (s *YouTubeService) getTranscriptViaPython(videoID string) (string, error) 
 	}
 
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+func findPythonBin() (string, error) {
+	for _, bin := range []string{"python3", "python"} {
+		if _, err := exec.LookPath(bin); err == nil {
+			return bin, nil
+		}
+	}
+
+	return "", fmt.Errorf("python interpreter not found (tried python3 and python)")
 }
 
 func findPythonScript() string {
