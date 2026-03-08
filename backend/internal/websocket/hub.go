@@ -7,10 +7,11 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+
+	"lectura-backend/internal/middleware"
 )
 
 var upgrader = websocket.Upgrader{
@@ -23,44 +24,21 @@ type Hub struct {
 	mu          sync.RWMutex
 	connections map[uuid.UUID][]*websocket.Conn
 	redisClient *redis.Client
-	jwtSecret   []byte
 	cancelFuncs map[uuid.UUID]context.CancelFunc
 }
 
 func NewHub(redisClient *redis.Client, jwtSecret string) *Hub {
+	_ = jwtSecret
 	return &Hub{
 		connections: make(map[uuid.UUID][]*websocket.Conn),
 		redisClient: redisClient,
-		jwtSecret:   []byte(jwtSecret),
 		cancelFuncs: make(map[uuid.UUID]context.CancelFunc),
 	}
 }
 
 func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// Authenticate via token query param
-	tokenStr := r.URL.Query().Get("token")
-	if tokenStr == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		return h.jwtSecret, nil
-	})
-	if err != nil || !token.Valid {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	userIDStr, _ := claims["user_id"].(string)
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
+	userID := middleware.GetUserID(r.Context())
+	if userID == uuid.Nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
