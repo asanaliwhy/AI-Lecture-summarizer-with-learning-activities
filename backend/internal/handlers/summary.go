@@ -442,17 +442,38 @@ func generatePDF(summary models.Summary) ([]byte, error) {
 
 func resolvePDFScriptPath() (string, error) {
 	candidates := []string{
-		filepath.Join("backend", "scripts", "pdf_export.py"),
 		filepath.Join("scripts", "pdf_export.py"),
+		filepath.Join("..", "scripts", "pdf_export.py"),
+		filepath.Join("backend", "scripts", "pdf_export.py"),
+		filepath.Join("..", "backend", "scripts", "pdf_export.py"),
 	}
 
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "scripts", "pdf_export.py"),
+			filepath.Join(exeDir, "..", "scripts", "pdf_export.py"),
+		)
+	}
+
+	checked := make([]string, 0, len(candidates))
 	for _, p := range candidates {
+		abs, absErr := filepath.Abs(p)
+		if absErr == nil {
+			checked = append(checked, abs)
+		} else {
+			checked = append(checked, p)
+		}
+
 		if _, err := os.Stat(p); err == nil {
-			return p, nil
+			if absErr != nil {
+				return p, nil
+			}
+			return abs, nil
 		}
 	}
 
-	return "", fmt.Errorf("pdf exporter script not found (checked backend/scripts/pdf_export.py and scripts/pdf_export.py)")
+	return "", fmt.Errorf("pdf_export.py not found; checked paths: %s", strings.Join(checked, ", "))
 }
 
 func buildPDFPayload(summary models.Summary) (map[string]interface{}, error) {
