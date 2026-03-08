@@ -153,16 +153,14 @@ func (h *ContentHandler) ValidateYouTube(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ContentHandler) Upload(w http.ResponseWriter, r *http.Request) {
-	// Check content length
-	if r.ContentLength > 100*1024*1024 { // 100MB
-		writeJSON(w, http.StatusRequestEntityTooLarge, errorResp("FILE_TOO_LARGE", "File size exceeds 100MB limit", r))
-		return
-	}
-
 	r.Body = http.MaxBytesReader(w, r.Body, 100*1024*1024)
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
+		if strings.Contains(err.Error(), "http: request body too large") {
+			writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "File exceeds maximum allowed size", r))
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "No file provided", r))
 		return
 	}
