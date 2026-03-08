@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/sync/errgroup"
@@ -631,6 +633,23 @@ func mergeNotificationPreferences(raw json.RawMessage) map[string]bool {
 	return prefs
 }
 
+func defaultSettings(userID uuid.UUID) *models.UserSettings {
+	notificationsJSON, err := json.Marshal(defaultNotificationPreferences())
+	if err != nil {
+		notificationsJSON = []byte(`{"processing_complete":true,"weekly_digest":false,"study_reminders":false}`)
+	}
+
+	return &models.UserSettings{
+		UserID:               userID,
+		DefaultSummaryLength: "standard",
+		DefaultFormat:        "cornell",
+		DefaultDifficulty:    "medium",
+		Language:             "en",
+		NotificationsJSON:    notificationsJSON,
+		UpdatedAt:            time.Now(),
+	}
+}
+
 func NewUserHandler(userRepo *repository.UserRepo) *UserHandler {
 	return &UserHandler{userRepo: userRepo}
 }
@@ -776,7 +795,12 @@ func (h *UserHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	settings, err := h.userRepo.GetSettings(r.Context(), userID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Settings not found", r))
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeJSON(w, http.StatusOK, defaultSettings(userID))
+			return
+		}
+		log.Printf("GetSettings: DB error for user %s: %v", userID, err)
+		writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve settings", r))
 		return
 	}
 	writeJSON(w, http.StatusOK, settings)
