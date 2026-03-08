@@ -21,20 +21,21 @@ import (
 )
 
 type Pool struct {
-	redis       *redis.Client
-	gemini      *services.GeminiService
-	email       *services.EmailService
-	userRepo    *repository.UserRepo
-	youtube     *services.YouTubeService
-	fileExtract *services.FileExtractService
-	jobRepo     *repository.JobRepo
-	contentRepo *repository.ContentRepo
-	summaryRepo *repository.SummaryRepo
-	quizRepo    *repository.QuizRepo
-	flashRepo   *repository.FlashcardRepo
-	storagePath string
-	workerCount int
-	stopChan    chan struct{}
+	redis               *redis.Client
+	gemini              *services.GeminiService
+	email               *services.EmailService
+	userRepo            *repository.UserRepo
+	youtube             *services.YouTubeService
+	fileExtract         *services.FileExtractService
+	jobRepo             *repository.JobRepo
+	contentRepo         *repository.ContentRepo
+	summaryRepo         *repository.SummaryRepo
+	quizRepo            *repository.QuizRepo
+	flashRepo           *repository.FlashcardRepo
+	storagePath         string
+	workerCount         int
+	contentReadyTimeout time.Duration
+	stopChan            chan struct{}
 }
 
 func NewPool(
@@ -51,22 +52,24 @@ func NewPool(
 	flashRepo *repository.FlashcardRepo,
 	storagePath string,
 	workerCount int,
+	contentReadyTimeout time.Duration,
 ) *Pool {
 	return &Pool{
-		redis:       redisClient,
-		gemini:      gemini,
-		email:       email,
-		userRepo:    userRepo,
-		youtube:     youtube,
-		fileExtract: fileExtract,
-		jobRepo:     jobRepo,
-		contentRepo: contentRepo,
-		summaryRepo: summaryRepo,
-		quizRepo:    quizRepo,
-		flashRepo:   flashRepo,
-		storagePath: storagePath,
-		workerCount: workerCount,
-		stopChan:    make(chan struct{}),
+		redis:               redisClient,
+		gemini:              gemini,
+		email:               email,
+		userRepo:            userRepo,
+		youtube:             youtube,
+		fileExtract:         fileExtract,
+		jobRepo:             jobRepo,
+		contentRepo:         contentRepo,
+		summaryRepo:         summaryRepo,
+		quizRepo:            quizRepo,
+		flashRepo:           flashRepo,
+		storagePath:         storagePath,
+		workerCount:         workerCount,
+		contentReadyTimeout: contentReadyTimeout,
+		stopChan:            make(chan struct{}),
 	}
 }
 
@@ -182,7 +185,7 @@ func (p *Pool) processSummary(ctx context.Context, job *models.Job) error {
 	}
 
 	if content.Type == "file" && (content.Transcript == nil || *content.Transcript == "") {
-		if _, waitErr := p.waitForContentReady(ctx, content.ID, 60*time.Second); waitErr != nil {
+		if _, waitErr := p.waitForContentReady(ctx, content.ID, p.contentReadyTimeout); waitErr != nil {
 			log.Printf("File transcript not ready for content %s, proceeding with fallback: %v", content.ID, waitErr)
 		}
 

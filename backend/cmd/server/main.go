@@ -118,6 +118,7 @@ func main() {
 		flashcardRepo,
 		cfg.StoragePath,
 		5,
+		cfg.ContentReadyTimeout,
 	)
 	workerPool.Start()
 	log.Println("✓ Worker pool started (5 goroutines)")

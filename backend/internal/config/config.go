@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -29,8 +30,9 @@ type Config struct {
 	GeminiConcurrentReqs int
 
 	// Storage
-	StorageType string
-	StoragePath string
+	StorageType         string
+	StoragePath         string
+	ContentReadyTimeout time.Duration
 
 	// SMTP
 	SMTPHost string
@@ -64,6 +66,7 @@ func Load() *Config {
 		GeminiConcurrentReqs: getEnvAsIntOrDefault("GEMINI_CONCURRENT_REQUESTS", 5),
 		StorageType:          getEnvOrDefault("STORAGE_TYPE", "local"),
 		StoragePath:          getEnvOrDefault("STORAGE_PATH", "./uploads"),
+		ContentReadyTimeout:  time.Duration(getEnvAsIntOrDefault("CONTENT_READY_TIMEOUT_SECONDS", 120)) * time.Second,
 		SMTPHost:             getEnvOrDefault("SMTP_HOST", ""),
 		SMTPPort:             getEnvOrDefault("SMTP_PORT", "587"),
 		SMTPUser:             getEnvOrDefault("SMTP_USER", ""),
