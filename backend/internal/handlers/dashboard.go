@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -425,11 +426,27 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		query += " ORDER BY created_at DESC"
 
-		rows, _ := h.pool.Query(ctx, query, args...)
+		rows, err := h.pool.Query(ctx, query, args...)
+		if err != nil {
+			log.Printf("LibraryHandler.List: failed to query summaries for user %s: %v", userID, err)
+			writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+			return
+		}
 		for rows.Next() {
 			item := LibraryItem{Type: "summary"}
-			rows.Scan(&item.ID, &item.Title, &item.Tags, &item.IsFavorite, &item.CreatedAt)
+			if err := rows.Scan(&item.ID, &item.Title, &item.Tags, &item.IsFavorite, &item.CreatedAt); err != nil {
+				rows.Close()
+				log.Printf("LibraryHandler.List: failed to scan summary row for user %s: %v", userID, err)
+				writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+				return
+			}
 			items = append(items, item)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			log.Printf("LibraryHandler.List: summary rows iteration failed for user %s: %v", userID, err)
+			writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+			return
 		}
 		rows.Close()
 	}
@@ -443,11 +460,27 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		query += " ORDER BY created_at DESC"
 
-		rows, _ := h.pool.Query(ctx, query, args...)
+		rows, err := h.pool.Query(ctx, query, args...)
+		if err != nil {
+			log.Printf("LibraryHandler.List: failed to query quizzes for user %s: %v", userID, err)
+			writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+			return
+		}
 		for rows.Next() {
 			item := LibraryItem{Type: "quiz"}
-			rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt)
+			if err := rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt); err != nil {
+				rows.Close()
+				log.Printf("LibraryHandler.List: failed to scan quiz row for user %s: %v", userID, err)
+				writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+				return
+			}
 			items = append(items, item)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			log.Printf("LibraryHandler.List: quiz rows iteration failed for user %s: %v", userID, err)
+			writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+			return
 		}
 		rows.Close()
 	}
@@ -461,11 +494,27 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		query += " ORDER BY created_at DESC"
 
-		rows, _ := h.pool.Query(ctx, query, args...)
+		rows, err := h.pool.Query(ctx, query, args...)
+		if err != nil {
+			log.Printf("LibraryHandler.List: failed to query flashcard decks for user %s: %v", userID, err)
+			writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+			return
+		}
 		for rows.Next() {
 			item := LibraryItem{Type: "flashcard"}
-			rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt)
+			if err := rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt); err != nil {
+				rows.Close()
+				log.Printf("LibraryHandler.List: failed to scan flashcard row for user %s: %v", userID, err)
+				writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+				return
+			}
 			items = append(items, item)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			log.Printf("LibraryHandler.List: flashcard rows iteration failed for user %s: %v", userID, err)
+			writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+			return
 		}
 		rows.Close()
 	}
