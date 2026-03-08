@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/sync/errgroup"
 
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
@@ -31,74 +32,100 @@ func NewDashboardHandler(pool *pgxpool.Pool, userRepo *repository.UserRepo) *Das
 
 func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	ctx := r.Context()
+	g, ctx := errgroup.WithContext(r.Context())
 
 	var summaryCount, quizCount, flashcardCount, weeklySummaryCount int
 	var weeklyQuizCount, weeklyFlashcardCount int
 	var prevWeeklySummaryCount, prevWeeklyQuizCount, prevWeeklyFlashcardCount int
 	var weeklyGoalTarget int
 	var weeklyGoalType string
-	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM summaries WHERE user_id = $1", userID).Scan(&summaryCount)
-	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM quizzes WHERE user_id = $1", userID).Scan(&quizCount)
-	h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM flashcard_decks WHERE user_id = $1", userID).Scan(&flashcardCount)
-	h.pool.QueryRow(ctx, `
-		SELECT COUNT(*)
-		FROM summaries
-		WHERE user_id = $1
-		  AND is_archived = FALSE
-		  AND created_at >= NOW() - INTERVAL '7 days'
-	`, userID).Scan(&weeklySummaryCount)
 
-	h.pool.QueryRow(ctx, `
-		SELECT COUNT(*)
-		FROM quizzes
-		WHERE user_id = $1
-		  AND created_at >= NOW() - INTERVAL '7 days'
-	`, userID).Scan(&weeklyQuizCount)
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM summaries WHERE user_id = $1", userID).Scan(&summaryCount)
+	})
 
-	h.pool.QueryRow(ctx, `
-		SELECT COUNT(*)
-		FROM flashcard_decks
-		WHERE user_id = $1
-		  AND created_at >= NOW() - INTERVAL '7 days'
-	`, userID).Scan(&weeklyFlashcardCount)
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM quizzes WHERE user_id = $1", userID).Scan(&quizCount)
+	})
 
-	h.pool.QueryRow(ctx, `
-		SELECT COUNT(*)
-		FROM summaries
-		WHERE user_id = $1
-		  AND is_archived = FALSE
-		  AND created_at >= NOW() - INTERVAL '14 days'
-		  AND created_at < NOW() - INTERVAL '7 days'
-	`, userID).Scan(&prevWeeklySummaryCount)
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM flashcard_decks WHERE user_id = $1", userID).Scan(&flashcardCount)
+	})
 
-	h.pool.QueryRow(ctx, `
-		SELECT COUNT(*)
-		FROM quizzes
-		WHERE user_id = $1
-		  AND created_at >= NOW() - INTERVAL '14 days'
-		  AND created_at < NOW() - INTERVAL '7 days'
-	`, userID).Scan(&prevWeeklyQuizCount)
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, `
+			SELECT COUNT(*)
+			FROM summaries
+			WHERE user_id = $1
+			  AND is_archived = FALSE
+			  AND created_at >= NOW() - INTERVAL '7 days'
+		`, userID).Scan(&weeklySummaryCount)
+	})
 
-	h.pool.QueryRow(ctx, `
-		SELECT COUNT(*)
-		FROM flashcard_decks
-		WHERE user_id = $1
-		  AND created_at >= NOW() - INTERVAL '14 days'
-		  AND created_at < NOW() - INTERVAL '7 days'
-	`, userID).Scan(&prevWeeklyFlashcardCount)
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, `
+			SELECT COUNT(*)
+			FROM quizzes
+			WHERE user_id = $1
+			  AND created_at >= NOW() - INTERVAL '7 days'
+		`, userID).Scan(&weeklyQuizCount)
+	})
 
-	h.pool.QueryRow(ctx, `
-		SELECT COALESCE((notifications_json->>'weekly_goal_target')::int, 5)
-		FROM user_settings
-		WHERE user_id = $1
-	`, userID).Scan(&weeklyGoalTarget)
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, `
+			SELECT COUNT(*)
+			FROM flashcard_decks
+			WHERE user_id = $1
+			  AND created_at >= NOW() - INTERVAL '7 days'
+		`, userID).Scan(&weeklyFlashcardCount)
+	})
 
-	h.pool.QueryRow(ctx, `
-		SELECT COALESCE(notifications_json->>'weekly_goal_type', 'summary')
-		FROM user_settings
-		WHERE user_id = $1
-	`, userID).Scan(&weeklyGoalType)
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, `
+			SELECT COUNT(*)
+			FROM summaries
+			WHERE user_id = $1
+			  AND is_archived = FALSE
+			  AND created_at >= NOW() - INTERVAL '14 days'
+			  AND created_at < NOW() - INTERVAL '7 days'
+		`, userID).Scan(&prevWeeklySummaryCount)
+	})
+
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, `
+			SELECT COUNT(*)
+			FROM quizzes
+			WHERE user_id = $1
+			  AND created_at >= NOW() - INTERVAL '14 days'
+			  AND created_at < NOW() - INTERVAL '7 days'
+		`, userID).Scan(&prevWeeklyQuizCount)
+	})
+
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, `
+			SELECT COUNT(*)
+			FROM flashcard_decks
+			WHERE user_id = $1
+			  AND created_at >= NOW() - INTERVAL '14 days'
+			  AND created_at < NOW() - INTERVAL '7 days'
+		`, userID).Scan(&prevWeeklyFlashcardCount)
+	})
+
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, `
+			SELECT COALESCE((notifications_json->>'weekly_goal_target')::int, 5)
+			FROM user_settings
+			WHERE user_id = $1
+		`, userID).Scan(&weeklyGoalTarget)
+	})
+
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, `
+			SELECT COALESCE(notifications_json->>'weekly_goal_type', 'summary')
+			FROM user_settings
+			WHERE user_id = $1
+		`, userID).Scan(&weeklyGoalType)
+	})
 	if weeklyGoalTarget <= 0 {
 		weeklyGoalTarget = 5
 	}
@@ -107,24 +134,39 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var studyHours, weeklyStudyHours, prevWeeklyStudyHours float64
-	h.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
-		FROM study_sessions
-		WHERE user_id = $1
-	`, userID).Scan(&studyHours)
-	h.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
-		FROM study_sessions
-		WHERE user_id = $1
-		  AND started_at >= NOW() - INTERVAL '7 days'
-	`, userID).Scan(&weeklyStudyHours)
-	h.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
-		FROM study_sessions
-		WHERE user_id = $1
-		  AND started_at >= NOW() - INTERVAL '14 days'
-		  AND started_at < NOW() - INTERVAL '7 days'
-	`, userID).Scan(&prevWeeklyStudyHours)
+
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
+			FROM study_sessions
+			WHERE user_id = $1
+		`, userID).Scan(&studyHours)
+	})
+
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
+			FROM study_sessions
+			WHERE user_id = $1
+			  AND started_at >= NOW() - INTERVAL '7 days'
+		`, userID).Scan(&weeklyStudyHours)
+	})
+
+	g.Go(func() error {
+		return h.pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
+			FROM study_sessions
+			WHERE user_id = $1
+			  AND started_at >= NOW() - INTERVAL '14 days'
+			  AND started_at < NOW() - INTERVAL '7 days'
+		`, userID).Scan(&prevWeeklyStudyHours)
+	})
+
+	if err := g.Wait(); err != nil {
+		log.Printf("Stats: query failed for user %s: %v", userID, err)
+		writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve stats", r))
+		return
+	}
 
 	calcTrend := func(current, previous float64) float64 {
 		if previous <= 0 {
