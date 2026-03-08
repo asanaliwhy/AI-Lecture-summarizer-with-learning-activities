@@ -255,9 +255,6 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		}
 	}
 
-	// Count words
-	wordCount := len(strings.Fields(rawText))
-
 	// Generate metadata (second Gemini call)
 	s.PublishUpdate(ctx, job.UserID, models.WSMessage{
 		Type: "status_update",
@@ -267,7 +264,21 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		},
 	})
 
-	metaPrompt := fmt.Sprintf(`Given this summary, return ONLY a valid JSON object with these fields:
+	type metaResult struct {
+		title       string
+		tags        []string
+		description *string
+	}
+
+	metaCh := make(chan metaResult, 1)
+	go func() {
+		result := metaResult{
+			title:       "Untitled Summary",
+			tags:        []string{},
+			description: nil,
+		}
+
+		metaPrompt := fmt.Sprintf(`Given this summary, return ONLY a valid JSON object with these fields:
 {"suggested_title": "title under 60 chars", "tags": ["tag1","tag2","tag3","tag4","tag5"], "one_sentence_description": "description under 120 chars"}
 
 Rules:
@@ -278,35 +289,42 @@ Rules:
 Summary:
 %s`, rawText[:min(len(rawText), 6000)])
 
-	tags := []string{}
-	var description *string
-	title := "Untitled Summary"
+		metaResp, err := s.model.GenerateContent(ctx, genai.Text(metaPrompt))
+		if err == nil {
+			metaJSON := extractText(metaResp)
+			metaJSON = strings.TrimPrefix(metaJSON, "```json")
+			metaJSON = strings.TrimPrefix(metaJSON, "```")
+			metaJSON = strings.TrimSuffix(metaJSON, "```")
+			metaJSON = strings.TrimSpace(metaJSON)
 
-	metaResp, err := s.model.GenerateContent(ctx, genai.Text(metaPrompt))
-	if err == nil {
-		metaJSON := extractText(metaResp)
-		metaJSON = strings.TrimPrefix(metaJSON, "```json")
-		metaJSON = strings.TrimPrefix(metaJSON, "```")
-		metaJSON = strings.TrimSuffix(metaJSON, "```")
-		metaJSON = strings.TrimSpace(metaJSON)
-
-		var meta struct {
-			Title       string   `json:"suggested_title"`
-			Tags        []string `json:"tags"`
-			Description string   `json:"one_sentence_description"`
-		}
-		if json.Unmarshal([]byte(metaJSON), &meta) == nil {
-			if meta.Title != "" {
-				title = meta.Title
+			var meta struct {
+				Title       string   `json:"suggested_title"`
+				Tags        []string `json:"tags"`
+				Description string   `json:"one_sentence_description"`
 			}
-			if len(meta.Tags) > 0 {
-				tags = meta.Tags
-			}
-			if meta.Description != "" {
-				description = &meta.Description
+			if json.Unmarshal([]byte(metaJSON), &meta) == nil {
+				if meta.Title != "" {
+					result.title = meta.Title
+				}
+				if len(meta.Tags) > 0 {
+					result.tags = meta.Tags
+				}
+				if meta.Description != "" {
+					result.description = &meta.Description
+				}
 			}
 		}
-	}
+
+		metaCh <- result
+	}()
+
+	// Count words while metadata call runs concurrently
+	wordCount := len(strings.Fields(rawText))
+
+	metaData := <-metaCh
+	title := metaData.title
+	tags := metaData.tags
+	description := metaData.description
 
 	// Update summary in database
 	err = s.summaryRepo.UpdateContent(
