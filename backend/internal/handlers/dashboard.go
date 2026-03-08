@@ -793,6 +793,11 @@ func (h *JobHandler) CancelJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.jobRepo.UpdateStatus(r.Context(), id, "failed")
+	if job.Status == "completed" || job.Status == "failed" || job.Status == "cancelled" {
+		writeJSON(w, http.StatusConflict, errorResp("CONFLICT", "Job is already in a terminal state and cannot be cancelled", r))
+		return
+	}
+
+	h.jobRepo.UpdateStatus(r.Context(), id, "cancelled")
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Job cancelled"})
 }
