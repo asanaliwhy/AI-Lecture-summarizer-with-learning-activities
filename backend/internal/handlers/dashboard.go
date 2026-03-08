@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -247,6 +246,7 @@ func (h *DashboardHandler) SetWeeklyGoal(w http.ResponseWriter, r *http.Request)
 func (h *DashboardHandler) Recent(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	ctx := r.Context()
+	const recentLimit = 12
 
 	type RecentItem struct {
 		ID        uuid.UUID `json:"id"`
@@ -256,63 +256,77 @@ func (h *DashboardHandler) Recent(w http.ResponseWriter, r *http.Request) {
 		Progress  float64   `json:"progress,omitempty"`
 	}
 
-	var items []RecentItem
+	rows, err := h.pool.Query(ctx, `
+		SELECT type, id, title, created_at, progress
+		FROM (
+			SELECT
+				'summary'::text AS type,
+				s.id,
+				s.title,
+				COALESCE(s.last_accessed_at, s.created_at) AS created_at,
+				0::float8 AS progress
+			FROM summaries s
+			WHERE s.user_id = $1
+			  AND s.is_archived = FALSE
+			  AND s.last_accessed_at IS NOT NULL
 
-	// Recent summaries
-	rows, _ := h.pool.Query(ctx,
-		"SELECT id, title, created_at FROM summaries WHERE user_id = $1 ORDER BY COALESCE(last_accessed_at, created_at) DESC LIMIT 3", userID)
+			UNION ALL
+
+			SELECT
+				'quiz'::text AS type,
+				q.id,
+				q.title,
+				COALESCE(q.last_accessed_at, q.created_at) AS created_at,
+				COALESCE(qa.score_percent::float8, 0) AS progress
+			FROM quizzes q
+			LEFT JOIN LATERAL (
+				SELECT score_percent
+				FROM quiz_attempts
+				WHERE quiz_id = q.id
+				  AND user_id = $1
+				  AND completed_at IS NOT NULL
+				ORDER BY completed_at DESC, started_at DESC
+				LIMIT 1
+			) qa ON true
+			WHERE q.user_id = $1
+			  AND q.last_accessed_at IS NOT NULL
+
+			UNION ALL
+
+			SELECT
+				'flashcard'::text AS type,
+				f.id,
+				f.title,
+				COALESCE(f.last_accessed_at, f.created_at) AS created_at,
+				0::float8 AS progress
+			FROM flashcard_decks f
+			WHERE f.user_id = $1
+			  AND f.last_accessed_at IS NOT NULL
+		) recent
+		ORDER BY created_at DESC
+		LIMIT $2
+	`, userID, recentLimit)
+	if err != nil {
+		log.Printf("Recent: query failed for user %s: %v", userID, err)
+		writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve recent items", r))
+		return
+	}
+	defer rows.Close()
+
+	items := make([]RecentItem, 0, recentLimit)
 	for rows.Next() {
 		var item RecentItem
-		rows.Scan(&item.ID, &item.Title, &item.CreatedAt)
-		item.Type = "summary"
-		item.Progress = 0
+		if err := rows.Scan(&item.Type, &item.ID, &item.Title, &item.CreatedAt, &item.Progress); err != nil {
+			log.Printf("Recent: row scan failed for user %s: %v", userID, err)
+			writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve recent items", r))
+			return
+		}
 		items = append(items, item)
 	}
-	rows.Close()
-
-	// Recent quizzes
-	rows, _ = h.pool.Query(ctx,
-		`SELECT q.id, q.title, q.created_at, COALESCE(qa.score_percent::float8, 0)
-		 FROM quizzes q
-		 LEFT JOIN LATERAL (
-		 	SELECT score_percent
-		 	FROM quiz_attempts
-		 	WHERE quiz_id = q.id
-		 	  AND user_id = $1
-		 	  AND completed_at IS NOT NULL
-		 	ORDER BY completed_at DESC, started_at DESC
-		 	LIMIT 1
-		 ) qa ON true
-		 WHERE q.user_id = $1
-		 ORDER BY q.created_at DESC
-		 LIMIT 3`, userID)
-	for rows.Next() {
-		var item RecentItem
-		rows.Scan(&item.ID, &item.Title, &item.CreatedAt, &item.Progress)
-		item.Type = "quiz"
-		items = append(items, item)
-	}
-	rows.Close()
-
-	// Recent flashcard decks
-	rows, _ = h.pool.Query(ctx,
-		"SELECT id, title, created_at FROM flashcard_decks WHERE user_id = $1 ORDER BY created_at DESC LIMIT 3", userID)
-	for rows.Next() {
-		var item RecentItem
-		rows.Scan(&item.ID, &item.Title, &item.CreatedAt)
-		item.Type = "flashcard"
-		item.Progress = 0
-		items = append(items, item)
-	}
-	rows.Close()
-
-	// Global sort across all item types so the truly latest activity is first
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].CreatedAt.After(items[j].CreatedAt)
-	})
-
-	if len(items) > 12 {
-		items = items[:12]
+	if err := rows.Err(); err != nil {
+		log.Printf("Recent: rows iteration error for user %s: %v", userID, err)
+		writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve recent items", r))
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"recent": items})
