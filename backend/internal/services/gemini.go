@@ -230,7 +230,29 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		c, n, st := parseCornell(rawText)
 		if c == "" || n == "" || st == "" {
 			// Follow-up call to restructure
-			restructurePrompt := "Restructure this text into Cornell Method format with clear [CUES], [NOTES], and [SUMMARY] sections. Return plain text only. Do NOT use markdown tables, pipes (|), or HTML:\n\n" + rawText
+			restructurePrompt := "Restructure the following text into Cornell Method format.\n\n" +
+				"Required section markers (exact, uppercase, in square brackets):\n" +
+				"[CUES]\n[NOTES]\n[SUMMARY]\n\n" +
+				"Output rules:\n" +
+				"- Plain text only. Do NOT use markdown tables, pipes (|), or HTML tags.\n" +
+				"- Keep CUES as short prompt lines and NOTES as readable bullet paragraphs.\n\n" +
+				"Cue quality rules (CRITICAL):\n" +
+				"- Each cue MUST be a specific retrieval question with one unambiguous answer, not a topic label.\n" +
+				"- WRONG: \"Cerebrum's role?\" — too broad, no single answer.\n" +
+				"- RIGHT: \"What percentage of brain mass does the cerebrum occupy?\"\n" +
+				"- People cues must target one action, date, policy, or decision — not broad traits.\n" +
+				"- WRONG: \"What characterized Khrushchev's leadership?\"\n" +
+				"- RIGHT: \"What provocative structure did Khrushchev build in 1961 to stop East German defections?\"\n" +
+				"- Each cue must have exactly one specific answer. Split multi-aspect topics into separate cues.\n\n" +
+				"Notes alignment rules (CRITICAL):\n" +
+				"- Each NOTES bullet must directly answer its matching CUE.\n" +
+				"- The first sentence of each note must answer the cue immediately — do not broaden scope.\n" +
+				"- WRONG: Cue asks how the Cold War extended to Asia but note gives generic domino-theory policy.\n" +
+				"- RIGHT: Cue asks that and note states China's 1949 revolution plus Korean War (1950-1953) brought Cold War conflict to Asia.\n\n" +
+				"Summary rules:\n" +
+				"- The [SUMMARY] section must synthesize — do not paraphrase the Notes section.\n" +
+				"- Write the Summary as if explaining to someone who has not read the Notes.\n\n" +
+				"Text to restructure:\n" + rawText
 			resp2, err := summaryModel.GenerateContent(ctx, genai.Text(restructurePrompt))
 			if err == nil {
 				rawText2 := extractText(resp2)
