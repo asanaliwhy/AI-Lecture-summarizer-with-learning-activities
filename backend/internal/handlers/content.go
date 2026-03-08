@@ -178,6 +178,10 @@ func (h *ContentHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnsupportedMediaType, errorResp("UNSUPPORTED_FORMAT", "File type not supported", r))
 		return
 	}
+	if !validateMagicBytes(buf, mimeType, header.Filename) {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "File content does not match declared type", r))
+		return
+	}
 
 	// Reset file reader
 	file.Seek(0, io.SeekStart)
@@ -306,6 +310,54 @@ func isAllowedMimeType(mime, filename string) bool {
 	return strings.HasSuffix(lower, ".pdf") || strings.HasSuffix(lower, ".docx") ||
 		strings.HasSuffix(lower, ".txt") || strings.HasSuffix(lower, ".mp4") ||
 		strings.HasSuffix(lower, ".mp3") || strings.HasSuffix(lower, ".wav")
+}
+
+func validateMagicBytes(data []byte, mimeType, filename string) bool {
+	lowerName := strings.ToLower(filename)
+
+	if strings.HasSuffix(lowerName, ".docx") || mimeType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" {
+		if len(data) < 4 {
+			return false
+		}
+		return data[0] == 0x50 && data[1] == 0x4B && data[2] == 0x03 && data[3] == 0x04
+	}
+
+	if strings.HasSuffix(lowerName, ".pdf") || mimeType == "application/pdf" {
+		if len(data) < 4 {
+			return false
+		}
+		return data[0] == 0x25 && data[1] == 0x50 && data[2] == 0x44 && data[3] == 0x46
+	}
+
+	if strings.HasSuffix(lowerName, ".mp3") || mimeType == "audio/mpeg" {
+		if len(data) < 3 {
+			return false
+		}
+		if data[0] == 'I' && data[1] == 'D' && data[2] == '3' {
+			return true
+		}
+		if len(data) >= 2 && data[0] == 0xFF && (data[1]&0xE0) == 0xE0 {
+			return true
+		}
+		return false
+	}
+
+	if strings.HasSuffix(lowerName, ".mp4") || mimeType == "video/mp4" {
+		if len(data) < 8 {
+			return false
+		}
+		return string(data[4:8]) == "ftyp"
+	}
+
+	if strings.HasSuffix(lowerName, ".wav") || mimeType == "audio/wav" {
+		if len(data) < 12 {
+			return false
+		}
+		return string(data[0:4]) == "RIFF" && string(data[8:12]) == "WAVE"
+	}
+
+	// Types without reliable magic bytes (e.g. txt) are accepted.
+	return true
 }
 
 func getExtension(filename string) string {
