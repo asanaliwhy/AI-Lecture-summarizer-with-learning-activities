@@ -2033,30 +2033,11 @@ func normalizeOptionalText(value *string) *string {
 }
 
 func buildMnemonicFallback(front string) *string {
-	words := strings.Fields(strings.TrimSpace(front))
-	if len(words) == 0 {
-		return nil
-	}
-
-	if len(words) > 4 {
-		words = words[:4]
-	}
-
-	initials := make([]rune, 0, len(words))
-	for _, w := range words {
-		r := []rune(strings.TrimSpace(w))
-		if len(r) == 0 {
-			continue
-		}
-		initials = append(initials, unicode.ToUpper(r[0]))
-	}
-
-	if len(initials) == 0 {
-		return nil
-	}
-
-	mnemonic := fmt.Sprintf("Memory cue: %s → %s", strings.Join(words, " "), string(initials))
-	return &mnemonic
+	// Acronym-based mnemonics are explicitly forbidden by the flashcard prompt rules.
+	// Returning nil is correct — no mnemonic is better than a fake one.
+	// If Gemini returned null for a mnemonic, respect that and omit it.
+	_ = front // parameter retained for signature compatibility
+	return nil
 }
 
 func buildExampleFallback(front, back string) *string {
