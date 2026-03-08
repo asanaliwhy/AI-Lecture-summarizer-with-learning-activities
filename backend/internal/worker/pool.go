@@ -591,7 +591,7 @@ func (p *Pool) handleFailure(ctx context.Context, job *models.Job, err error) {
 		jobBytes, _ := json.Marshal(job)
 		backoff := time.Duration(1<<uint(job.RetryCount)) * time.Second
 		time.AfterFunc(backoff, func() {
-			p.redis.LPush(context.Background(), jobQueueName(job.Type), string(jobBytes))
+			p.redis.RPush(context.Background(), jobQueueName(job.Type), string(jobBytes))
 		})
 	} else {
 		// Max retries reached
