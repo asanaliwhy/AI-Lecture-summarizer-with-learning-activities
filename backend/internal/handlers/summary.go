@@ -554,6 +554,15 @@ func parseOverview(content string) string {
 	if len(sections) == 0 {
 		return strings.TrimSpace(content)
 	}
+
+	// First pass: find a section explicitly named as an overview
+	for _, sec := range sections {
+		if isOverviewHeading(sec["heading"]) {
+			return sec["body"]
+		}
+	}
+
+	// Fallback: return the first section regardless of heading
 	return sections[0]["body"]
 }
 
@@ -561,16 +570,20 @@ func parseStructures(content string) []map[string]string {
 	sections := parseSections(content)
 	structures := make([]map[string]string, 0)
 
-	for i, sec := range sections {
-		if i == 0 {
-			continue
-		}
+	for _, sec := range sections {
+		heading := sec["heading"]
 		body := sec["body"]
 		if body == "" {
 			continue
 		}
+
+		// Skip overview and facts sections — they belong to other fields
+		if isOverviewHeading(heading) || isFactsHeading(heading) {
+			continue
+		}
+
 		structures = append(structures, map[string]string{
-			"name":       sec["heading"],
+			"name":       heading,
 			"definition": body,
 			"function":   body,
 			"examples":   "Not specified",
@@ -612,7 +625,7 @@ func parseFacts(content string) []string {
 	if len(out) == 0 {
 		sections := parseSections(content)
 		for _, sec := range sections {
-			if strings.Contains(strings.ToLower(sec["heading"]), "fact") {
+			if isFactsHeading(sec["heading"]) {
 				for _, line := range strings.Split(sec["body"], "\n") {
 					t := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(line, "- "), "• "), "* "))
 					if t != "" {
@@ -631,6 +644,25 @@ func parseFacts(content string) []string {
 	}
 
 	return out
+}
+
+func isOverviewHeading(heading string) bool {
+	lower := strings.ToLower(strings.TrimSpace(heading))
+	return lower == "overview" ||
+		strings.HasPrefix(lower, "overview") ||
+		lower == "introduction" ||
+		lower == "summary" ||
+		lower == "background"
+}
+
+func isFactsHeading(heading string) bool {
+	lower := strings.ToLower(strings.TrimSpace(heading))
+	return strings.Contains(lower, "fact") ||
+		strings.Contains(lower, "interesting") ||
+		strings.Contains(lower, "notable") ||
+		strings.Contains(lower, "fun fact") ||
+		strings.Contains(lower, "did you know") ||
+		strings.Contains(lower, "additional")
 }
 
 func parseSections(content string) []map[string]string {
