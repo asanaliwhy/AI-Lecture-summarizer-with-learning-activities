@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
 	"lectura-backend/internal/middleware"
@@ -28,7 +29,7 @@ func (h *WSTicketHandler) IssueTicket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := middleware.GetUserID(r.Context())
-	if userID.String() == "" {
+	if userID == uuid.Nil {
 		writeJSON(w, http.StatusUnauthorized, errorResp("UNAUTHORIZED", "Unauthorized", r))
 		return
 	}
