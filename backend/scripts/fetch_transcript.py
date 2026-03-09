@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
 """Fetch YouTube transcript and print as plain text to stdout.
 
-Usage: python fetch_transcript.py <video_id>
+Usage: python3 fetch_transcript.py <video_id>
 Exit 0 + transcript text on stdout = success
 Exit 1 + error message on stderr   = failure
 """
@@ -14,7 +15,7 @@ sys.stderr.reconfigure(encoding="utf-8")
 
 def main():
     if len(sys.argv) < 2:
-        print("usage: fetch_transcript.py <video_id>", file=sys.stderr)
+        print("usage: python3 fetch_transcript.py <video_id>", file=sys.stderr)
         sys.exit(1)
 
     video_id = sys.argv[1]
