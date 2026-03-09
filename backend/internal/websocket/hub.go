@@ -8,26 +8,108 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 )
 
+var (
+	writeWait      = 10 * time.Second
+	pongWait       = 60 * time.Second
+	maxMessageSize int64 = 512
+	sendBufferSize       = 256
+)
+
+func pingPeriod() time.Duration {
+	return (pongWait * 9) / 10
+}
+
+type Client struct {
+	hub    *Hub
+	conn   *websocket.Conn
+	send   chan []byte
+	userID uuid.UUID
+}
+
 type Hub struct {
 	mu          sync.RWMutex
-	connections map[uuid.UUID][]*websocket.Conn
+	connections map[uuid.UUID]map[*Client]bool
 	redisClient *redis.Client
 	cancelFuncs map[uuid.UUID]context.CancelFunc
 	frontendURL string
+	register    chan *Client
+	unregister  chan *Client
 }
 
 func NewHub(redisClient *redis.Client, frontendURL string) *Hub {
-	return &Hub{
-		connections: make(map[uuid.UUID][]*websocket.Conn),
+	h := &Hub{
+		connections: make(map[uuid.UUID]map[*Client]bool),
 		redisClient: redisClient,
 		cancelFuncs: make(map[uuid.UUID]context.CancelFunc),
 		frontendURL: frontendURL,
+		register:    make(chan *Client, 1024),
+		unregister:  make(chan *Client, 1024),
+	}
+	go h.run()
+	return h
+}
+
+func (h *Hub) run() {
+	for {
+		select {
+		case client := <-h.register:
+			h.mu.Lock()
+			if h.connections[client.userID] == nil {
+				h.connections[client.userID] = make(map[*Client]bool)
+			}
+			h.connections[client.userID][client] = true
+
+			if len(h.connections[client.userID]) == 1 && h.redisClient != nil {
+				ctx, cancel := context.WithCancel(context.Background())
+				h.cancelFuncs[client.userID] = cancel
+				go h.subscribeToPubSub(ctx, client.userID)
+			}
+
+			total := len(h.connections[client.userID])
+			h.mu.Unlock()
+			log.Printf("WebSocket connected: user %s (total: %d)", client.userID, total)
+
+		case client := <-h.unregister:
+			h.mu.Lock()
+			clients, ok := h.connections[client.userID]
+			if ok {
+				if _, exists := clients[client]; exists {
+					delete(clients, client)
+					close(client.send)
+				}
+
+				if len(clients) == 0 {
+					delete(h.connections, client.userID)
+					if cancel, ok := h.cancelFuncs[client.userID]; ok {
+						cancel()
+						delete(h.cancelFuncs, client.userID)
+					}
+				}
+			}
+			h.mu.Unlock()
+
+			if client.conn != nil {
+				_ = client.conn.Close()
+			}
+			log.Printf("WebSocket disconnected: user %s", client.userID)
+		}
+	}
+}
+
+func (h *Hub) enqueueUnregister(client *Client) {
+	select {
+	case h.unregister <- client:
+	default:
+		go func() {
+			h.unregister <- client
+		}()
 	}
 }
 
@@ -77,60 +159,17 @@ func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.registerConnection(userID, conn)
-
-	// Keep connection alive and handle disconnect
-	go func() {
-		defer h.unregisterConnection(userID, conn)
-		for {
-			_, _, err := conn.ReadMessage()
-			if err != nil {
-				break
-			}
-		}
-	}()
-}
-
-func (h *Hub) registerConnection(userID uuid.UUID, conn *websocket.Conn) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	h.connections[userID] = append(h.connections[userID], conn)
-
-	// Start pub/sub subscription if this is the first connection for this user
-	if len(h.connections[userID]) == 1 {
-		ctx, cancel := context.WithCancel(context.Background())
-		h.cancelFuncs[userID] = cancel
-		go h.subscribeToPubSub(ctx, userID)
+	client := &Client{
+		hub:    h,
+		conn:   conn,
+		send:   make(chan []byte, sendBufferSize),
+		userID: userID,
 	}
 
-	log.Printf("WebSocket connected: user %s (total: %d)", userID, len(h.connections[userID]))
-}
+	h.register <- client
 
-func (h *Hub) unregisterConnection(userID uuid.UUID, conn *websocket.Conn) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	conn.Close()
-
-	conns := h.connections[userID]
-	for i, c := range conns {
-		if c == conn {
-			h.connections[userID] = append(conns[:i], conns[i+1:]...)
-			break
-		}
-	}
-
-	// If no more connections, cancel pub/sub
-	if len(h.connections[userID]) == 0 {
-		delete(h.connections, userID)
-		if cancel, ok := h.cancelFuncs[userID]; ok {
-			cancel()
-			delete(h.cancelFuncs, userID)
-		}
-	}
-
-	log.Printf("WebSocket disconnected: user %s", userID)
+	go client.writePump()
+	go client.readPump()
 }
 
 func (h *Hub) subscribeToPubSub(ctx context.Context, userID uuid.UUID) {
@@ -154,10 +193,19 @@ func (h *Hub) subscribeToPubSub(ctx context.Context, userID uuid.UUID) {
 
 func (h *Hub) broadcast(userID uuid.UUID, data []byte) {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
+	clientsByUser := h.connections[userID]
+	clients := make([]*Client, 0, len(clientsByUser))
+	for client := range clientsByUser {
+		clients = append(clients, client)
+	}
+	h.mu.RUnlock()
 
-	for _, conn := range h.connections[userID] {
-		conn.WriteMessage(websocket.TextMessage, data)
+	for _, client := range clients {
+		select {
+		case client.send <- data:
+		default:
+			h.enqueueUnregister(client)
+		}
 	}
 }
 
@@ -168,4 +216,51 @@ func (h *Hub) SendToUser(userID uuid.UUID, msg interface{}) {
 		return
 	}
 	h.broadcast(userID, data)
+}
+
+func (c *Client) writePump() {
+	ticker := time.NewTicker(pingPeriod())
+	defer func() {
+		ticker.Stop()
+		c.hub.enqueueUnregister(c)
+	}()
+
+	for {
+		select {
+		case msg, ok := <-c.send:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				return
+			}
+
+		case <-ticker.C:
+			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func (c *Client) readPump() {
+	defer func() {
+		c.hub.enqueueUnregister(c)
+	}()
+
+	c.conn.SetReadLimit(maxMessageSize)
+	_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetPongHandler(func(string) error {
+		return c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	})
+
+	for {
+		if _, _, err := c.conn.ReadMessage(); err != nil {
+			break
+		}
+	}
 }
