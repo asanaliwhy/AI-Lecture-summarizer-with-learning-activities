@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -44,6 +45,9 @@ type Config struct {
 	// Frontend
 	FrontendURL string
 
+	// Proxy trust (for forwarded headers)
+	TrustedProxyCIDRs []string
+
 	// Google OAuth
 	GoogleClientID     string
 	GoogleClientSecret string
@@ -73,6 +77,7 @@ func Load() *Config {
 		SMTPPass:             getEnvOrDefault("SMTP_PASS", ""),
 		SMTPFrom:             getEnvOrDefault("SMTP_FROM", "noreply@lectura.app"),
 		FrontendURL:          getEnvOrDefault("FRONTEND_URL", "http://localhost:5173"),
+		TrustedProxyCIDRs:    getEnvAsCSV("TRUSTED_PROXY_CIDRS"),
 		GoogleClientID:       getEnvOrDefault("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:   getEnvOrDefault("GOOGLE_CLIENT_SECRET", ""),
 		GoogleRedirectURI:    getEnvOrDefault("GOOGLE_REDIRECT_URI", ""),
@@ -107,4 +112,26 @@ func getEnvAsIntOrDefault(key string, defaultVal int) int {
 		return defaultVal
 	}
 	return n
+}
+
+func getEnvAsCSV(key string) []string {
+	val := strings.TrimSpace(os.Getenv(key))
+	if val == "" {
+		return nil
+	}
+
+	parts := strings.Split(val, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+
+	return out
 }

@@ -32,6 +32,7 @@ func buildTestRouter() http.Handler {
 		(*handlers.ChatHandler)(nil),
 		wsHub,
 		"https://app.example.com",
+		nil,
 	)
 }
 

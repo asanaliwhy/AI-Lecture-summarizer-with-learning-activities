@@ -28,6 +28,7 @@ func New(
 	chatHandler *handlers.ChatHandler,
 	wsHub *websocket.Hub,
 	frontendURL string,
+	trustedProxyCIDRs []string,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -40,7 +41,7 @@ func New(
 	r.Use(middleware.CORS(frontendURL))
 
 	// Auth rate limiter (10 req/min per IP)
-	authLimiter := middleware.NewRateLimiter(10, time.Minute)
+	authLimiter := middleware.NewRateLimiterWithTrustedProxies(10, time.Minute, trustedProxyCIDRs)
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {

@@ -149,6 +149,7 @@ func main() {
 		chatHandler,
 		wsHub,
 		cfg.FrontendURL,
+		cfg.TrustedProxyCIDRs,
 	)
 
 	server := &http.Server{

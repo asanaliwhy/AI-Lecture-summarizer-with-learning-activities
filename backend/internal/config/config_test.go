@@ -80,3 +80,37 @@ func TestMustGetEnv_ReturnsValue(t *testing.T) {
 		t.Errorf("Expected 'value123', got %q", result)
 	}
 }
+
+func TestGetEnvAsCSV(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		envValue string
+		expected []string
+	}{
+		{name: "empty returns nil", key: "TEST_CSV_1", envValue: "", expected: nil},
+		{name: "single value", key: "TEST_CSV_2", envValue: "10.0.0.0/8", expected: []string{"10.0.0.0/8"}},
+		{name: "multiple with spaces", key: "TEST_CSV_3", envValue: "10.0.0.0/8, 172.16.0.0/12 ,192.168.0.0/16", expected: []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.envValue == "" {
+				os.Unsetenv(tc.key)
+			} else {
+				os.Setenv(tc.key, tc.envValue)
+				defer os.Unsetenv(tc.key)
+			}
+
+			result := getEnvAsCSV(tc.key)
+			if len(result) != len(tc.expected) {
+				t.Fatalf("expected %d values, got %d", len(tc.expected), len(result))
+			}
+			for i := range result {
+				if result[i] != tc.expected[i] {
+					t.Fatalf("expected %q at index %d, got %q", tc.expected[i], i, result[i])
+				}
+			}
+		})
+	}
+}
