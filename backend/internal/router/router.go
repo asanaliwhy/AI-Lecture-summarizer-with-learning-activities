@@ -96,7 +96,6 @@ func New(
 			r.Post("/generate", summaryHandler.Generate)
 			r.Get("/", summaryHandler.List)
 			r.Get("/{id}", summaryHandler.Get)
-			r.Get("/{id}/export", summaryHandler.ExportPDF)
 			r.Put("/{id}", summaryHandler.Update)
 			r.Delete("/{id}", summaryHandler.Delete)
 			r.Post("/{id}/regenerate", summaryHandler.Regenerate)

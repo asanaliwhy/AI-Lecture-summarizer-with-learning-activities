@@ -1,0 +1,26 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SummaryPage production behaviors > snapshot: jsPDF text calls match expected structure 1`] = `
+[
+  [
+    "AI Basics",
+    48,
+    48,
+  ],
+  [
+    "Generated: 01.01.2025",
+    48,
+    70,
+  ],
+  [
+    "Overview:",
+    48,
+    94,
+  ],
+  [
+    "Neural networks learn patterns from data.",
+    48,
+    114,
+  ],
+]
+`;

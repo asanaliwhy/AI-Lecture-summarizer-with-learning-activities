@@ -37,6 +37,7 @@ const mocked = vi.hoisted(() => {
             update: vi.fn(),
             regenerate: vi.fn(),
             delete: vi.fn(),
+            exportPdf: vi.fn(),
         },
     }
 })
@@ -184,6 +185,7 @@ describe('SummaryPage production behaviors', () => {
         mocked.summariesApi.update.mockResolvedValue({})
         mocked.summariesApi.regenerate.mockResolvedValue({ job_id: 'job-123' })
         mocked.summariesApi.delete.mockResolvedValue({})
+        mocked.summariesApi.exportPdf.mockRejectedValue(new Error('backend export deprecated'))
 
         container = document.createElement('div')
         document.body.appendChild(container)
@@ -344,6 +346,35 @@ describe('SummaryPage production behaviors', () => {
 
         expect(mocked.pdf.save).toHaveBeenCalledWith('AI Basics.pdf')
         expect(mocked.toast.success).toHaveBeenCalledWith('PDF exported')
+    })
+
+    it('exports summary title as first text element and uses expected title/body font sizes', async () => {
+        await act(async () => {
+            root.render(<SummaryPage />)
+        })
+        await flush()
+
+        clickButton('Export')
+        await flush()
+
+        const firstTextCall = mocked.pdf.text.mock.calls[0]
+        expect(firstTextCall?.[0]).toBe('AI Basics')
+
+        const fontSizeCalls = mocked.pdf.setFontSize.mock.calls.map((call) => call[0])
+        expect(fontSizeCalls).toContain(18)
+        expect(fontSizeCalls).toContain(11)
+    })
+
+    it('snapshot: jsPDF text calls match expected structure', async () => {
+        await act(async () => {
+            root.render(<SummaryPage />)
+        })
+        await flush()
+
+        clickButton('Export')
+        await flush()
+
+        expect(mocked.pdf.text.mock.calls).toMatchSnapshot()
     })
 
     it('renders non-404 retry state for server failures', async () => {

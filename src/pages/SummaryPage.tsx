@@ -1192,21 +1192,9 @@ export function SummaryPage() {
   const handleExportPdf = async () => {
     if (!summary) return
 
-    try {
-      const { blob, filename } = await api.summaries.exportPdf(summary.id)
-      const objectUrl = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = objectUrl
-      anchor.download = filename || `${sanitizeFileName(title || summary?.title || 'summary')}.pdf`
-      document.body.appendChild(anchor)
-      anchor.click()
-      anchor.remove()
-      URL.revokeObjectURL(objectUrl)
-      toast.success('PDF exported')
-      return
-    } catch {
-      // Fallback to legacy client-side export if backend export fails
-    }
+    // PDF generation is handled client-side via jsPDF.
+    // The backend pdf_export.py path is deprecated and not part of active routes.
+    // All PDF formatting changes should be made in this function.
 
     try {
       const { jsPDF } = await import('jspdf')

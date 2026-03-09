@@ -7,9 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -368,115 +365,8 @@ func (h *SummaryHandler) Regenerate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SummaryHandler) ExportPDF(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid summary ID", r))
-		return
-	}
-
-	summary, err := h.summaryRepo.GetByID(r.Context(), id)
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Summary not found", r))
-		return
-	}
-
-	userID := middleware.GetUserID(r.Context())
-	if summary.UserID != userID {
-		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
-		return
-	}
-
-	pdfBytes, err := generatePDF(*summary)
-	if err != nil {
-		log.Printf("pdf export failed for summary %s: %v", summary.ID, err)
-		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to export PDF", r))
-		return
-	}
-
-	fileName := sanitizePDFFileName(summary.Title)
-	if fileName == "" {
-		fileName = "summary"
-	}
-
-	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.pdf\"", fileName))
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(pdfBytes)
-}
-
-func generatePDF(summary models.Summary) ([]byte, error) {
-	payload, err := buildPDFPayload(summary)
-	if err != nil {
-		return nil, err
-	}
-
-	jsonBytes, _ := json.Marshal(payload)
-	tmpOut := filepath.Join(os.TempDir(), fmt.Sprintf("lectura_%s.pdf", summary.ID))
-
-	scriptPath, err := resolvePDFScriptPath()
-	if err != nil {
-		return nil, err
-	}
-
-	pythonBin := "python3"
-	if _, lookErr := exec.LookPath(pythonBin); lookErr != nil {
-		pythonBin = "python"
-		if _, lookErr2 := exec.LookPath(pythonBin); lookErr2 != nil {
-			return nil, fmt.Errorf("python interpreter not found (tried python3 and python)")
-		}
-	}
-
-	cmd := exec.Command(pythonBin, scriptPath, summary.Format, string(jsonBytes), tmpOut)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("pdf generation failed: %s", strings.TrimSpace(string(out)))
-	}
-
-	trimmed := strings.TrimSpace(string(out))
-	if !strings.HasPrefix(trimmed, "OK:") {
-		return nil, fmt.Errorf("pdf script error: %s", trimmed)
-	}
-
-	defer os.Remove(tmpOut)
-	return os.ReadFile(tmpOut)
-}
-
-func resolvePDFScriptPath() (string, error) {
-	candidates := []string{
-		filepath.Join("scripts", "pdf_export.py"),
-		filepath.Join("..", "scripts", "pdf_export.py"),
-		filepath.Join("backend", "scripts", "pdf_export.py"),
-		filepath.Join("..", "backend", "scripts", "pdf_export.py"),
-	}
-
-	if exePath, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exePath)
-		candidates = append(candidates,
-			filepath.Join(exeDir, "scripts", "pdf_export.py"),
-			filepath.Join(exeDir, "..", "scripts", "pdf_export.py"),
-		)
-	}
-
-	checked := make([]string, 0, len(candidates))
-	for _, p := range candidates {
-		abs, absErr := filepath.Abs(p)
-		if absErr == nil {
-			checked = append(checked, abs)
-		} else {
-			checked = append(checked, p)
-		}
-
-		if _, err := os.Stat(p); err == nil {
-			if absErr != nil {
-				return p, nil
-			}
-			return abs, nil
-		}
-	}
-
-	return "", fmt.Errorf("pdf_export.py not found; checked paths: %s", strings.Join(checked, ", "))
-}
+// PDF export is handled client-side via jsPDF in src/pages/SummaryPage.tsx.
+// The previous backend pdf_export.py pipeline was removed to avoid dual-path drift.
 
 func buildPDFPayload(summary models.Summary) (map[string]interface{}, error) {
 	source := strings.TrimSpace(summary.Source)
