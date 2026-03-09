@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const login = async (email: string, password: string) => {
         const data = await api.auth.login({ email, password })
-        setTokens(data.access_token, data.refresh_token)
+        setTokens(data.access_token)
         // Fetch user profile after login since login endpoint only returns tokens
         await refreshUser()
     }
@@ -75,13 +75,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const googleLogin = async (idToken: string) => {
         const data = await api.auth.googleLogin(idToken)
-        setTokens(data.access_token, data.refresh_token)
+        setTokens(data.access_token)
         await refreshUser()
     }
 
     const googleCodeLogin = async (code: string) => {
         const data = await api.auth.googleCodeLogin(code)
-        setTokens(data.access_token, data.refresh_token)
+        setTokens(data.access_token)
         await refreshUser()
     }
 

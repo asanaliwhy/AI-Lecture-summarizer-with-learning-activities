@@ -46,13 +46,13 @@ function getAccessToken(): string | null {
     return localStorage.getItem('access_token')
 }
 
-function getRefreshToken(): string | null {
-    return localStorage.getItem('refresh_token')
-}
-
-export function setTokens(access: string, refresh: string) {
+// Security tradeoff: access token remains in localStorage for bearer header usage.
+// It is short-lived (15 minutes). Refresh token is no longer accessible to JS
+// and is stored in an HttpOnly cookie scoped to /api/v1/auth/refresh.
+export function setTokens(access: string) {
     localStorage.setItem('access_token', access)
-    localStorage.setItem('refresh_token', refresh)
+    // Cleanup legacy storage from pre-cookie refresh-token implementation.
+    localStorage.removeItem('refresh_token')
 }
 
 export function clearTokens() {
@@ -82,14 +82,15 @@ async function apiFetch<T>(
     const res = await fetch(`${API_BASE}${path}`, {
         ...options,
         headers,
+        credentials: 'include',
     })
 
     // Try refresh on 401
-    if (res.status === 401 && getRefreshToken()) {
+    if (res.status === 401) {
         const refreshed = await tryRefresh()
         if (refreshed) {
             headers['Authorization'] = `Bearer ${getAccessToken()}`
-            const retry = await fetch(`${API_BASE}${path}`, { ...options, headers })
+            const retry = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' })
             if (!retry.ok) {
                 const err = await retry.json().catch(() => ({}))
                 throw new ApiError(retry.status, err?.error?.message || 'Request failed', err?.error?.fields)
@@ -114,20 +115,18 @@ async function apiFetch<T>(
 }
 
 async function tryRefresh(): Promise<boolean> {
-    const refreshToken = getRefreshToken()
-    if (!refreshToken) return false
-
     try {
         const res = await fetch(`${API_BASE}/auth/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: refreshToken }),
+            credentials: 'include',
+            body: JSON.stringify({}),
         })
 
         if (!res.ok) return false
 
         const data = await res.json()
-        setTokens(data.access_token, data.refresh_token)
+        setTokens(data.access_token)
         return true
     } catch {
         return false
@@ -382,7 +381,7 @@ export const api = {
             }),
 
         login: (data: { email: string; password: string }) =>
-            apiFetch<{ access_token: string; refresh_token: string }>('/auth/login', {
+            apiFetch<{ access_token: string; expires_in: number }>('/auth/login', {
                 method: 'POST',
                 body: JSON.stringify(data),
             }),
@@ -390,11 +389,11 @@ export const api = {
         logout: () =>
             apiFetch('/auth/logout', {
                 method: 'POST',
-                body: JSON.stringify({ refresh_token: getRefreshToken() }),
+                body: JSON.stringify({}),
             }),
 
         verifyEmail: (token: string) =>
-            apiFetch<{ access_token: string; refresh_token: string }>(`/auth/verify-email?token=${token}`),
+            apiFetch<{ access_token: string; expires_in: number }>(`/auth/verify-email?token=${token}`),
 
         resendVerification: (email: string) =>
             apiFetch('/auth/resend-verification', {
@@ -403,13 +402,13 @@ export const api = {
             }),
 
         googleLogin: (idToken: string) =>
-            apiFetch<{ access_token: string; refresh_token: string }>('/auth/google', {
+            apiFetch<{ access_token: string; expires_in: number }>('/auth/google', {
                 method: 'POST',
                 body: JSON.stringify({ id_token: idToken }),
             }),
 
         googleCodeLogin: (code: string) =>
-            apiFetch<{ access_token: string; refresh_token: string }>('/auth/google/code', {
+            apiFetch<{ access_token: string; expires_in: number }>('/auth/google/code', {
                 method: 'POST',
                 body: JSON.stringify({ code }),
             }),

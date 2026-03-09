@@ -1,20 +1,43 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
+	"strings"
+	"time"
 
 	"lectura-backend/internal/models"
 	"lectura-backend/internal/services"
 )
 
-type AuthHandler struct {
-	authService *services.AuthService
-	frontendURL string
+const (
+	refreshTokenCookieName = "refresh_token"
+	refreshTokenCookiePath = "/api/v1/auth/refresh"
+)
+
+type authService interface {
+	Register(ctx context.Context, req models.RegisterRequest) (*models.User, string, error)
+	VerifyEmail(ctx context.Context, token string) (*models.AuthTokens, error)
+	Login(ctx context.Context, req models.LoginRequest) (*models.AuthTokens, error)
+	RefreshToken(ctx context.Context, refreshToken string) (*models.AuthTokens, error)
+	Logout(ctx context.Context, refreshToken string) error
+	GoogleLogin(ctx context.Context, idToken string) (*models.AuthTokens, error)
+	GoogleCodeLogin(ctx context.Context, code string) (*models.AuthTokens, error)
+	GoogleOAuthConfig() (clientID string, redirectURI string, configured bool)
+	ResendVerification(ctx context.Context, email string) error
 }
 
-func NewAuthHandler(authService *services.AuthService, frontendURL string) *AuthHandler {
-	return &AuthHandler{authService: authService, frontendURL: frontendURL}
+type AuthHandler struct {
+	authService  authService
+	frontendURL  string
+	isProduction bool
+}
+
+func NewAuthHandler(authService *services.AuthService, frontendURL string, isProduction bool) *AuthHandler {
+	return &AuthHandler{authService: authService, frontendURL: frontendURL, isProduction: isProduction}
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +72,8 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, tokens)
+	setRefreshTokenCookie(w, tokens.RefreshToken, h.isProduction)
+	writeAuthResponse(w, http.StatusOK, tokens)
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -65,33 +89,42 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, tokens)
+	setRefreshTokenCookie(w, tokens.RefreshToken, h.isProduction)
+	writeAuthResponse(w, http.StatusOK, tokens)
 }
 
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var req models.RefreshRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	refreshToken, err := readRefreshTokenFromRequest(r)
+	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
 		return
 	}
+	if refreshToken == "" {
+		writeJSON(w, http.StatusUnauthorized, errorResp("UNAUTHORIZED", "Refresh token missing or expired. Please log in again.", r))
+		return
+	}
 
-	tokens, err := h.authService.RefreshToken(r.Context(), req.RefreshToken)
+	tokens, err := h.authService.RefreshToken(r.Context(), refreshToken)
 	if err != nil {
 		handleServiceError(w, r, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, tokens)
+	setRefreshTokenCookie(w, tokens.RefreshToken, h.isProduction)
+	writeAuthResponse(w, http.StatusOK, tokens)
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	var req models.RefreshRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	refreshToken, err := readRefreshTokenFromRequest(r)
+	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
 		return
 	}
 
-	h.authService.Logout(r.Context(), req.RefreshToken)
+	if refreshToken != "" {
+		h.authService.Logout(r.Context(), refreshToken)
+	}
+	clearRefreshTokenCookie(w, h.isProduction)
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
 
@@ -113,7 +146,8 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, tokens)
+	setRefreshTokenCookie(w, tokens.RefreshToken, h.isProduction)
+	writeAuthResponse(w, http.StatusOK, tokens)
 }
 
 func (h *AuthHandler) GoogleCodeLogin(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +168,8 @@ func (h *AuthHandler) GoogleCodeLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, tokens)
+	setRefreshTokenCookie(w, tokens.RefreshToken, h.isProduction)
+	writeAuthResponse(w, http.StatusOK, tokens)
 }
 
 func (h *AuthHandler) GoogleConfig(w http.ResponseWriter, r *http.Request) {
@@ -211,4 +246,58 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error) {
 	default:
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "An unexpected error occurred", r))
 	}
+}
+
+func writeAuthResponse(w http.ResponseWriter, status int, tokens *models.AuthTokens) {
+	writeJSON(w, status, map[string]interface{}{
+		"access_token": tokens.AccessToken,
+		"expires_in":   tokens.ExpiresIn,
+	})
+}
+
+func setRefreshTokenCookie(w http.ResponseWriter, refreshToken string, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshTokenCookieName,
+		Value:    refreshToken,
+		Path:     refreshTokenCookiePath,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int((7 * 24 * time.Hour).Seconds()),
+	})
+}
+
+func clearRefreshTokenCookie(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshTokenCookieName,
+		Value:    "",
+		Path:     refreshTokenCookiePath,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	})
+}
+
+func readRefreshTokenFromRequest(r *http.Request) (string, error) {
+	if c, err := r.Cookie(refreshTokenCookieName); err == nil {
+		if token := strings.TrimSpace(c.Value); token != "" {
+			return token, nil
+		}
+	}
+
+	if r.Body == nil {
+		return "", nil
+	}
+
+	var req models.RefreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if errors.Is(err, io.EOF) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	return strings.TrimSpace(req.RefreshToken), nil
 }

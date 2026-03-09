@@ -1,3 +1,5 @@
+import { setTokens, clearTokens } from '../lib/api'
+
 // Mock fetch globally
 const mockFetch = vi.fn()
 globalThis.fetch = mockFetch
@@ -9,6 +11,19 @@ describe('API Client', () => {
     })
 
     describe('Authentication', () => {
+        it('does not store refresh token in localStorage', () => {
+            localStorage.setItem('refresh_token', 'legacy-refresh-token')
+
+            setTokens('test-access-token')
+
+            expect(localStorage.getItem('access_token')).toBe('test-access-token')
+            expect(localStorage.getItem('refresh_token')).toBeNull()
+
+            clearTokens()
+            expect(localStorage.getItem('access_token')).toBeNull()
+            expect(localStorage.getItem('refresh_token')).toBeNull()
+        })
+
         it('should store tokens on login', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,

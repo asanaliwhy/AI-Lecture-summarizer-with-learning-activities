@@ -60,8 +60,8 @@ export function EmailVerificationPage() {
     setStatus('verifying')
     try {
       const data = await api.auth.verifyEmail(token)
-      if (data.access_token && data.refresh_token) {
-        setTokens(data.access_token, data.refresh_token)
+      if (data.access_token) {
+        setTokens(data.access_token)
         setStatus('success')
         success('Email verified successfully! Redirecting...')
         redirectTimer.current = setTimeout(() => navigate('/dashboard'), 2000)

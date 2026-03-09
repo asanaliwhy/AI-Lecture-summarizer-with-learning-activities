@@ -91,7 +91,7 @@ func main() {
 	)
 
 	// ──── Initialize Handlers ────
-	authHandler := handlers.NewAuthHandler(authService, cfg.FrontendURL)
+	authHandler := handlers.NewAuthHandler(authService, cfg.FrontendURL, cfg.Env == "production")
 	wsTicketHandler := handlers.NewWSTicketHandler(redisClients.Queue)
 	contentHandler := handlers.NewContentHandler(contentRepo, jobRepo, redisClients.Queue, cfg.StoragePath, youtubeService)
 	summaryHandler := handlers.NewSummaryHandler(summaryRepo, contentRepo, jobRepo, redisClients.Queue)

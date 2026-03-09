@@ -150,7 +150,6 @@ describe('EmailVerificationPage', () => {
         mocked.searchParams.set('token', 'valid-token')
         mocked.authApi.verifyEmail.mockResolvedValue({
             access_token: 'at-123',
-            refresh_token: 'rt-456',
         })
 
         act(() => {
@@ -160,7 +159,7 @@ describe('EmailVerificationPage', () => {
         await flush()
 
         expect(mocked.authApi.verifyEmail).toHaveBeenCalledWith('valid-token')
-        expect(mocked.setTokens).toHaveBeenCalledWith('at-123', 'rt-456')
+        expect(mocked.setTokens).toHaveBeenCalledWith('at-123')
         expect(container.textContent).toContain('Email Verified')
         expect(mocked.toast.success).toHaveBeenCalledWith('Email verified successfully! Redirecting...')
 
