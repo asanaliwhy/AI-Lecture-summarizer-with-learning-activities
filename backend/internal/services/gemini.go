@@ -1563,18 +1563,52 @@ func pruneSmartRedundantSections(text string) string {
 		return strings.Contains(lower, "conclusions") || strings.Contains(lower, "summary highlights") || strings.Contains(lower, "summary table")
 	}
 
+	isSectionBoundary := func(line string) bool {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			return false
+		}
+		if strings.HasPrefix(trimmed, "#") {
+			return true
+		}
+		return isHeader(line)
+	}
+
+	hasFutureSectionBoundary := func(start int) bool {
+		for i := start; i < len(lines); i++ {
+			if isSectionBoundary(lines[i]) {
+				return true
+			}
+		}
+		return false
+	}
+
 	out := make([]string, 0, len(lines))
 	skip := false
-	for _, line := range lines {
+	sawBlankWhileSkipping := false
+	for i, line := range lines {
 		if isForbiddenHeader(line) {
 			skip = true
+			sawBlankWhileSkipping = false
 			continue
-		}
-		if skip && isHeader(line) {
-			skip = false
 		}
 		if skip {
-			continue
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
+				sawBlankWhileSkipping = true
+				continue
+			}
+
+			if isSectionBoundary(line) {
+				skip = false
+				sawBlankWhileSkipping = false
+			} else if sawBlankWhileSkipping && !hasFutureSectionBoundary(i+1) {
+				// Preserve orphaned trailing content that appears after a pruned forbidden section.
+				skip = false
+				sawBlankWhileSkipping = false
+			} else {
+				continue
+			}
 		}
 		out = append(out, line)
 	}
