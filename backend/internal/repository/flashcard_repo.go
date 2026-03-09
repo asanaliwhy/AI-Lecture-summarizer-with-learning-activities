@@ -83,6 +83,17 @@ func (r *FlashcardRepo) ToggleFavorite(ctx context.Context, id uuid.UUID, userID
 	return err
 }
 
+func (r *FlashcardRepo) TouchLastAccessed(ctx context.Context, id uuid.UUID) (bool, error) {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE flashcard_decks SET last_accessed_at = NOW() WHERE id = $1`,
+		id,
+	)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 // Card operations
 
 func (r *FlashcardRepo) CreateCards(ctx context.Context, deckID uuid.UUID, cards []models.FlashcardCard) error {

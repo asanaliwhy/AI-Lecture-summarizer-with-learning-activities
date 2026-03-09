@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -31,6 +32,7 @@ type flashcardRepository interface {
 	GetCardsByDeck(ctx context.Context, deckID uuid.UUID) ([]models.FlashcardCard, error)
 	ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
 	DeleteDeck(ctx context.Context, id uuid.UUID) error
+	TouchLastAccessed(ctx context.Context, id uuid.UUID) (bool, error)
 	GetCardByID(ctx context.Context, id uuid.UUID) (*models.FlashcardCard, error)
 	RateCard(ctx context.Context, cardID uuid.UUID, rating int) error
 	GetDeckStats(ctx context.Context, deckID uuid.UUID) (*models.DeckStats, error)
@@ -161,6 +163,13 @@ func (h *FlashcardHandler) GetDeck(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
 		return
 	}
+
+	go func(deckID uuid.UUID) {
+		_, touchErr := h.flashRepo.TouchLastAccessed(context.Background(), deckID)
+		if touchErr != nil {
+			log.Printf("failed to update last_accessed_at for deck %s: %v", deckID, touchErr)
+		}
+	}(deck.ID)
 
 	cards, _ := h.flashRepo.GetCardsByDeck(r.Context(), id)
 

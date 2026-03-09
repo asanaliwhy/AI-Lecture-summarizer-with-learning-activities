@@ -23,12 +23,91 @@ import (
 )
 
 type DashboardHandler struct {
-	pool     *pgxpool.Pool
-	userRepo *repository.UserRepo
+	pool          *pgxpool.Pool
+	userRepo      *repository.UserRepo
+	recentFetcher func(ctx context.Context, userID uuid.UUID, limit int) ([]dashboardRecentItem, error)
 }
 
 func NewDashboardHandler(pool *pgxpool.Pool, userRepo *repository.UserRepo) *DashboardHandler {
 	return &DashboardHandler{pool: pool, userRepo: userRepo}
+}
+
+type dashboardRecentItem struct {
+	ID        uuid.UUID `json:"id"`
+	Type      string    `json:"type"`
+	Title     string    `json:"title"`
+	CreatedAt time.Time `json:"created_at"`
+	Progress  float64   `json:"progress,omitempty"`
+}
+
+const recentActivityQuery = `
+	SELECT type, id, title, last_accessed_at, progress
+	FROM (
+		SELECT
+			'summary'::text AS type,
+			s.id,
+			s.title,
+			COALESCE(s.last_accessed_at, s.created_at) AS last_accessed_at,
+			0::float8 AS progress
+		FROM summaries s
+		WHERE s.user_id = $1
+		  AND s.is_archived = FALSE
+
+		UNION ALL
+
+		SELECT
+			'quiz'::text AS type,
+			q.id,
+			q.title,
+			COALESCE(q.last_accessed_at, q.created_at) AS last_accessed_at,
+			COALESCE(qa.score_percent::float8, 0) AS progress
+		FROM quizzes q
+		LEFT JOIN LATERAL (
+			SELECT score_percent
+			FROM quiz_attempts
+			WHERE quiz_id = q.id
+			  AND user_id = $1
+			  AND completed_at IS NOT NULL
+			ORDER BY completed_at DESC, started_at DESC
+			LIMIT 1
+		) qa ON true
+		WHERE q.user_id = $1
+
+		UNION ALL
+
+		SELECT
+			'flashcard_deck'::text AS type,
+			f.id,
+			f.title,
+			COALESCE(f.last_accessed_at, f.created_at) AS last_accessed_at,
+			0::float8 AS progress
+		FROM flashcard_decks f
+		WHERE f.user_id = $1
+	) recent
+	ORDER BY last_accessed_at DESC NULLS LAST
+	LIMIT $2
+`
+
+func (h *DashboardHandler) fetchRecentFromDB(ctx context.Context, userID uuid.UUID, limit int) ([]dashboardRecentItem, error) {
+	rows, err := h.pool.Query(ctx, recentActivityQuery, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]dashboardRecentItem, 0, limit)
+	for rows.Next() {
+		var item dashboardRecentItem
+		if err := rows.Scan(&item.Type, &item.ID, &item.Title, &item.CreatedAt, &item.Progress); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return items, nil
 }
 
 func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
@@ -250,83 +329,14 @@ func (h *DashboardHandler) Recent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	const recentLimit = 12
 
-	type RecentItem struct {
-		ID        uuid.UUID `json:"id"`
-		Type      string    `json:"type"`
-		Title     string    `json:"title"`
-		CreatedAt time.Time `json:"created_at"`
-		Progress  float64   `json:"progress,omitempty"`
+	fetchRecent := h.recentFetcher
+	if fetchRecent == nil {
+		fetchRecent = h.fetchRecentFromDB
 	}
 
-	rows, err := h.pool.Query(ctx, `
-		SELECT type, id, title, created_at, progress
-		FROM (
-			SELECT
-				'summary'::text AS type,
-				s.id,
-				s.title,
-				COALESCE(s.last_accessed_at, s.created_at) AS created_at,
-				0::float8 AS progress
-			FROM summaries s
-			WHERE s.user_id = $1
-			  AND s.is_archived = FALSE
-			  AND s.last_accessed_at IS NOT NULL
-
-			UNION ALL
-
-			SELECT
-				'quiz'::text AS type,
-				q.id,
-				q.title,
-				COALESCE(q.last_accessed_at, q.created_at) AS created_at,
-				COALESCE(qa.score_percent::float8, 0) AS progress
-			FROM quizzes q
-			LEFT JOIN LATERAL (
-				SELECT score_percent
-				FROM quiz_attempts
-				WHERE quiz_id = q.id
-				  AND user_id = $1
-				  AND completed_at IS NOT NULL
-				ORDER BY completed_at DESC, started_at DESC
-				LIMIT 1
-			) qa ON true
-			WHERE q.user_id = $1
-			  AND q.last_accessed_at IS NOT NULL
-
-			UNION ALL
-
-			SELECT
-				'flashcard'::text AS type,
-				f.id,
-				f.title,
-				COALESCE(f.last_accessed_at, f.created_at) AS created_at,
-				0::float8 AS progress
-			FROM flashcard_decks f
-			WHERE f.user_id = $1
-			  AND f.last_accessed_at IS NOT NULL
-		) recent
-		ORDER BY created_at DESC
-		LIMIT $2
-	`, userID, recentLimit)
+	items, err := fetchRecent(ctx, userID, recentLimit)
 	if err != nil {
 		log.Printf("Recent: query failed for user %s: %v", userID, err)
-		writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve recent items", r))
-		return
-	}
-	defer rows.Close()
-
-	items := make([]RecentItem, 0, recentLimit)
-	for rows.Next() {
-		var item RecentItem
-		if err := rows.Scan(&item.Type, &item.ID, &item.Title, &item.CreatedAt, &item.Progress); err != nil {
-			log.Printf("Recent: row scan failed for user %s: %v", userID, err)
-			writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve recent items", r))
-			return
-		}
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("Recent: rows iteration error for user %s: %v", userID, err)
 		writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve recent items", r))
 		return
 	}

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log"
@@ -130,6 +131,13 @@ func (h *QuizHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
 		return
 	}
+
+	go func(quizID uuid.UUID) {
+		_, touchErr := h.quizRepo.TouchLastAccessed(context.Background(), quizID)
+		if touchErr != nil {
+			log.Printf("failed to update last_accessed_at for quiz %s: %v", quizID, touchErr)
+		}
+	}(quiz.ID)
 
 	writeJSON(w, http.StatusOK, quiz)
 }

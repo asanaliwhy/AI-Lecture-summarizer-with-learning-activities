@@ -56,6 +56,10 @@ func (s *stubFlashcardRepoForRateCard) DeleteDeck(ctx context.Context, id uuid.U
 	return nil
 }
 
+func (s *stubFlashcardRepoForRateCard) TouchLastAccessed(ctx context.Context, id uuid.UUID) (bool, error) {
+	return true, nil
+}
+
 func (s *stubFlashcardRepoForRateCard) GetCardByID(ctx context.Context, id uuid.UUID) (*models.FlashcardCard, error) {
 	if s.cardErr != nil {
 		return nil, s.cardErr

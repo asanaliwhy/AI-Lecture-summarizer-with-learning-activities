@@ -126,6 +126,17 @@ func (r *QuizRepo) ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid
 	return err
 }
 
+func (r *QuizRepo) TouchLastAccessed(ctx context.Context, id uuid.UUID) (bool, error) {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE quizzes SET last_accessed_at = NOW() WHERE id = $1`,
+		id,
+	)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 // Quiz Attempts
 
 func (r *QuizRepo) CreateAttempt(ctx context.Context, a *models.QuizAttempt) error {

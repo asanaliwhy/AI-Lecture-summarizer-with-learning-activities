@@ -1,0 +1,9 @@
+BEGIN;
+
+ALTER TABLE quizzes
+    ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ;
+
+ALTER TABLE flashcard_decks
+    ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ;
+
+COMMIT;
