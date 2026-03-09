@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
-import { API_BASE, refreshAccessToken } from './api'
+import { API_BASE, api, refreshAccessToken } from './api'
 
 interface WSMessage {
     type: string
@@ -39,9 +39,27 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
             }
         }
 
+        let ticket: string
+        try {
+            const response = await api.ws.getTicket()
+            ticket = response.ticket
+        } catch {
+            isConnectingRef.current = false
+            reconnectTimerRef.current = window.setTimeout(() => {
+                if (!unmountedRef.current) connect()
+            }, reconnectDelayRef.current)
+            reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000)
+            return
+        }
+
+        if (unmountedRef.current) {
+            isConnectingRef.current = false
+            return
+        }
+
         const apiUrl = new URL(API_BASE)
         const protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsUrl = `${protocol}//${apiUrl.host}${apiUrl.pathname}/ws?token=${encodeURIComponent(token)}`
+        const wsUrl = `${protocol}//${apiUrl.host}${apiUrl.pathname}/ws?ticket=${encodeURIComponent(ticket)}`
 
         const ws = new WebSocket(wsUrl)
 
