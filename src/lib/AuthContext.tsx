@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { api, setTokens, clearTokens, ApiError } from './api'
+import { Navigate, useLocation } from 'react-router-dom'
 
 interface User {
     id: string
@@ -114,6 +115,7 @@ export function useAuth() {
 // Protected Route component
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, isLoading } = useAuth()
+    const location = useLocation()
 
     if (isLoading) {
         return (
@@ -124,8 +126,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
 
     if (!isAuthenticated) {
-        window.location.href = '/login'
-        return null
+        return <Navigate to="/login" replace state={{ from: location.pathname }} />
     }
 
     return <>{children}</>
