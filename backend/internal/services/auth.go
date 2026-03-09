@@ -113,7 +113,7 @@ func (s *AuthService) Register(ctx context.Context, req models.RegisterRequest) 
 	s.userRepo.CreateSettings(ctx, user.ID)
 
 	// Generate verification token
-	token, err := generateToken(32)
+	token, err := GenerateToken(32)
 	if err != nil {
 		return nil, "", err
 	}
@@ -240,7 +240,7 @@ func (s *AuthService) ResendVerification(ctx context.Context, email string) (str
 	}
 
 	// Generate new token
-	token, err := generateToken(32)
+	token, err := GenerateToken(32)
 	if err != nil {
 		return "", err
 	}
@@ -266,7 +266,7 @@ func (s *AuthService) issueTokens(ctx context.Context, user *models.User) (*mode
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	refreshToken, err := generateToken(64)
+	refreshToken, err := GenerateToken(64)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +436,7 @@ func (s *AuthService) loginOrCreateGoogleUser(ctx context.Context, tokenInfo *go
 	return s.issueTokens(ctx, newUser)
 }
 
-func generateToken(bytes int) (string, error) {
+func GenerateToken(bytes int) (string, error) {
 	b := make([]byte, bytes)
 	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("failed to generate token: %w", err)
