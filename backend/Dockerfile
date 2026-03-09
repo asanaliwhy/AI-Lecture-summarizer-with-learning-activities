@@ -14,23 +14,26 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /lectura-server ./cmd/server/main.go
 
 # ─── Stage 2: Run ───
-FROM python:3.11-slim
+FROM python:3.11-alpine
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tzdata \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
 COPY --from=builder /lectura-server .
 COPY --from=builder /app/migrations ./migrations
-COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/scripts/fetch_transcript.py ./scripts/fetch_transcript.py
 COPY --from=builder /app/requirements.txt ./requirements.txt
 
 RUN python3 -m pip install --no-cache-dir -r ./requirements.txt
 
-# Create uploads directory
-RUN mkdir -p /app/uploads
+# Create non-root user and writable runtime directories
+RUN addgroup -S appgroup \
+    && adduser -S appuser -G appgroup \
+    && mkdir -p /app/uploads /app/scripts \
+    && chown -R appuser:appgroup /app
+
+USER appuser
 
 EXPOSE 8081
 
