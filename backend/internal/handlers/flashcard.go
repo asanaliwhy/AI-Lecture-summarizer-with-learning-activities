@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 
 	"lectura-backend/internal/middleware"
@@ -15,10 +18,22 @@ import (
 )
 
 type FlashcardHandler struct {
-	flashRepo   *repository.FlashcardRepo
+	flashRepo   flashcardRepository
 	summaryRepo *repository.SummaryRepo
 	jobRepo     *repository.JobRepo
 	redis       *redis.Client
+}
+
+type flashcardRepository interface {
+	CreateDeck(ctx context.Context, d *models.FlashcardDeck) error
+	ListDecksByUser(ctx context.Context, userID uuid.UUID) ([]*models.FlashcardDeck, error)
+	GetDeckByID(ctx context.Context, id uuid.UUID) (*models.FlashcardDeck, error)
+	GetCardsByDeck(ctx context.Context, deckID uuid.UUID) ([]models.FlashcardCard, error)
+	ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
+	DeleteDeck(ctx context.Context, id uuid.UUID) error
+	GetCardByID(ctx context.Context, id uuid.UUID) (*models.FlashcardCard, error)
+	RateCard(ctx context.Context, cardID uuid.UUID, rating int) error
+	GetDeckStats(ctx context.Context, deckID uuid.UUID) (*models.DeckStats, error)
 }
 
 func NewFlashcardHandler(flashRepo *repository.FlashcardRepo, summaryRepo *repository.SummaryRepo, jobRepo *repository.JobRepo, redisClient *redis.Client) *FlashcardHandler {
@@ -210,6 +225,8 @@ func (h *FlashcardHandler) DeleteDeck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FlashcardHandler) RateCard(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
 	cardID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid card ID", r))
@@ -227,12 +244,37 @@ func (h *FlashcardHandler) RateCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	card, err := h.flashRepo.GetCardByID(r.Context(), cardID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Card not found", r))
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to fetch card", r))
+		return
+	}
+
+	deck, err := h.flashRepo.GetDeckByID(r.Context(), card.DeckID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Deck not found", r))
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to fetch deck", r))
+		return
+	}
+
+	if deck.UserID != userID {
+		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
+		return
+	}
+
 	if err := h.flashRepo.RateCard(r.Context(), cardID, req.Rating); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to rate card", r))
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Card rated"})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *FlashcardHandler) GetDeckStats(w http.ResponseWriter, r *http.Request) {

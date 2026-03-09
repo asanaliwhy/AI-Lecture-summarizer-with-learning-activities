@@ -132,6 +132,24 @@ func (r *FlashcardRepo) GetCardsByDeck(ctx context.Context, deckID uuid.UUID) ([
 	return cards, nil
 }
 
+func (r *FlashcardRepo) GetCardByID(ctx context.Context, id uuid.UUID) (*models.FlashcardCard, error) {
+	c := &models.FlashcardCard{}
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, deck_id, front, back, mnemonic, example, topic, difficulty,
+		 interval_days, ease_factor, repetitions, next_review_at, last_reviewed_at
+		 FROM flashcard_cards WHERE id = $1`,
+		id,
+	).Scan(
+		&c.ID, &c.DeckID, &c.Front, &c.Back, &c.Mnemonic, &c.Example, &c.Topic,
+		&c.Difficulty, &c.IntervalDays, &c.EaseFactor, &c.Repetitions,
+		&c.NextReviewAt, &c.LastReviewedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
 // SM-2 Algorithm — pure math, no Gemini
 func (r *FlashcardRepo) RateCard(ctx context.Context, cardID uuid.UUID, rating int) error {
 	// Get current card values
