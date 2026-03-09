@@ -476,9 +476,8 @@ export function DashboardPage() {
                 key={stat.label}
                 to={stat.link || '#'}
                 className={cn(
-                  'block transition-all duration-300',
-                  stat.clickable &&
-                  'cursor-pointer hover:-translate-y-1 hover:shadow-lg',
+                  'block transition-all duration-300 hover:-translate-y-1 hover:shadow-lg',
+                  stat.clickable ? 'cursor-pointer' : 'cursor-default',
                 )}
               >
                 <Card className="overflow-hidden border-none shadow-sm h-full relative group">
