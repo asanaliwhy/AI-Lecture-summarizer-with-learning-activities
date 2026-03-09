@@ -182,10 +182,20 @@ func (h *SummaryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Title string   `json:"title"`
 		Tags  []string `json:"tags"`
 	}
-	json.NewDecoder(r.Body).Decode(&update)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&update); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
+
+	if strings.TrimSpace(update.Title) == "" && update.Tags == nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "No fields to update", r))
+		return
+	}
 
 	if update.Title != "" {
-		summary.Title = update.Title
+		summary.Title = strings.TrimSpace(update.Title)
 	}
 	if update.Tags != nil {
 		summary.Tags = update.Tags
