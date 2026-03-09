@@ -415,6 +415,10 @@ export const api = {
             }),
     },
 
+    ws: {
+        getTicket: () => apiFetch<{ ticket: string }>('/ws/ticket'),
+    },
+
     // Content
     content: {
         validateYouTube: (url: string) =>
