@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { ApiError } from '../lib/api'
 import { buildGoogleAuthURL } from '../lib/googleOAuth'
@@ -11,6 +11,7 @@ import { Eye, EyeOff } from 'lucide-react'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useAuth()
   const { success: toastSuccess, error: toastError } = useToast()
   const [showPassword, setShowPassword] = useState(false)
@@ -19,6 +20,7 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const from = (location as unknown as { state?: { from?: string } }).state?.from ?? '/dashboard'
 
   const handleGoogleSignIn = useCallback(async () => {
     const authURL = await buildGoogleAuthURL()
@@ -49,7 +51,7 @@ export function LoginPage() {
     try {
       await login(email, password)
       toastSuccess('Welcome back!')
-      navigate('/dashboard')
+      navigate(from, { replace: true })
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message)

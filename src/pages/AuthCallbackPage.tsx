@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { ApiError } from '../lib/api'
 import { Button } from '../components/ui/Button'
@@ -7,6 +7,7 @@ import { useToast } from '../components/ui/Toast'
 
 export function AuthCallbackPage() {
     const navigate = useNavigate()
+    const location = useLocation()
     const { googleCodeLogin } = useAuth()
     const { error: toastError } = useToast()
     const [error, setError] = useState('')
@@ -44,7 +45,7 @@ export function AuthCallbackPage() {
                         setTimeout(() => reject(new Error('Google sign-in timed out. Please try again.')), 15000),
                     ),
                 ])
-                navigate('/dashboard', { replace: true })
+                navigate(from, { replace: true })
             } catch (err) {
                 const message = err instanceof ApiError ? err.message : 'Google sign-in failed'
                 setError(message)
@@ -53,7 +54,7 @@ export function AuthCallbackPage() {
         }
 
         completeAuth()
-    }, [googleCodeLogin, navigate, toastError])
+    }, [from, googleCodeLogin, navigate, toastError])
 
     if (!error) {
         return (
@@ -79,3 +80,4 @@ export function AuthCallbackPage() {
         </div>
     )
 }
+const from = (location as unknown as { state?: { from?: string } }).state?.from ?? '/dashboard'
