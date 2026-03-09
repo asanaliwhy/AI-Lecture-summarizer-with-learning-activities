@@ -1189,6 +1189,40 @@ func splitSentenceLikeChunks(text string) []string {
 	return parts
 }
 
+func isFillerOverviewBullet(line string) bool {
+	lower := strings.ToLower(strings.TrimSpace(line))
+
+	content := lower
+	for _, prefix := range []string{"- ", "* ", "• "} {
+		if strings.HasPrefix(content, prefix) {
+			content = strings.TrimPrefix(content, prefix)
+			break
+		}
+	}
+
+	if !strings.HasPrefix(content, "overview of") {
+		return false
+	}
+
+	if strings.Contains(content, ":") {
+		return false
+	}
+
+	for _, r := range content {
+		if unicode.IsDigit(r) {
+			return false
+		}
+	}
+
+	afterPhrase := strings.TrimSpace(strings.TrimPrefix(content, "overview of"))
+	wordCount := len(strings.Fields(afterPhrase))
+	if wordCount > 6 {
+		return false
+	}
+
+	return true
+}
+
 func normalizeBulletsSummary(text string) string {
 	normalized := strings.ReplaceAll(text, "\r\n", "\n")
 	lines := strings.Split(normalized, "\n")
@@ -1244,9 +1278,8 @@ func normalizeBulletsSummary(text string) string {
 		content = strings.ReplaceAll(content, "Figure:", "Size:")
 		content = strings.ReplaceAll(content, "Example:", "Examples:")
 
-		// Trim redundant overview bullets after wrapper headings.
-		lt := strings.ToLower(strings.TrimSpace(content))
-		if strings.HasPrefix(lt, "overview of ") {
+		// Trim only filler overview bullets after wrapper headings.
+		if isFillerOverviewBullet(content) {
 			continue
 		}
 
