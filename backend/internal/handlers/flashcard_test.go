@@ -257,3 +257,77 @@ func TestGetDeck_EmptyDeck_Returns200WithEmptyCards(t *testing.T) {
 		t.Fatalf("expected empty cards list, got %d", len(payload.Cards))
 	}
 }
+
+func TestGetDeckStats_Owner_Returns200(t *testing.T) {
+	userID := uuid.New()
+	deckID := uuid.New()
+
+	repo := &stubFlashcardRepoForRateCard{
+		deck: &models.FlashcardDeck{ID: deckID, UserID: userID, Title: "Deck"},
+	}
+	h := &FlashcardHandler{flashRepo: repo}
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", deckID.String())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/flashcards/decks/"+deckID.String()+"/stats", nil)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	rr := httptest.NewRecorder()
+
+	h.GetDeckStats(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+}
+
+func TestGetDeckStats_NonOwner_Returns403(t *testing.T) {
+	ownerID := uuid.New()
+	otherUserID := uuid.New()
+	deckID := uuid.New()
+
+	repo := &stubFlashcardRepoForRateCard{
+		deck: &models.FlashcardDeck{ID: deckID, UserID: ownerID, Title: "Deck"},
+	}
+	h := &FlashcardHandler{flashRepo: repo}
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", deckID.String())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/flashcards/decks/"+deckID.String()+"/stats", nil)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, otherUserID))
+	rr := httptest.NewRecorder()
+
+	h.GetDeckStats(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rr.Code)
+	}
+	if code := errorCodeFromBody(t, rr); code != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN, got %q", code)
+	}
+}
+
+func TestGetDeckStats_DeckNotFound_Returns404(t *testing.T) {
+	userID := uuid.New()
+	deckID := uuid.New()
+
+	repo := &stubFlashcardRepoForRateCard{deckErr: pgx.ErrNoRows}
+	h := &FlashcardHandler{flashRepo: repo}
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", deckID.String())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/flashcards/decks/"+deckID.String()+"/stats", nil)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	rr := httptest.NewRecorder()
+
+	h.GetDeckStats(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rr.Code)
+	}
+	if code := errorCodeFromBody(t, rr); code != "NOT_FOUND" {
+		t.Fatalf("expected NOT_FOUND, got %q", code)
+	}
+}

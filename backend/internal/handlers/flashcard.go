@@ -297,6 +297,22 @@ func (h *FlashcardHandler) GetDeckStats(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	deck, err := h.flashRepo.GetDeckByID(r.Context(), deckID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Deck not found", r))
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to fetch deck", r))
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	if deck.UserID != userID {
+		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
+		return
+	}
+
 	stats, err := h.flashRepo.GetDeckStats(r.Context(), deckID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to fetch stats", r))
