@@ -92,6 +92,7 @@ func main() {
 
 	// ──── Initialize Handlers ────
 	authHandler := handlers.NewAuthHandler(authService, cfg.FrontendURL)
+	wsTicketHandler := handlers.NewWSTicketHandler(redisClients.Queue)
 	contentHandler := handlers.NewContentHandler(contentRepo, jobRepo, redisClients.Queue, cfg.StoragePath, youtubeService)
 	summaryHandler := handlers.NewSummaryHandler(summaryRepo, contentRepo, jobRepo, redisClients.Queue)
 	quizHandler := handlers.NewQuizHandler(quizRepo, summaryRepo, jobRepo, redisClients.Queue)
@@ -128,13 +129,14 @@ func main() {
 	log.Println("✓ Notification scheduler started")
 
 	// ──── Step 7: Start WebSocket Hub ────
-	wsHub := websocket.NewHub(redisClients.PubSub, cfg.JWTSecret)
+	wsHub := websocket.NewHub(redisClients.PubSub, cfg.FrontendURL)
 	log.Println("✓ WebSocket hub started")
 
 	// ──── Step 8: Start HTTP Server ────
 	r := router.New(
 		jwtAuth,
 		authHandler,
+		wsTicketHandler,
 		contentHandler,
 		summaryHandler,
 		quizHandler,

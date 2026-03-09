@@ -15,6 +15,7 @@ import (
 func New(
 	jwtAuth *middleware.JWTAuth,
 	authHandler *handlers.AuthHandler,
+	wsTicketHandler *handlers.WSTicketHandler,
 	contentHandler *handlers.ContentHandler,
 	summaryHandler *handlers.SummaryHandler,
 	quizHandler *handlers.QuizHandler,
@@ -186,8 +187,9 @@ func New(
 		// ──── WebSocket ────
 		r.Group(func(r chi.Router) {
 			r.Use(jwtAuth.Middleware)
-			r.Get("/ws", wsHub.HandleWebSocket)
+			r.Get("/ws/ticket", wsTicketHandler.IssueTicket)
 		})
+		r.Get("/ws", wsHub.HandleWebSocket)
 	})
 
 	return r

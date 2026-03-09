@@ -14,11 +14,12 @@ import (
 
 func buildTestRouter() http.Handler {
 	jwtAuth := middleware.NewJWTAuth("test-jwt-secret")
-	wsHub := websocket.NewHub(nil, "test-jwt-secret")
+	wsHub := websocket.NewHub(nil, "https://app.example.com")
 
 	return New(
 		jwtAuth,
 		(*handlers.AuthHandler)(nil),
+		(*handlers.WSTicketHandler)(nil),
 		(*handlers.ContentHandler)(nil),
 		(*handlers.SummaryHandler)(nil),
 		(*handlers.QuizHandler)(nil),
@@ -125,4 +126,3 @@ func TestRouterNew_PublicAuthRouteWired(t *testing.T) {
 		t.Fatalf("expected VALIDATION_ERROR, got %q", code)
 	}
 }
-
