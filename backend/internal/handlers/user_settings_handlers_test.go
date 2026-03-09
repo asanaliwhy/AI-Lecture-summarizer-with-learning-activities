@@ -130,6 +130,35 @@ func TestUserHandler_UpdateMe_RejectsTooLongBio(t *testing.T) {
 	}
 }
 
+func TestUserHandler_UpdateMe_NormalizesEmailAndName(t *testing.T) {
+	userID := uuid.New()
+	repo := &stubUserRepoForSettingsHandlers{
+		user: &models.User{ID: userID, FullName: "Alice", Email: "alice@example.com"},
+	}
+	h := &UserHandler{userRepo: repo}
+
+	body := `{"full_name":"  Alice Noor  ","email":"  ALICE@Example.COM  "}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/user/me", strings.NewReader(body))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	h.UpdateMe(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+	if !repo.updatedUser {
+		t.Fatalf("expected user update to be attempted")
+	}
+	if repo.user.Email != "alice@example.com" {
+		t.Fatalf("expected normalized lowercase email, got %q", repo.user.Email)
+	}
+	if repo.user.FullName != "Alice Noor" {
+		t.Fatalf("expected trimmed full name, got %q", repo.user.FullName)
+	}
+}
+
 func TestUserHandler_UpdateSettings_InvalidRequestBody(t *testing.T) {
 	userID := uuid.New()
 	repo := &stubUserRepoForSettingsHandlers{user: &models.User{ID: userID}}

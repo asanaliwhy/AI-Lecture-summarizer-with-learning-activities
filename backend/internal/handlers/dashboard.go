@@ -696,10 +696,10 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if update.FullName != "" {
-		user.FullName = update.FullName
+		user.FullName = strings.TrimSpace(update.FullName)
 	}
 	if update.Email != "" {
-		user.Email = update.Email
+		user.Email = strings.ToLower(strings.TrimSpace(update.Email))
 	}
 	if update.Avatar != nil {
 		user.AvatarURL = update.Avatar
