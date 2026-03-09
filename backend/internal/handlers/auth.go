@@ -156,13 +156,13 @@ func (h *AuthHandler) ResendVerification(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, err := h.authService.ResendVerification(r.Context(), req.Email)
+	err := h.authService.ResendVerification(r.Context(), req.Email)
 	if err != nil {
 		handleServiceError(w, r, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Verification email sent"})
+	writeJSON(w, http.StatusOK, map[string]string{"message": "If that email is registered and unverified, a new verification email has been sent."})
 }
 
 // Shared helpers

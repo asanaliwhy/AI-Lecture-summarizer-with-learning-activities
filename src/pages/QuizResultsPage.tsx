@@ -251,7 +251,7 @@ export function QuizResultsPage() {
   }
 
   const score = toNumber(attemptMeta?.score_percent ?? attemptMeta?.score ?? quizMeta?.last_score) ?? 0
-  const totalQuestions = toNumber(quizMeta?.question_count ?? attemptMeta?.total_questions) ?? reviewQuestions.length ?? 0
+  const totalQuestions = toNumber(quizMeta?.question_count) ?? reviewQuestions.length ?? 0
   const correctCount = toNumber(attemptMeta?.correct_count) ?? Math.round((score / 100) * totalQuestions)
   const incorrectCount = Math.max(0, totalQuestions - correctCount)
   const timeTaken = attemptMeta?.time_taken_seconds ?? attemptMeta?.time_taken ?? attemptMeta?.duration ?? ''

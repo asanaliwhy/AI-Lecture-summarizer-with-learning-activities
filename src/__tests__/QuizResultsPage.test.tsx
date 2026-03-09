@@ -74,7 +74,6 @@ describe('QuizResultsPage production behaviors', () => {
         attempt: {
             score_percent: 80,
             correct_count: 4,
-            total_questions: 5,
             quiz_id: 'quiz-9',
             summary_id: 'summary-9',
             time_taken_seconds: 120,
@@ -126,6 +125,19 @@ describe('QuizResultsPage production behaviors', () => {
         expect(container.textContent).toContain('Physics Quiz')
         expect(container.textContent).toContain('80%')
         expect(container.textContent).toContain('Detailed Review')
+    })
+
+    it('displays total using quiz.question_count, not attempt.total_questions', async () => {
+        const payload = makeAttemptPayload()
+        payload.quiz.question_count = 7
+        mocked.quizzesApi.getAttempt.mockResolvedValueOnce(payload)
+
+        await act(async () => {
+            root.render(<QuizResultsPage />)
+        })
+        await flush()
+
+        expect(container.textContent).toContain('4/7')
     })
 
     it('shows retryable load error and loads successfully on retry', async () => {

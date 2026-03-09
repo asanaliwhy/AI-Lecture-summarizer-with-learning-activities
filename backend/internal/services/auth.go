@@ -27,13 +27,29 @@ import (
 )
 
 type AuthService struct {
-	userRepo           *repository.UserRepo
+	userRepo           authUserRepository
 	redis              *redis.Client
 	jwt                *middleware.JWTAuth
-	email              *EmailService
+	email              verificationEmailSender
 	googleClientID     string
 	googleClientSecret string
 	googleRedirectURI  string
+	issueTokensFn      func(ctx context.Context, user *models.User) (*models.AuthTokens, error)
+}
+
+type verificationEmailSender interface {
+	SendVerificationEmail(to, token string) error
+}
+
+type authUserRepository interface {
+	GetByEmail(ctx context.Context, email string) (*models.User, error)
+	Create(ctx context.Context, user *models.User) error
+	CreateSettings(ctx context.Context, userID uuid.UUID) error
+	VerifyEmail(ctx context.Context, userID uuid.UUID) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
+	UpdateLastLogin(ctx context.Context, userID uuid.UUID) error
+	GetByGoogleID(ctx context.Context, googleID string) (*models.User, error)
+	LinkGoogle(ctx context.Context, userID uuid.UUID, googleID string) error
 }
 
 func NewAuthService(
@@ -66,6 +82,8 @@ func (s *AuthService) GoogleOAuthConfig() (clientID string, redirectURI string, 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
 func (s *AuthService) Register(ctx context.Context, req models.RegisterRequest) (*models.User, string, error) {
+	req.Email = normalizeEmail(req.Email)
+
 	// Validate all fields at once
 	fieldErrors := make(map[string]string)
 
@@ -166,6 +184,8 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string) (*models.Au
 }
 
 func (s *AuthService) Login(ctx context.Context, req models.LoginRequest) (*models.AuthTokens, error) {
+	req.Email = normalizeEmail(req.Email)
+
 	user, err := s.userRepo.GetByEmail(ctx, req.Email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -188,7 +208,7 @@ func (s *AuthService) Login(ctx context.Context, req models.LoginRequest) (*mode
 
 	s.userRepo.UpdateLastLogin(ctx, user.ID)
 
-	return s.issueTokens(ctx, user)
+	return s.issueTokensForUser(ctx, user)
 }
 
 func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*models.AuthTokens, error) {
@@ -222,42 +242,46 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 	return s.redis.Del(ctx, "refresh:"+refreshToken).Err()
 }
 
-func (s *AuthService) ResendVerification(ctx context.Context, email string) (string, error) {
+func (s *AuthService) ResendVerification(ctx context.Context, email string) error {
+	email = normalizeEmail(email)
+
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
-		return "", &NotFoundError{Message: "Email not found"}
+		return nil
 	}
 
 	if user.IsVerified {
-		return "", &ConflictError{Message: "Email is already verified"}
+		return nil
 	}
 
 	// Rate limit check
 	rateLimitKey := fmt.Sprintf("resend_limit:%s", user.ID.String())
 	exists, _ := s.redis.Exists(ctx, rateLimitKey).Result()
 	if exists > 0 {
-		return "", &RateLimitError{Message: "Please wait 60 seconds before requesting another verification email"}
+		return &RateLimitError{Message: "Please wait 60 seconds before requesting another verification email"}
 	}
 
 	// Generate new token
 	token, err := GenerateToken(32)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	s.redis.Set(ctx, "email_verify:"+token, user.ID.String(), 24*time.Hour)
 	s.redis.Set(ctx, rateLimitKey, "1", 60*time.Second)
 
 	// Send verification email
-	go func(email, verificationToken string) {
-		if err := s.email.SendVerificationEmail(email, verificationToken); err != nil {
-			log.Printf("✗ verification email send failed (resend) to %s: %v", email, err)
-		} else {
-			log.Printf("✓ verification email queued (resend) to %s", email)
-		}
-	}(user.Email, token)
+	if s.email != nil {
+		go func(email, verificationToken string) {
+			if err := s.email.SendVerificationEmail(email, verificationToken); err != nil {
+				log.Printf("✗ verification email send failed (resend) to %s: %v", email, err)
+			} else {
+				log.Printf("✓ verification email queued (resend) to %s", email)
+			}
+		}(user.Email, token)
+	}
 
-	return token, nil
+	return nil
 }
 
 func (s *AuthService) issueTokens(ctx context.Context, user *models.User) (*models.AuthTokens, error) {
@@ -377,6 +401,8 @@ func (s *AuthService) verifyGoogleIDToken(idToken string) (*googleTokenInfo, err
 }
 
 func (s *AuthService) loginOrCreateGoogleUser(ctx context.Context, tokenInfo *googleTokenInfo) (*models.AuthTokens, error) {
+	normalizedEmail := normalizeEmail(tokenInfo.Email)
+
 	// Try to find existing user by Google ID
 	user, err := s.userRepo.GetByGoogleID(ctx, tokenInfo.Sub)
 	if err == nil {
@@ -384,7 +410,7 @@ func (s *AuthService) loginOrCreateGoogleUser(ctx context.Context, tokenInfo *go
 			return nil, &UnauthorizedError{Message: "Account is deactivated"}
 		}
 		s.userRepo.UpdateLastLogin(ctx, user.ID)
-		return s.issueTokens(ctx, user)
+		return s.issueTokensForUser(ctx, user)
 	}
 
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -392,14 +418,14 @@ func (s *AuthService) loginOrCreateGoogleUser(ctx context.Context, tokenInfo *go
 	}
 
 	// Try to find existing user by email
-	user, err = s.userRepo.GetByEmail(ctx, tokenInfo.Email)
+	user, err = s.userRepo.GetByEmail(ctx, normalizedEmail)
 	if err == nil {
 		if !user.IsActive {
 			return nil, &UnauthorizedError{Message: "Account is deactivated"}
 		}
 		s.userRepo.LinkGoogle(ctx, user.ID, tokenInfo.Sub)
 		s.userRepo.UpdateLastLogin(ctx, user.ID)
-		return s.issueTokens(ctx, user)
+		return s.issueTokensForUser(ctx, user)
 	}
 
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -415,11 +441,11 @@ func (s *AuthService) loginOrCreateGoogleUser(ctx context.Context, tokenInfo *go
 
 	fullName := tokenInfo.Name
 	if fullName == "" {
-		fullName = tokenInfo.Email
+		fullName = normalizedEmail
 	}
 
 	newUser := &models.User{
-		Email:        tokenInfo.Email,
+		Email:        normalizedEmail,
 		FullName:     fullName,
 		AvatarURL:    avatarURL,
 		IsVerified:   true, // Google accounts are pre-verified
@@ -433,7 +459,18 @@ func (s *AuthService) loginOrCreateGoogleUser(ctx context.Context, tokenInfo *go
 
 	s.userRepo.CreateSettings(ctx, newUser.ID)
 
-	return s.issueTokens(ctx, newUser)
+	return s.issueTokensForUser(ctx, newUser)
+}
+
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func (s *AuthService) issueTokensForUser(ctx context.Context, user *models.User) (*models.AuthTokens, error) {
+	if s.issueTokensFn != nil {
+		return s.issueTokensFn(ctx, user)
+	}
+	return s.issueTokens(ctx, user)
 }
 
 func GenerateToken(bytes int) (string, error) {
