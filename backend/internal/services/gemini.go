@@ -488,7 +488,20 @@ func (s *GeminiService) GenerateQuiz(ctx context.Context, job *models.Job, summa
 	}
 	questionsJSON, _ := json.Marshal(validQuestions)
 
-	return s.quizRepo.UpdateQuestions(ctx, job.ReferenceID, questionsJSON, len(validQuestions))
+	if err := s.quizRepo.UpdateQuestions(ctx, job.ReferenceID, questionsJSON, len(validQuestions)); err != nil {
+		return err
+	}
+
+	s.PublishUpdate(ctx, job.UserID, models.WSMessage{
+		Type: "completed",
+		Payload: models.CompletedEvent{
+			JobID:      job.ID,
+			ResultID:   job.ReferenceID,
+			ResultType: "quiz",
+		},
+	})
+
+	return nil
 }
 
 // GenerateFlashcards handles flashcard generation
@@ -561,7 +574,20 @@ func (s *GeminiService) GenerateFlashcards(ctx context.Context, job *models.Job,
 		return fmt.Errorf("flashcard generation produced zero valid cards")
 	}
 
-	return s.flashRepo.CreateCards(ctx, job.ReferenceID, validCards)
+	if err := s.flashRepo.CreateCards(ctx, job.ReferenceID, validCards); err != nil {
+		return err
+	}
+
+	s.PublishUpdate(ctx, job.UserID, models.WSMessage{
+		Type: "completed",
+		Payload: models.CompletedEvent{
+			JobID:      job.ID,
+			ResultID:   job.ReferenceID,
+			ResultType: "flashcard",
+		},
+	})
+
+	return nil
 }
 
 // Helper functions
