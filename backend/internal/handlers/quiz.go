@@ -219,6 +219,17 @@ func (h *QuizHandler) StartAttempt(w http.ResponseWriter, r *http.Request) {
 
 	userID := middleware.GetUserID(r.Context())
 
+	quiz, err := h.quizRepo.GetByID(r.Context(), quizID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Quiz not found", r))
+		return
+	}
+
+	if quiz.UserID != userID {
+		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
+		return
+	}
+
 	attempt := &models.QuizAttempt{
 		QuizID: quizID,
 		UserID: userID,
@@ -320,7 +331,12 @@ func (h *QuizHandler) SubmitAttempt(w http.ResponseWriter, r *http.Request) {
 	// Get quiz questions for grading
 	quiz, err := h.quizRepo.GetByID(r.Context(), attempt.QuizID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to fetch quiz", r))
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Quiz not found", r))
+		return
+	}
+
+	if quiz.UserID != userID {
+		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
 		return
 	}
 
@@ -386,7 +402,16 @@ func (h *QuizHandler) GetAttempt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Include quiz questions for results page
-	quiz, _ := h.quizRepo.GetByID(r.Context(), attempt.QuizID)
+	quiz, err := h.quizRepo.GetByID(r.Context(), attempt.QuizID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Quiz not found", r))
+		return
+	}
+
+	if quiz.UserID != userID {
+		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"attempt":   attempt,

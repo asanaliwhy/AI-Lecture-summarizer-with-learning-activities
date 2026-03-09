@@ -53,6 +53,12 @@ func (s *stubQuizRepoForMutations) TouchLastAccessed(ctx context.Context, id uui
 }
 
 func (s *stubQuizRepoForMutations) CreateAttempt(ctx context.Context, a *models.QuizAttempt) error {
+	if a.ID == uuid.Nil {
+		a.ID = uuid.New()
+	}
+	if a.StartedAt.IsZero() {
+		a.StartedAt = time.Now()
+	}
 	return nil
 }
 
@@ -161,7 +167,7 @@ func TestSubmitAttempt_ValidBody_Returns200(t *testing.T) {
 
 	repo := &stubQuizRepoForMutations{
 		attempt: &models.QuizAttempt{ID: attemptID, QuizID: quizID, UserID: userID, StartedAt: time.Now(), AnswersJSON: json.RawMessage(`[{"question_index":0,"answer_index":1}]`)},
-		quiz:    &models.Quiz{ID: quizID, QuestionsJSON: json.RawMessage(`[{"question":"Q1","type":"mcq","options":["a","b"],"correct_index":1,"explanation":"","hint":"","difficulty":"easy","topic":"t"}]`)},
+		quiz:    &models.Quiz{ID: quizID, UserID: userID, QuestionsJSON: json.RawMessage(`[{"question":"Q1","type":"mcq","options":["a","b"],"correct_index":1,"explanation":"","hint":"","difficulty":"easy","topic":"t"}]`)},
 	}
 	h := &QuizHandler{quizRepo: repo}
 
@@ -175,5 +181,78 @@ func TestSubmitAttempt_ValidBody_Returns200(t *testing.T) {
 	}
 	if !repo.submitted || repo.submitAttemptID != attemptID {
 		t.Fatalf("expected submit to be called with attempt %s", attemptID)
+	}
+}
+
+func TestStartAttempt_DeniesForeignQuiz(t *testing.T) {
+	userID := uuid.New()
+	ownerID := uuid.New()
+	quizID := uuid.New()
+
+	repo := &stubQuizRepoForMutations{
+		quiz: &models.Quiz{ID: quizID, UserID: ownerID},
+	}
+	h := &QuizHandler{quizRepo: repo}
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", quizID.String())
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/quizzes/"+quizID.String()+"/start", nil)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	rr := httptest.NewRecorder()
+
+	h.StartAttempt(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rr.Code)
+	}
+}
+
+func TestStartAttempt_AllowsOwnedQuiz(t *testing.T) {
+	userID := uuid.New()
+	quizID := uuid.New()
+
+	repo := &stubQuizRepoForMutations{
+		quiz: &models.Quiz{ID: quizID, UserID: userID},
+	}
+	h := &QuizHandler{quizRepo: repo}
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", quizID.String())
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/quizzes/"+quizID.String()+"/start", nil)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	rr := httptest.NewRecorder()
+
+	h.StartAttempt(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, rr.Code)
+	}
+}
+
+func TestGetAttempt_DeniesWhenQuizOwnershipMismatch(t *testing.T) {
+	userID := uuid.New()
+	ownerID := uuid.New()
+	attemptID := uuid.New()
+	quizID := uuid.New()
+
+	repo := &stubQuizRepoForMutations{
+		attempt: &models.QuizAttempt{ID: attemptID, QuizID: quizID, UserID: userID},
+		quiz:    &models.Quiz{ID: quizID, UserID: ownerID, QuestionsJSON: json.RawMessage(`[]`)},
+	}
+	h := &QuizHandler{quizRepo: repo}
+
+	qctx := chi.NewRouteContext()
+	qctx.URLParams.Add("id", attemptID.String())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/quiz-attempts/"+attemptID.String(), nil)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, qctx))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	rr := httptest.NewRecorder()
+
+	h.GetAttempt(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rr.Code)
 	}
 }
