@@ -171,7 +171,11 @@ func (h *FlashcardHandler) GetDeck(w http.ResponseWriter, r *http.Request) {
 		}
 	}(deck.ID)
 
-	cards, _ := h.flashRepo.GetCardsByDeck(r.Context(), id)
+	cards, err := h.flashRepo.GetCardsByDeck(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to fetch cards", r))
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"deck":  deck,

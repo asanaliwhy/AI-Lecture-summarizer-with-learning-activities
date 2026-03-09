@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -17,10 +18,23 @@ import (
 )
 
 type QuizHandler struct {
-	quizRepo    *repository.QuizRepo
+	quizRepo    quizRepository
 	summaryRepo *repository.SummaryRepo
 	jobRepo     *repository.JobRepo
 	redis       *redis.Client
+}
+
+type quizRepository interface {
+	Create(ctx context.Context, q *models.Quiz) error
+	ListByUser(ctx context.Context, userID uuid.UUID) ([]*models.Quiz, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Quiz, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+	ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
+	TouchLastAccessed(ctx context.Context, id uuid.UUID) (bool, error)
+	CreateAttempt(ctx context.Context, a *models.QuizAttempt) error
+	GetAttemptByID(ctx context.Context, id uuid.UUID) (*models.QuizAttempt, error)
+	SaveProgress(ctx context.Context, attemptID uuid.UUID, answers json.RawMessage) error
+	SubmitAttempt(ctx context.Context, attemptID uuid.UUID, score float64, correct int, answers json.RawMessage) error
 }
 
 func NewQuizHandler(quizRepo *repository.QuizRepo, summaryRepo *repository.SummaryRepo, jobRepo *repository.JobRepo, redisClient *redis.Client) *QuizHandler {
@@ -242,7 +256,10 @@ func (h *QuizHandler) SaveProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var progress models.SaveProgressRequest
-	json.NewDecoder(r.Body).Decode(&progress)
+	if err := json.NewDecoder(r.Body).Decode(&progress); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
 
 	// Merge with existing answers
 	var answers []map[string]int
@@ -267,15 +284,24 @@ func (h *QuizHandler) SaveProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	answersJSON, _ := json.Marshal(answers)
-	h.quizRepo.SaveProgress(r.Context(), attemptID, answersJSON)
+	if err := h.quizRepo.SaveProgress(r.Context(), attemptID, answersJSON); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to save progress", r))
+		return
+	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Progress saved"})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *QuizHandler) SubmitAttempt(w http.ResponseWriter, r *http.Request) {
 	attemptID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid attempt ID", r))
+		return
+	}
+
+	var req map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
 		return
 	}
 
@@ -299,10 +325,16 @@ func (h *QuizHandler) SubmitAttempt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var questions []models.QuizQuestion
-	json.Unmarshal(quiz.QuestionsJSON, &questions)
+	if err := json.Unmarshal(quiz.QuestionsJSON, &questions); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to parse quiz questions", r))
+		return
+	}
 
 	var answers []map[string]int
-	json.Unmarshal(attempt.AnswersJSON, &answers)
+	if err := json.Unmarshal(attempt.AnswersJSON, &answers); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to parse answers", r))
+		return
+	}
 
 	// Grade
 	correct := 0
@@ -321,7 +353,10 @@ func (h *QuizHandler) SubmitAttempt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	answersJSON, _ := json.Marshal(answers)
-	h.quizRepo.SubmitAttempt(r.Context(), attemptID, score, correct, answersJSON)
+	if err := h.quizRepo.SubmitAttempt(r.Context(), attemptID, score, correct, answersJSON); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to submit attempt", r))
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"score_percent": score,

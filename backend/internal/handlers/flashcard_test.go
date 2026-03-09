@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,6 +21,8 @@ type stubFlashcardRepoForRateCard struct {
 	cardErr     error
 	deck        *models.FlashcardDeck
 	deckErr     error
+	cards       []models.FlashcardCard
+	cardsErr    error
 	rateErr     error
 	rated       bool
 	ratedCardID uuid.UUID
@@ -45,7 +48,10 @@ func (s *stubFlashcardRepoForRateCard) GetDeckByID(ctx context.Context, id uuid.
 }
 
 func (s *stubFlashcardRepoForRateCard) GetCardsByDeck(ctx context.Context, deckID uuid.UUID) ([]models.FlashcardCard, error) {
-	return nil, nil
+	if s.cardsErr != nil {
+		return nil, s.cardsErr
+	}
+	return s.cards, nil
 }
 
 func (s *stubFlashcardRepoForRateCard) ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
@@ -188,5 +194,66 @@ func TestRateCard_InvalidRating_Returns400(t *testing.T) {
 	}
 	if code := errorCodeFromBody(t, rr); code != "VALIDATION_ERROR" {
 		t.Fatalf("expected VALIDATION_ERROR, got %q", code)
+	}
+}
+
+func TestGetDeck_CardFetchError_Returns500(t *testing.T) {
+	userID := uuid.New()
+	deckID := uuid.New()
+
+	repo := &stubFlashcardRepoForRateCard{
+		deck:     &models.FlashcardDeck{ID: deckID, UserID: userID, Title: "Deck"},
+		cardsErr: context.Canceled,
+	}
+	h := &FlashcardHandler{flashRepo: repo}
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", deckID.String())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/flashcards/decks/"+deckID.String(), nil)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	rr := httptest.NewRecorder()
+
+	h.GetDeck(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, rr.Code)
+	}
+	if code := errorCodeFromBody(t, rr); code != "INTERNAL_ERROR" {
+		t.Fatalf("expected INTERNAL_ERROR, got %q", code)
+	}
+}
+
+func TestGetDeck_EmptyDeck_Returns200WithEmptyCards(t *testing.T) {
+	userID := uuid.New()
+	deckID := uuid.New()
+
+	repo := &stubFlashcardRepoForRateCard{
+		deck:  &models.FlashcardDeck{ID: deckID, UserID: userID, Title: "Deck"},
+		cards: []models.FlashcardCard{},
+	}
+	h := &FlashcardHandler{flashRepo: repo}
+
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", deckID.String())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/flashcards/decks/"+deckID.String(), nil)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	rr := httptest.NewRecorder()
+
+	h.GetDeck(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	var payload struct {
+		Cards []models.FlashcardCard `json:"cards"`
+	}
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(payload.Cards) != 0 {
+		t.Fatalf("expected empty cards list, got %d", len(payload.Cards))
 	}
 }
