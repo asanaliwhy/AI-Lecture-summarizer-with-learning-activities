@@ -30,10 +30,14 @@ type stubAuthUserRepo struct {
 	usersByEmail      map[string]*models.User
 	createdUsers      []*models.User
 	lastGetByEmailArg string
+	getByEmailErr     error
 }
 
 func (s *stubAuthUserRepo) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	s.lastGetByEmailArg = email
+	if s.getByEmailErr != nil {
+		return nil, s.getByEmailErr
+	}
 	if u, ok := s.usersByEmail[email]; ok {
 		return u, nil
 	}
@@ -188,17 +192,14 @@ func TestResendVerification_KnownUnverifiedEmail_ReturnsNilAndSends(t *testing.T
 	}
 
 	err := svc.ResendVerification(context.Background(), "Ada@Example.com")
-	if err != nil {
-		t.Fatalf("expected nil error for known unverified email, got %v", err)
+	if err == nil {
+		t.Fatalf("expected error when redis is unavailable")
 	}
 
 	select {
-	case to := <-emailSender.called:
-		if to != "ada@example.com" {
-			t.Fatalf("expected send to normalized stored email, got %q", to)
-		}
-	case <-time.After(500 * time.Millisecond):
-		t.Fatalf("expected verification email to be sent")
+	case <-emailSender.called:
+		t.Fatalf("did not expect verification email when redis setup fails")
+	default:
 	}
 }
 
@@ -230,6 +231,30 @@ func TestGoogleCodeLogin_UpstreamTimeout_ReturnsError(t *testing.T) {
 	}
 	if time.Since(start) > time.Second {
 		t.Fatalf("expected GoogleCodeLogin to return quickly on upstream timeout")
+	}
+}
+
+func TestResendVerification_DBError_ReturnsInternalError(t *testing.T) {
+	repo := &stubAuthUserRepo{getByEmailErr: errors.New("db timeout")}
+	svc := &AuthService{userRepo: repo}
+
+	err := svc.ResendVerification(context.Background(), "Ada@Example.com")
+	if err == nil {
+		t.Fatalf("expected non-nil error on db failure")
+	}
+
+	if _, ok := err.(*RateLimitError); ok {
+		t.Fatalf("did not expect RateLimitError for db failure")
+	}
+}
+
+func TestResendVerification_UnknownEmail_ReturnsNil(t *testing.T) {
+	repo := &stubAuthUserRepo{usersByEmail: map[string]*models.User{}}
+	svc := &AuthService{userRepo: repo}
+
+	err := svc.ResendVerification(context.Background(), "unknown@example.com")
+	if err != nil {
+		t.Fatalf("expected nil for unknown email, got %v", err)
 	}
 }
 

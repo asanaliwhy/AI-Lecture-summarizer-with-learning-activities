@@ -112,7 +112,7 @@ func (h *DashboardHandler) fetchRecentFromDB(ctx context.Context, userID uuid.UU
 
 func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	g, ctx := errgroup.WithContext(r.Context())
+	g, gctx := errgroup.WithContext(r.Context())
 
 	var summaryCount, quizCount, flashcardCount, weeklySummaryCount int
 	var weeklyQuizCount, weeklyFlashcardCount int
@@ -121,19 +121,19 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	var weeklyGoalType string
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM summaries WHERE user_id = $1", userID).Scan(&summaryCount)
+		return h.pool.QueryRow(gctx, "SELECT COUNT(*) FROM summaries WHERE user_id = $1", userID).Scan(&summaryCount)
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM quizzes WHERE user_id = $1", userID).Scan(&quizCount)
+		return h.pool.QueryRow(gctx, "SELECT COUNT(*) FROM quizzes WHERE user_id = $1", userID).Scan(&quizCount)
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, "SELECT COUNT(*) FROM flashcard_decks WHERE user_id = $1", userID).Scan(&flashcardCount)
+		return h.pool.QueryRow(gctx, "SELECT COUNT(*) FROM flashcard_decks WHERE user_id = $1", userID).Scan(&flashcardCount)
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, `
+		return h.pool.QueryRow(gctx, `
 			SELECT COUNT(*)
 			FROM summaries
 			WHERE user_id = $1
@@ -143,7 +143,7 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, `
+		return h.pool.QueryRow(gctx, `
 			SELECT COUNT(*)
 			FROM quizzes
 			WHERE user_id = $1
@@ -152,7 +152,7 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, `
+		return h.pool.QueryRow(gctx, `
 			SELECT COUNT(*)
 			FROM flashcard_decks
 			WHERE user_id = $1
@@ -161,7 +161,7 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, `
+		return h.pool.QueryRow(gctx, `
 			SELECT COUNT(*)
 			FROM summaries
 			WHERE user_id = $1
@@ -172,7 +172,7 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, `
+		return h.pool.QueryRow(gctx, `
 			SELECT COUNT(*)
 			FROM quizzes
 			WHERE user_id = $1
@@ -182,7 +182,7 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, `
+		return h.pool.QueryRow(gctx, `
 			SELECT COUNT(*)
 			FROM flashcard_decks
 			WHERE user_id = $1
@@ -192,7 +192,7 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, `
+		return h.pool.QueryRow(gctx, `
 			SELECT COALESCE((notifications_json->>'weekly_goal_target')::int, 5)
 			FROM user_settings
 			WHERE user_id = $1
@@ -200,23 +200,17 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, `
+		return h.pool.QueryRow(gctx, `
 			SELECT COALESCE(notifications_json->>'weekly_goal_type', 'summary')
 			FROM user_settings
 			WHERE user_id = $1
 		`, userID).Scan(&weeklyGoalType)
 	})
-	if weeklyGoalTarget <= 0 {
-		weeklyGoalTarget = 5
-	}
-	if weeklyGoalType == "" {
-		weeklyGoalType = "summary"
-	}
 
 	var studyHours, weeklyStudyHours, prevWeeklyStudyHours float64
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, `
+		return h.pool.QueryRow(gctx, `
 			SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
 			FROM study_sessions
 			WHERE user_id = $1
@@ -224,7 +218,7 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, `
+		return h.pool.QueryRow(gctx, `
 			SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
 			FROM study_sessions
 			WHERE user_id = $1
@@ -233,7 +227,7 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 
 	g.Go(func() error {
-		return h.pool.QueryRow(ctx, `
+		return h.pool.QueryRow(gctx, `
 			SELECT COALESCE(SUM(duration_seconds), 0)::float8 / 3600.0
 			FROM study_sessions
 			WHERE user_id = $1
@@ -246,6 +240,13 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Stats: query failed for user %s: %v", userID, err)
 		writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve stats", r))
 		return
+	}
+
+	if weeklyGoalTarget <= 0 {
+		weeklyGoalTarget = 5
+	}
+	if weeklyGoalType == "" {
+		weeklyGoalType = "summary"
 	}
 
 	calcTrend := func(current, previous float64) float64 {

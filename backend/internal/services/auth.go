@@ -247,7 +247,10 @@ func (s *AuthService) ResendVerification(ctx context.Context, email string) erro
 
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
-		return nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return fmt.Errorf("failed to look up user for resend verification: %w", err)
 	}
 
 	if user.IsVerified {
@@ -256,7 +259,10 @@ func (s *AuthService) ResendVerification(ctx context.Context, email string) erro
 
 	// Rate limit check
 	rateLimitKey := fmt.Sprintf("resend_limit:%s", user.ID.String())
-	exists, _ := s.redis.Exists(ctx, rateLimitKey).Result()
+	exists, err := s.redis.Exists(ctx, rateLimitKey).Result()
+	if err != nil {
+		return fmt.Errorf("failed to check resend rate limit: %w", err)
+	}
 	if exists > 0 {
 		return &RateLimitError{Message: "Please wait 60 seconds before requesting another verification email"}
 	}
@@ -267,8 +273,12 @@ func (s *AuthService) ResendVerification(ctx context.Context, email string) erro
 		return err
 	}
 
-	s.redis.Set(ctx, "email_verify:"+token, user.ID.String(), 24*time.Hour)
-	s.redis.Set(ctx, rateLimitKey, "1", 60*time.Second)
+	if err := s.redis.Set(ctx, "email_verify:"+token, user.ID.String(), 24*time.Hour).Err(); err != nil {
+		return fmt.Errorf("failed to store verification token: %w", err)
+	}
+	if err := s.redis.Set(ctx, rateLimitKey, "1", 60*time.Second).Err(); err != nil {
+		return fmt.Errorf("failed to set resend rate limit: %w", err)
+	}
 
 	// Send verification email
 	if s.email != nil {
