@@ -613,6 +613,18 @@ func enforceSmartAdditionalFactsBullets(text string) (string, bool) {
 	normalized := strings.ReplaceAll(text, "\r\n", "\n")
 	lines := strings.Split(normalized, "\n")
 
+	joinSections := func(parts ...string) string {
+		normalizedParts := make([]string, 0, len(parts))
+		for _, part := range parts {
+			trimmed := strings.TrimRight(part, "\n")
+			if trimmed == "" {
+				continue
+			}
+			normalizedParts = append(normalizedParts, trimmed)
+		}
+		return strings.Join(normalizedParts, "\n\n")
+	}
+
 	start := -1
 	for i, line := range lines {
 		if isAdditionalFactsHeading(line) {
@@ -649,15 +661,17 @@ func enforceSmartAdditionalFactsBullets(text string) (string, bool) {
 	if hasBullets {
 		// Ensure markdown list parsing stability: keep a blank line after heading.
 		if len(sectionLines) > 0 && strings.TrimSpace(sectionLines[0]) != "" {
-			rebuilt := make([]string, 0, len(lines)+1)
-			rebuilt = append(rebuilt, lines[:start+1]...)
-			rebuilt = append(rebuilt, "")
-			rebuilt = append(rebuilt, sectionLines...)
+			before := strings.Join(lines[:start+1], "\n")
+			factsSection := strings.Join(sectionLines, "\n")
+
+			cleaned := ""
 			if end < len(lines) {
-				rebuilt = append(rebuilt, lines[end:]...)
+				after := strings.Join(lines[end:], "\n")
+				cleaned = joinSections(before, factsSection, after)
+			} else {
+				cleaned = joinSections(before, factsSection)
 			}
 
-			cleaned := strings.Join(rebuilt, "\n")
 			for strings.Contains(cleaned, "\n\n\n") {
 				cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
 			}
@@ -686,16 +700,17 @@ func enforceSmartAdditionalFactsBullets(text string) (string, bool) {
 		return normalized, false
 	}
 
-	rebuilt := make([]string, 0, len(lines)+len(bullets))
-	rebuilt = append(rebuilt, lines[:start+1]...)
-	rebuilt = append(rebuilt, "")
-	rebuilt = append(rebuilt, bullets...)
+	before := strings.Join(lines[:start+1], "\n")
+	factsSection := strings.Join(bullets, "\n")
+
+	cleaned := ""
 	if end < len(lines) {
-		rebuilt = append(rebuilt, "")
-		rebuilt = append(rebuilt, lines[end:]...)
+		after := strings.Join(lines[end:], "\n")
+		cleaned = joinSections(before, factsSection, after)
+	} else {
+		cleaned = joinSections(before, factsSection)
 	}
 
-	cleaned := strings.Join(rebuilt, "\n")
 	for strings.Contains(cleaned, "\n\n\n") {
 		cleaned = strings.ReplaceAll(cleaned, "\n\n\n", "\n\n")
 	}
