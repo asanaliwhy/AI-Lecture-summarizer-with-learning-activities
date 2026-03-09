@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,11 +24,21 @@ import (
 )
 
 type ContentHandler struct {
-	contentRepo *repository.ContentRepo
-	jobRepo     *repository.JobRepo
+	contentRepo contentStore
+	jobRepo     jobStore
 	redis       *redis.Client
 	storagePath string
 	youtube     *services.YouTubeService
+}
+
+type contentStore interface {
+	Create(ctx context.Context, c *models.Content) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Content, error)
+}
+
+type jobStore interface {
+	Create(ctx context.Context, j *models.Job) error
+	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 }
 
 func NewContentHandler(contentRepo *repository.ContentRepo, jobRepo *repository.JobRepo, redisClient *redis.Client, storagePath string, youtube *services.YouTubeService) *ContentHandler {
@@ -73,16 +84,33 @@ func (h *ContentHandler) ValidateYouTube(w http.ResponseWriter, r *http.Request)
 
 	// Fetch metadata from oEmbed
 	oembedURL := "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + videoID + "&format=json"
-	resp, err := http.Get(oembedURL)
+	request, reqErr := http.NewRequestWithContext(r.Context(), http.MethodGet, oembedURL, nil)
+	if reqErr != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("UPSTREAM_ERROR", "Failed to reach YouTube", r))
+		return
+	}
+
+	resp, err := services.YouTubeHTTPClient.Do(request)
 	var oembed struct {
 		Title        string `json:"title"`
 		AuthorName   string `json:"author_name"`
 		ThumbnailURL string `json:"thumbnail_url"`
 	}
 
-	if err == nil && resp.StatusCode == http.StatusOK {
-		defer resp.Body.Close()
-		json.NewDecoder(resp.Body).Decode(&oembed)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("UPSTREAM_ERROR", "Failed to reach YouTube", r))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		writeJSON(w, http.StatusUnprocessableEntity, errorResp("INVALID_URL", "YouTube URL could not be validated", r))
+		return
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&oembed); err != nil {
+		writeJSON(w, http.StatusBadGateway, errorResp("UPSTREAM_ERROR", "Failed to parse YouTube metadata", r))
+		return
 	}
 
 	// Fallback if oEmbed fails or for fields not in oEmbed
@@ -135,13 +163,22 @@ func (h *ContentHandler) ValidateYouTube(w http.ResponseWriter, r *http.Request)
 		CreatedAt:   time.Now(),
 	}
 
-	if err := h.jobRepo.Create(r.Context(), job); err == nil {
-		if h.redis == nil {
-			log.Println("CRITICAL: h.redis is nil in ValidateYouTube, cannot enqueue job")
-		} else {
-			jobBytes, _ := json.Marshal(job)
-			h.redis.LPush(r.Context(), "queue:content-processing", string(jobBytes))
-		}
+	if err := h.jobRepo.Create(r.Context(), job); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to create processing job", r))
+		return
+	}
+
+	if h.redis == nil {
+		_ = h.jobRepo.UpdateStatus(r.Context(), job.ID, "failed")
+		writeJSON(w, http.StatusInternalServerError, errorResp("QUEUE_ERROR", "Failed to queue processing job", r))
+		return
+	}
+
+	jobBytes, _ := json.Marshal(job)
+	if err := h.redis.LPush(r.Context(), "queue:content-processing", string(jobBytes)).Err(); err != nil {
+		_ = h.jobRepo.UpdateStatus(r.Context(), job.ID, "failed")
+		writeJSON(w, http.StatusInternalServerError, errorResp("QUEUE_ERROR", "Failed to queue processing job", r))
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -236,15 +273,23 @@ func (h *ContentHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		ReferenceID: content.ID,
 	}
 
-	if err := h.jobRepo.Create(r.Context(), job); err == nil {
-		if h.redis == nil {
-			log.Println("CRITICAL: h.redis is nil in Upload, cannot enqueue file content-processing job")
-		} else {
-			jobBytes, _ := json.Marshal(job)
-			h.redis.LPush(r.Context(), "queue:content-processing", string(jobBytes))
-		}
-	} else {
+	if err := h.jobRepo.Create(r.Context(), job); err != nil {
 		log.Printf("failed to create file content-processing job for content %s: %v", content.ID, err)
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to create processing job", r))
+		return
+	}
+
+	if h.redis == nil {
+		_ = h.jobRepo.UpdateStatus(r.Context(), job.ID, "failed")
+		writeJSON(w, http.StatusInternalServerError, errorResp("QUEUE_ERROR", "Failed to queue processing job", r))
+		return
+	}
+
+	jobBytes, _ := json.Marshal(job)
+	if err := h.redis.LPush(r.Context(), "queue:content-processing", string(jobBytes)).Err(); err != nil {
+		_ = h.jobRepo.UpdateStatus(r.Context(), job.ID, "failed")
+		writeJSON(w, http.StatusInternalServerError, errorResp("QUEUE_ERROR", "Failed to queue processing job", r))
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

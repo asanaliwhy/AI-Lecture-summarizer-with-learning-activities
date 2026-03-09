@@ -330,7 +330,13 @@ func (s *AuthService) GoogleCodeLogin(ctx context.Context, code string) (*models
 	form.Set("redirect_uri", s.googleRedirectURI)
 	form.Set("grant_type", "authorization_code")
 
-	resp, err := http.PostForm("https://oauth2.googleapis.com/token", form)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://oauth2.googleapis.com/token", strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to build token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := DefaultHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange Google authorization code: %w", err)
 	}
@@ -365,7 +371,7 @@ func (s *AuthService) GoogleLogin(ctx context.Context, idToken string) (*models.
 }
 
 func (s *AuthService) loginWithGoogleIDToken(ctx context.Context, idToken string) (*models.AuthTokens, error) {
-	tokenInfo, err := s.verifyGoogleIDToken(idToken)
+	tokenInfo, err := s.verifyGoogleIDToken(ctx, idToken)
 	if err != nil {
 		return nil, err
 	}
@@ -373,8 +379,13 @@ func (s *AuthService) loginWithGoogleIDToken(ctx context.Context, idToken string
 	return s.loginOrCreateGoogleUser(ctx, tokenInfo)
 }
 
-func (s *AuthService) verifyGoogleIDToken(idToken string) (*googleTokenInfo, error) {
-	resp, err := http.Get("https://oauth2.googleapis.com/tokeninfo?id_token=" + url.QueryEscape(idToken))
+func (s *AuthService) verifyGoogleIDToken(ctx context.Context, idToken string) (*googleTokenInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://oauth2.googleapis.com/tokeninfo?id_token="+url.QueryEscape(idToken), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build token info request: %w", err)
+	}
+
+	resp, err := DefaultHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify Google token: %w", err)
 	}

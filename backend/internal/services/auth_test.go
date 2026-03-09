@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"testing"
 	"time"
 
@@ -199,3 +201,38 @@ func TestResendVerification_KnownUnverifiedEmail_ReturnsNilAndSends(t *testing.T
 		t.Fatalf("expected verification email to be sent")
 	}
 }
+
+func TestGoogleCodeLogin_UpstreamTimeout_ReturnsError(t *testing.T) {
+	originalClient := DefaultHTTPClient
+	t.Cleanup(func() { DefaultHTTPClient = originalClient })
+
+	DefaultHTTPClient = &http.Client{
+		Timeout: 25 * time.Millisecond,
+		Transport: roundTripFuncAuth(func(req *http.Request) (*http.Response, error) {
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		}),
+	}
+
+	svc := &AuthService{
+		googleClientID:     "client-id",
+		googleClientSecret: "client-secret",
+		googleRedirectURI:  "https://example.com/callback",
+	}
+
+	start := time.Now()
+	_, err := svc.GoogleCodeLogin(context.Background(), "auth-code")
+	if err == nil {
+		t.Fatalf("expected timeout error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected context deadline exceeded wrapped error, got %v", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Fatalf("expected GoogleCodeLogin to return quickly on upstream timeout")
+	}
+}
+
+type roundTripFuncAuth func(*http.Request) (*http.Response, error)
+
+func (f roundTripFuncAuth) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
