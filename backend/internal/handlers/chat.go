@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -26,6 +27,8 @@ func NewChatHandler(summaryRepo summaryRepository, geminiService *services.Gemin
 }
 
 func (h *ChatHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
+	const maxChatMessageLength = 2000
+
 	summaryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid summary ID", r))
@@ -39,7 +42,12 @@ func (h *ChatHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.TrimSpace(req.Message) == "" {
-		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Message is required", r))
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Message cannot be empty", r))
+		return
+	}
+
+	if len([]rune(req.Message)) > maxChatMessageLength {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", fmt.Sprintf("Message exceeds maximum length of %d characters", maxChatMessageLength), r))
 		return
 	}
 
