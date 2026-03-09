@@ -55,7 +55,7 @@ func (r *JobRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Job, error
 
 func (r *JobRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
 	query := "UPDATE jobs SET status = $1 WHERE id = $2"
-	if status == "completed" || status == "failed" {
+	if updateStatusSetsCompletedAt(status) {
 		now := time.Now()
 		query = "UPDATE jobs SET status = $1, completed_at = $2 WHERE id = $3"
 		_, err := r.pool.Exec(ctx, query, status, now, id)
@@ -63,6 +63,10 @@ func (r *JobRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string)
 	}
 	_, err := r.pool.Exec(ctx, query, status, id)
 	return err
+}
+
+func updateStatusSetsCompletedAt(status string) bool {
+	return status == "completed" || status == "failed" || status == "cancelled"
 }
 
 func (r *JobRepo) UpdateError(ctx context.Context, id uuid.UUID, errMsg string, retryCount int) error {
