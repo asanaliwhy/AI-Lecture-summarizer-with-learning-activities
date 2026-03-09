@@ -3,43 +3,71 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
-
-	"lectura-backend/internal/middleware"
 )
-
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
-}
 
 type Hub struct {
 	mu          sync.RWMutex
 	connections map[uuid.UUID][]*websocket.Conn
 	redisClient *redis.Client
 	cancelFuncs map[uuid.UUID]context.CancelFunc
+	frontendURL string
 }
 
-func NewHub(redisClient *redis.Client, jwtSecret string) *Hub {
-	_ = jwtSecret
+func NewHub(redisClient *redis.Client, frontendURL string) *Hub {
 	return &Hub{
 		connections: make(map[uuid.UUID][]*websocket.Conn),
 		redisClient: redisClient,
 		cancelFuncs: make(map[uuid.UUID]context.CancelFunc),
+		frontendURL: frontendURL,
 	}
 }
 
 func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	if userID == uuid.Nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true
+			}
+
+			allowed := strings.Split(h.frontendURL, ",")
+			for _, a := range allowed {
+				if strings.TrimSpace(a) == origin {
+					return true
+				}
+			}
+
+			return false
+		},
+	}
+
+	ticket := r.URL.Query().Get("ticket")
+	if ticket == "" {
+		http.Error(w, "missing ticket", http.StatusUnauthorized)
+		return
+	}
+
+	key := fmt.Sprintf("ws_ticket:%s", ticket)
+	userIDStr, err := h.redisClient.GetDel(r.Context(), key).Result()
+	if err != nil {
+		http.Error(w, "invalid or expired ticket", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "invalid user ID in ticket", http.StatusUnauthorized)
 		return
 	}
 
