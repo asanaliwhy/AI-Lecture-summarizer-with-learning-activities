@@ -201,9 +201,9 @@ func (p *Pool) processSummary(ctx context.Context, job *models.Job) error {
 			return fmt.Errorf("youtube content has no source URL")
 		}
 
-		videoID := extractVideoID(*content.SourceURL)
-		if videoID == "" {
-			return fmt.Errorf("invalid YouTube URL: %s", *content.SourceURL)
+		videoID, extractErr := extractVideoID(*content.SourceURL)
+		if extractErr != nil {
+			return extractErr
 		}
 
 		p.gemini.PublishUpdate(ctx, job.UserID, models.WSMessage{
@@ -344,9 +344,9 @@ func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
 
 	if content.Type == "youtube" && content.SourceURL != nil {
 		// Extract video ID from URL
-		videoID := extractVideoID(*content.SourceURL)
-		if videoID == "" {
-			return fmt.Errorf("invalid YouTube URL: %s", *content.SourceURL)
+		videoID, extractErr := extractVideoID(*content.SourceURL)
+		if extractErr != nil {
+			return extractErr
 		}
 
 		// Step 1: Fetch transcript
@@ -483,7 +483,21 @@ func buildMetadataFallbackTranscript(content *models.Content) string {
 	)
 }
 
-func extractVideoID(url string) string {
+func isValidVideoID(id string) bool {
+	if len(id) != 11 {
+		return false
+	}
+
+	for _, r := range id {
+		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
+			return false
+		}
+	}
+
+	return true
+}
+
+func extractVideoID(url string) (string, error) {
 	parsed, err := urlpkg.Parse(url)
 	if err == nil {
 		host := strings.ToLower(parsed.Host)
@@ -491,44 +505,54 @@ func extractVideoID(url string) string {
 
 		// youtube.com/watch?v=VIDEO_ID
 		if strings.Contains(host, "youtube.com") {
-			if v := parsed.Query().Get("v"); len(v) == 11 {
-				return v
+			if v := parsed.Query().Get("v"); v != "" {
+				if !isValidVideoID(v) {
+					return "", fmt.Errorf("invalid YouTube video ID: %q", v)
+				}
+				return v, nil
 			}
 
 			parts := strings.Split(path, "/")
 			if len(parts) >= 2 {
 				switch parts[0] {
 				case "shorts", "embed", "v":
-					if len(parts[1]) == 11 {
-						return parts[1]
+					candidate := parts[1]
+					if !isValidVideoID(candidate) {
+						return "", fmt.Errorf("invalid YouTube video ID: %q", candidate)
 					}
+					return candidate, nil
 				}
 			}
 		}
 
 		// youtu.be/VIDEO_ID
 		if strings.Contains(host, "youtu.be") {
-			if len(path) >= 11 {
+			if path != "" {
 				candidate := strings.Split(path, "/")[0]
-				if len(candidate) == 11 {
-					return candidate
+				if !isValidVideoID(candidate) {
+					return "", fmt.Errorf("invalid YouTube video ID: %q", candidate)
 				}
+				return candidate, nil
 			}
 		}
 	}
 
 	// Fallback regex for unusual URL forms
 	patterns := []string{
-		`(?:v=|\/v\/|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})`,
+		`(?:v=|\/v\/|youtu\.be\/|embed\/|shorts\/)([^&?/]+)`,
 	}
 	for _, p := range patterns {
 		re := regexp.MustCompile(p)
 		if m := re.FindStringSubmatch(url); len(m) > 1 {
-			return m[1]
+			candidate := m[1]
+			if !isValidVideoID(candidate) {
+				return "", fmt.Errorf("invalid YouTube video ID: %q", candidate)
+			}
+			return candidate, nil
 		}
 	}
 
-	return ""
+	return "", fmt.Errorf("invalid YouTube URL: %s", url)
 }
 
 func (p *Pool) handleSuccess(ctx context.Context, job *models.Job) {
