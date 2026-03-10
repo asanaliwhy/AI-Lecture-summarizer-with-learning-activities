@@ -1101,10 +1101,20 @@ export function SummaryPage() {
 
   const handleTitleSave = async () => {
     setIsEditingTitle(false)
-    if (id && title !== summary?.title) {
+    const trimmed = title.trim()
+    if (!trimmed) {
+      setTitle(summary?.title || 'Untitled Summary')
+      toast.error('Title cannot be empty')
+      return
+    }
+
+    if (id && trimmed !== summary?.title) {
+      const previousTitle = summary?.title || 'Untitled Summary'
       try {
-        await api.summaries.update(id, { title })
+        await api.summaries.update(id, { title: trimmed })
+        setTitle(trimmed)
       } catch {
+        setTitle(previousTitle)
         toast.error('Failed to update title')
       }
     }
@@ -1218,7 +1228,7 @@ export function SummaryPage() {
 
       let y = margin
 
-      if (summary?.format !== 'smart') {
+      if (summary?.format !== 'smart' && summary?.format !== 'cornell') {
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(18)
         doc.text(fileTitle, margin, y)
@@ -1509,6 +1519,271 @@ export function SummaryPage() {
             y += 14
           }
         })
+
+        doc.save(`${fileTitle}.pdf`)
+        toast.success('PDF exported')
+        return
+      }
+
+      if (summary?.format === 'cornell') {
+        let y = margin
+
+        const ensurePageSpace = (heightNeeded: number) => {
+          if (y + heightNeeded > pageHeight - margin) {
+            doc.addPage()
+            y = margin
+          }
+        }
+
+        const sourceRaw = String(summary.source || summary.source_type || '').toLowerCase()
+        const sourceLabel = sourceRaw.includes('youtube') || sourceRaw.includes('youtu') ? 'YouTube' : 'Document'
+        const dateLabel = formatPdfDate(summary.created_at)
+        const tags = (summary.tags || []).filter(Boolean).slice(0, 5)
+
+        ensurePageSpace(24)
+        doc.setFillColor(232, 236, 247)
+        doc.rect(margin, y, contentWidth, 18, 'F')
+        doc.setTextColor(79, 70, 229)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.text('CORNELL METHOD', margin + 8, y + 12)
+        y += 50
+
+        doc.setTextColor(30, 30, 50)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(22)
+        const cornellTitleLines = doc.splitTextToSize(fileTitle, contentWidth) as string[]
+        for (const line of cornellTitleLines) {
+          ensurePageSpace(26)
+          doc.text(line, margin, y)
+          y += 24
+        }
+        y += 2
+
+        ensurePageSpace(16)
+        doc.setTextColor(100, 100, 100)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        doc.text(`Source: ${sourceLabel} · Generated: ${dateLabel}`, margin, y)
+        y += 14
+
+        if (tags.length > 0) {
+          const gap = 6
+          const chipHeight = 18
+          const chipWidth = (contentWidth - gap * (tags.length - 1)) / tags.length
+          ensurePageSpace(chipHeight + 10)
+
+          tags.forEach((tag, index) => {
+            const x = margin + index * (chipWidth + gap)
+            doc.setFillColor(209, 250, 229)
+            doc.rect(x, y, chipWidth, chipHeight, 'F')
+            doc.setTextColor(6, 95, 70)
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(10)
+            const chipText = cleanInlineMarkdown(String(tag))
+            const chipLines = doc.splitTextToSize(chipText, chipWidth - 10) as string[]
+            doc.text(chipLines.slice(0, 1), x + 5, y + 12, { maxWidth: chipWidth - 10 })
+          })
+
+          y += chipHeight + 10
+        }
+
+        ensurePageSpace(6)
+        doc.setFillColor(79, 70, 229)
+        doc.rect(margin, y, contentWidth, 1.5, 'F')
+        y += 14
+
+        const cueColumnWidth = contentWidth * 0.36
+        const noteColumnWidth = contentWidth * 0.64
+        const rowPaddingY = 8
+        const rowPaddingX = 10
+        const rowLineHeight = 14
+        const headerHeight = 22
+
+        const drawCornellHeader = () => {
+          ensurePageSpace(headerHeight)
+          doc.setFillColor(30, 30, 50)
+          doc.rect(margin, y, contentWidth, headerHeight, 'F')
+
+          doc.setDrawColor(220, 220, 235)
+          doc.setLineWidth(0.5)
+          doc.rect(margin, y, cueColumnWidth, headerHeight)
+          doc.rect(margin + cueColumnWidth, y, noteColumnWidth, headerHeight)
+
+          doc.setTextColor(255, 255, 255)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(10.5)
+          doc.text('CUES', margin + rowPaddingX, y + 14)
+          doc.text('NOTES', margin + cueColumnWidth + rowPaddingX, y + 14)
+          y += headerHeight
+        }
+
+        const parseCornellItems = (rawValue: string, normalizedValue: string): string[] => {
+          const toItemsFromLines = (input: string): string[] => {
+            const lines = input
+              .replace(/\r\n/g, '\n')
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean)
+
+            if (lines.length === 0) return []
+
+            const parsed: string[] = []
+            let current = ''
+
+            const flush = () => {
+              const cleaned = cleanInlineMarkdown(current)
+              if (cleaned) parsed.push(cleaned)
+              current = ''
+            }
+
+            for (const line of lines) {
+              if (isMarkdownTableSeparator(line)) continue
+
+              if (line.startsWith('|') && line.endsWith('|')) {
+                const cells = parseMarkdownTableRow(line)
+                if (cells.length > 0) {
+                  flush()
+                  parsed.push(cleanInlineMarkdown(cells.join(' — ')))
+                }
+                continue
+              }
+
+              const strippedHeading = line.replace(/^#{1,6}\s+/, '').replace(/^>\s+/, '')
+              const isNewItem = /^([-*+•]\s+|\d+[.)]\s+)/.test(strippedHeading)
+              const itemText = cleanInlineMarkdown(
+                strippedHeading.replace(/^[-*+•]\s+/, '').replace(/^\d+[.)]\s+/, '').trim(),
+              )
+
+              if (!itemText) continue
+
+              if (isNewItem) {
+                flush()
+                current = itemText
+              } else if (!current) {
+                current = itemText
+              } else {
+                current = `${current} ${itemText}`
+              }
+            }
+
+            flush()
+            return parsed
+          }
+
+          const source = (rawValue || '').trim()
+          const normalized = (normalizedValue || '').trim()
+
+          const fromRaw = toItemsFromLines(source)
+          if (fromRaw.length > 1) return fromRaw
+
+          if (source.includes('•')) {
+            const inlineBullets = source
+              .replace(/\r\n/g, '\n')
+              .split(/(?:^|\s)•\s+/)
+              .map((item) => cleanInlineMarkdown(item))
+              .filter(Boolean)
+            if (inlineBullets.length > 1) return inlineBullets
+          }
+
+          const fromNormalized = toItemsFromLines(normalized)
+          if (fromNormalized.length > 0) return fromNormalized
+
+          return (source || normalized)
+            .replace(/\r\n/g, '\n')
+            .split(/\n{2,}|\n/)
+            .map((item) => cleanInlineMarkdown(item.replace(/^[-*+•]\s+/, '').replace(/^\d+[.)]\s+/, '').trim()))
+            .filter(Boolean)
+        }
+
+        const cueItems = parseCornellItems(summary?.cornell_cues || '', cues)
+        const noteItems = parseCornellItems(summary?.cornell_notes || '', notes)
+
+        const maxRows = Math.max(cueItems.length, noteItems.length, 1)
+        drawCornellHeader()
+
+        for (let i = 0; i < maxRows; i += 1) {
+          const cueText = cueItems[i] || ''
+          const noteText = noteItems[i] || ''
+
+          const cueLines = doc.splitTextToSize(cueText || '—', Math.max(cueColumnWidth - rowPaddingX * 2 - 14, 24)) as string[]
+          const noteLines = doc.splitTextToSize(noteText || '—', Math.max(noteColumnWidth - rowPaddingX * 2, 24)) as string[]
+          const maxLines = Math.max(cueLines.length, noteLines.length, 1)
+          const rowHeight = maxLines * rowLineHeight + rowPaddingY * 2
+
+          if (y + rowHeight > pageHeight - margin) {
+            doc.addPage()
+            y = margin
+            drawCornellHeader()
+          }
+
+          if (i % 2 === 0) {
+            doc.setFillColor(248, 249, 255)
+          } else {
+            doc.setFillColor(255, 255, 255)
+          }
+          doc.rect(margin, y, contentWidth, rowHeight, 'F')
+
+          doc.setDrawColor(220, 220, 235)
+          doc.setLineWidth(0.5)
+          doc.rect(margin, y, cueColumnWidth, rowHeight)
+          doc.rect(margin + cueColumnWidth, y, noteColumnWidth, rowHeight)
+
+          doc.setTextColor(79, 70, 229)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(11)
+          doc.text(`${i + 1}.`, margin + rowPaddingX, y + rowPaddingY + 10)
+
+          doc.setTextColor(50, 50, 60)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10.5)
+          doc.text(cueLines, margin + rowPaddingX + 14, y + rowPaddingY + 10, {
+            maxWidth: Math.max(cueColumnWidth - rowPaddingX * 2 - 14, 24),
+          })
+
+          doc.setTextColor(50, 50, 50)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10.5)
+          doc.text(noteLines, margin + cueColumnWidth + rowPaddingX, y + rowPaddingY + 10, {
+            maxWidth: Math.max(noteColumnWidth - rowPaddingX * 2, 24),
+          })
+
+          y += rowHeight
+        }
+
+        y += 14
+
+        const summaryHeaderHeight = 22
+        ensurePageSpace(summaryHeaderHeight)
+        doc.setFillColor(30, 30, 50)
+        doc.rect(margin, y, contentWidth, summaryHeaderHeight, 'F')
+        doc.setTextColor(255, 255, 255)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.text('SUMMARY', margin + rowPaddingX, y + 14)
+        y += summaryHeaderHeight
+
+        const summaryText = cornellSummaryText || 'No summary available.'
+        const summaryLines = doc.splitTextToSize(summaryText, contentWidth - 20) as string[]
+        const summaryBodyHeight = Math.max(34, summaryLines.length * 17 + 16)
+        ensurePageSpace(summaryBodyHeight)
+        doc.setFillColor(245, 245, 255)
+        doc.rect(margin, y, contentWidth, summaryBodyHeight, 'F')
+
+        doc.setTextColor(50, 50, 60)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(11)
+        let summaryY = y + 16
+        for (const line of summaryLines) {
+          doc.text(line, margin + 10, summaryY, { maxWidth: contentWidth - 20 })
+          summaryY += 17
+        }
+        y += summaryBodyHeight
+
+        doc.setTextColor(120, 120, 120)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.text('Lectura · Page 1', pageWidth / 2, pageHeight - 20, { align: 'center' })
 
         doc.save(`${fileTitle}.pdf`)
         toast.success('PDF exported')
