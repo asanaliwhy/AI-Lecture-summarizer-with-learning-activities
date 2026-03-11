@@ -20,6 +20,14 @@ import (
 	"lectura-backend/internal/services"
 )
 
+type workerJobRepo interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Job, error)
+	Create(ctx context.Context, j *models.Job) error
+	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
+	UpdateStatusIfNotTerminal(ctx context.Context, id uuid.UUID, status string) (bool, error)
+	UpdateError(ctx context.Context, id uuid.UUID, errMsg string, retryCount int) error
+}
+
 type Pool struct {
 	redis               *redis.Client
 	gemini              *services.GeminiService
@@ -27,7 +35,7 @@ type Pool struct {
 	userRepo            *repository.UserRepo
 	youtube             *services.YouTubeService
 	fileExtract         *services.FileExtractService
-	jobRepo             *repository.JobRepo
+	jobRepo             workerJobRepo
 	contentRepo         *repository.ContentRepo
 	summaryRepo         *repository.SummaryRepo
 	quizRepo            *repository.QuizRepo
@@ -287,11 +295,26 @@ func (p *Pool) waitForContentReady(ctx context.Context, contentID uuid.UUID, tim
 }
 
 func (p *Pool) processQuiz(ctx context.Context, job *models.Job) error {
-	// Get the summary content for quiz generation
-	var config struct {
-		SummaryID uuid.UUID `json:"summary_id"`
+	current, err := p.jobRepo.GetByID(ctx, job.ID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch job state for %s: %w", job.ID, err)
 	}
-	json.Unmarshal(job.ConfigJSON, &config)
+	if current.Status == "cancelled" {
+		log.Printf("job %s was cancelled before quiz processing started — skipping", job.ID)
+		return nil
+	}
+
+	// Validate job config before processing to avoid zero-value downstream behavior.
+	var config models.GenerateQuizRequest
+	if err := json.Unmarshal(job.ConfigJSON, &config); err != nil {
+		return fmt.Errorf("invalid quiz job config for job %s: %w", job.ID, err)
+	}
+	if config.NumQuestions <= 0 {
+		return fmt.Errorf("invalid quiz config for job %s: num_questions must be > 0, got %d", job.ID, config.NumQuestions)
+	}
+	if config.SummaryID == uuid.Nil {
+		return fmt.Errorf("invalid quiz config for job %s: summary_id is required", job.ID)
+	}
 
 	summary, err := p.summaryRepo.GetByID(ctx, config.SummaryID)
 	if err != nil {
@@ -307,10 +330,23 @@ func (p *Pool) processQuiz(ctx context.Context, job *models.Job) error {
 }
 
 func (p *Pool) processFlashcard(ctx context.Context, job *models.Job) error {
-	var config struct {
-		SummaryID uuid.UUID `json:"summary_id"`
+	current, err := p.jobRepo.GetByID(ctx, job.ID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch job state for %s: %w", job.ID, err)
 	}
-	json.Unmarshal(job.ConfigJSON, &config)
+	if current.Status == "cancelled" {
+		log.Printf("job %s was cancelled before flashcard processing started — skipping", job.ID)
+		return nil
+	}
+
+	// Validate job config before processing to avoid zero-value downstream behavior.
+	var config models.GenerateFlashcardsRequest
+	if err := json.Unmarshal(job.ConfigJSON, &config); err != nil {
+		return fmt.Errorf("invalid flashcard job config for job %s: %w", job.ID, err)
+	}
+	if config.NumCards <= 0 {
+		return fmt.Errorf("invalid flashcard config for job %s: num_cards must be > 0, got %d", job.ID, config.NumCards)
+	}
 
 	deck, err := p.flashRepo.GetDeckByID(ctx, job.ReferenceID)
 	if err != nil {
@@ -335,6 +371,15 @@ func (p *Pool) processFlashcard(ctx context.Context, job *models.Job) error {
 }
 
 func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
+	current, err := p.jobRepo.GetByID(ctx, job.ID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch job state for %s: %w", job.ID, err)
+	}
+	if current.Status == "cancelled" {
+		log.Printf("job %s was cancelled before content processing started — skipping", job.ID)
+		return nil
+	}
+
 	content, err := p.contentRepo.GetByID(ctx, job.ReferenceID)
 	if err != nil {
 		return fmt.Errorf("failed to get content: %w", err)
@@ -556,7 +601,15 @@ func extractVideoID(url string) (string, error) {
 }
 
 func (p *Pool) handleSuccess(ctx context.Context, job *models.Job) {
-	p.jobRepo.UpdateStatus(ctx, job.ID, "completed")
+	updated, err := p.jobRepo.UpdateStatusIfNotTerminal(ctx, job.ID, "completed")
+	if err != nil {
+		log.Printf("failed to mark job %s completed: %v", job.ID, err)
+		return
+	}
+	if !updated {
+		log.Printf("job %s completion skipped — already in terminal state", job.ID)
+		return
+	}
 
 	if job.Type == "summary-generation" {
 		go p.sendSummaryCompletionEmail(context.Background(), job)

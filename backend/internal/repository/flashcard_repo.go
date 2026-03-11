@@ -3,10 +3,12 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"lectura-backend/internal/models"
@@ -211,28 +213,37 @@ func (r *FlashcardRepo) RateCard(ctx context.Context, cardID uuid.UUID, rating i
 }
 
 func (r *FlashcardRepo) GetDeckStats(ctx context.Context, deckID uuid.UUID) (*models.DeckStats, error) {
+	return getDeckStatsWithQueryRow(ctx, deckID, func(ctx context.Context, sql string, args ...interface{}) pgx.Row {
+		return r.pool.QueryRow(ctx, sql, args...)
+	})
+}
+
+func getDeckStatsWithQueryRow(
+	ctx context.Context,
+	deckID uuid.UUID,
+	queryRow func(context.Context, string, ...interface{}) pgx.Row,
+) (*models.DeckStats, error) {
 	stats := &models.DeckStats{}
 
-	err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM flashcard_cards WHERE deck_id = $1", deckID).Scan(&stats.TotalCards)
+	err := queryRow(ctx, `
+		SELECT
+			COUNT(*) AS total,
+			COUNT(*) FILTER (WHERE repetitions >= 3 AND ease_factor >= 2.5) AS mastered,
+			COUNT(*) FILTER (WHERE repetitions > 0 AND (repetitions < 3 OR ease_factor < 2.5)) AS learning,
+			COUNT(*) FILTER (WHERE repetitions = 0) AS new,
+			COUNT(*) FILTER (WHERE next_review_at <= CURRENT_DATE) AS due_today
+		FROM flashcard_cards
+		WHERE deck_id = $1
+	`, deckID).Scan(
+		&stats.TotalCards,
+		&stats.Mastered,
+		&stats.Learning,
+		&stats.New,
+		&stats.DueToday,
+	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GetDeckStats: %w", err)
 	}
-
-	r.pool.QueryRow(ctx,
-		"SELECT COUNT(*) FROM flashcard_cards WHERE deck_id = $1 AND repetitions >= 3 AND ease_factor >= 2.5",
-		deckID).Scan(&stats.Mastered)
-
-	r.pool.QueryRow(ctx,
-		"SELECT COUNT(*) FROM flashcard_cards WHERE deck_id = $1 AND repetitions > 0 AND (repetitions < 3 OR ease_factor < 2.5)",
-		deckID).Scan(&stats.Learning)
-
-	r.pool.QueryRow(ctx,
-		"SELECT COUNT(*) FROM flashcard_cards WHERE deck_id = $1 AND repetitions = 0",
-		deckID).Scan(&stats.New)
-
-	r.pool.QueryRow(ctx,
-		"SELECT COUNT(*) FROM flashcard_cards WHERE deck_id = $1 AND next_review_at <= CURRENT_DATE",
-		deckID).Scan(&stats.DueToday)
 
 	if stats.TotalCards > 0 {
 		stats.MasteryRate = float64(stats.Mastered) / float64(stats.TotalCards) * 100

@@ -6,6 +6,7 @@ import { act } from 'react'
 
 const mocked = vi.hoisted(() => ({
     navigate: vi.fn(),
+    locationState: {} as { from?: string },
     login: vi.fn(),
     googleLogin: vi.fn(),
     toast: {
@@ -33,6 +34,7 @@ vi.mock('../components/ui/Toast', () => ({
 vi.mock('react-router-dom', () => ({
     Link: ({ children, to }: { children: React.ReactNode; to: string }) => <a href={to}>{children}</a>,
     useNavigate: () => mocked.navigate,
+    useLocation: () => ({ state: mocked.locationState }),
 }))
 
 import { LoginPage } from '../pages/LoginPage'
@@ -77,6 +79,7 @@ describe('LoginPage auth flows', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         mocked.login.mockResolvedValue(undefined)
+        mocked.locationState = {}
 
         container = document.createElement('div')
         document.body.appendChild(container)
@@ -125,7 +128,28 @@ describe('LoginPage auth flows', () => {
 
         expect(mocked.login).toHaveBeenCalledWith('user@example.com', 'Password123!')
         expect(mocked.toast.success).toHaveBeenCalledWith('Welcome back!')
-        expect(mocked.navigate).toHaveBeenCalledWith('/dashboard')
+        expect(mocked.navigate).toHaveBeenCalledWith('/dashboard', { replace: true })
+    })
+
+    it('navigates to prior protected route when location state has from', async () => {
+        mocked.locationState = { from: '/library' }
+
+        act(() => {
+            root.render(<LoginPage />)
+        })
+        await flush()
+
+        setInput('#email', 'user@example.com')
+        setInput('#password', 'Password123!')
+
+        const form = container.querySelector('form') as HTMLFormElement | null
+        expect(form).toBeTruthy()
+        act(() => {
+            form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+        })
+        await flush()
+
+        expect(mocked.navigate).toHaveBeenCalledWith('/library', { replace: true })
     })
 
     it('toggles password visibility button and supports keyboard interaction on submit button', async () => {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -12,8 +13,14 @@ import (
 	"lectura-backend/internal/repository"
 )
 
+type studySessionRepository interface {
+	Start(ctx context.Context, s *models.StudySession) error
+	Heartbeat(ctx context.Context, sessionID, userID uuid.UUID) (bool, error)
+	Stop(ctx context.Context, sessionID, userID uuid.UUID) (bool, error)
+}
+
 type StudySessionHandler struct {
-	repo *repository.StudySessionRepo
+	repo studySessionRepository
 }
 
 func NewStudySessionHandler(repo *repository.StudySessionRepo) *StudySessionHandler {
@@ -74,8 +81,13 @@ func (h *StudySessionHandler) Heartbeat(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.repo.Heartbeat(r.Context(), sessionID, userID); err != nil {
+	updated, err := h.repo.Heartbeat(r.Context(), sessionID, userID)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to update study session", r))
+		return
+	}
+	if !updated {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Session not found or already ended", r))
 		return
 	}
 
@@ -90,8 +102,13 @@ func (h *StudySessionHandler) Stop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.repo.Stop(r.Context(), sessionID, userID); err != nil {
+	updated, err := h.repo.Stop(r.Context(), sessionID, userID)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to stop study session", r))
+		return
+	}
+	if !updated {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Session not found or already ended", r))
 		return
 	}
 

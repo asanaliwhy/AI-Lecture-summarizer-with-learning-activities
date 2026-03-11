@@ -1,4 +1,4 @@
-import { setTokens, clearTokens } from '../lib/api'
+import { setTokens, clearTokens, tryRefreshOnce } from '../lib/api'
 
 // Mock fetch globally
 const mockFetch = vi.fn()
@@ -134,6 +134,67 @@ describe('API Client', () => {
             await expect(
                 fetch('http://localhost:8081/api/v1/summaries')
             ).rejects.toThrow('Network error')
+        })
+    })
+
+    describe('Refresh single-flight', () => {
+        it('only fires one refresh when multiple concurrent callers invoke tryRefreshOnce', async () => {
+            localStorage.setItem('access_token', 'stale-token')
+
+            let refreshCalls = 0
+            mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+                const url = String(input)
+                if (url.includes('/auth/refresh')) {
+                    refreshCalls++
+                    await new Promise((resolve) => setTimeout(resolve, 20))
+                    return {
+                        ok: true,
+                        json: () => Promise.resolve({ access_token: 'new-shared-token' }),
+                    }
+                }
+                return {
+                    ok: true,
+                    json: () => Promise.resolve({}),
+                }
+            })
+
+            const results = await Promise.all([
+                tryRefreshOnce(),
+                tryRefreshOnce(),
+                tryRefreshOnce(),
+                tryRefreshOnce(),
+                tryRefreshOnce(),
+            ])
+
+            expect(refreshCalls).toBe(1)
+            expect(results.every(Boolean)).toBe(true)
+            expect(localStorage.getItem('access_token')).toBe('new-shared-token')
+        })
+
+        it('runs refresh again after previous single-flight cycle completes', async () => {
+            let refreshCalls = 0
+            mockFetch.mockImplementation(async (input: RequestInfo | URL) => {
+                const url = String(input)
+                if (url.includes('/auth/refresh')) {
+                    refreshCalls++
+                    return {
+                        ok: true,
+                        json: () => Promise.resolve({ access_token: `token-${refreshCalls}` }),
+                    }
+                }
+                return {
+                    ok: true,
+                    json: () => Promise.resolve({}),
+                }
+            })
+
+            const first = await tryRefreshOnce()
+            const second = await tryRefreshOnce()
+
+            expect(first).toBe(true)
+            expect(second).toBe(true)
+            expect(refreshCalls).toBe(2)
+            expect(localStorage.getItem('access_token')).toBe('token-2')
         })
     })
 

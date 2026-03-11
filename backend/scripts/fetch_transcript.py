@@ -7,11 +7,23 @@ Exit 1 + error message on stderr   = failure
 """
 import sys
 import os
+import signal
 
 # Force UTF-8 output on Windows
 os.environ["PYTHONIOENCODING"] = "utf-8"
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
+
+
+def _timeout_handler(signum, frame):
+    print("transcript fetch timed out after 25s", file=sys.stderr)
+    sys.exit(1)
+
+
+# SIGALRM works on Unix (Linux/macOS). On Windows, Go-side timeout still applies.
+if hasattr(signal, "SIGALRM"):
+    signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(25)
 
 def main():
     if len(sys.argv) < 2:
@@ -51,4 +63,8 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        if hasattr(signal, "SIGALRM"):
+            signal.alarm(0)

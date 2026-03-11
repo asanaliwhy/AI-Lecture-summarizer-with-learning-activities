@@ -48,7 +48,7 @@ func NewGeminiService(
 		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 	}
 
-	model := client.GenerativeModel("gemini-2.5-flash")
+	model := client.GenerativeModel("gemini-3-flash-preview")
 	model.SetTemperature(0.3)
 	model.SetTopP(0.95)
 
@@ -115,7 +115,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 
 	summaryModel := s.model
 	if metadataOnlyMode {
-		metadataModel := s.client.GenerativeModel("gemini-2.5-flash")
+		metadataModel := s.client.GenerativeModel("gemini-3-flash-preview")
 		metadataModel.SetTemperature(0.3)
 		metadataModel.SetTopP(0.95)
 		metadataModel.SetMaxOutputTokens(3072)
@@ -293,12 +293,25 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	}
 
 	metaCh := make(chan metaResult, 1)
-	go func() {
+	go func(summaryExcerpt string) {
 		result := metaResult{
 			title:       "Untitled Summary",
 			tags:        []string{},
 			description: nil,
 		}
+
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Printf("metadata generation panic for summary %s: %v", job.ReferenceID, recovered)
+			}
+			select {
+			case metaCh <- result:
+			default:
+			}
+		}()
+
+		metaCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
 
 		metaPrompt := fmt.Sprintf(`Given this summary, return ONLY a valid JSON object with these fields:
 {"suggested_title": "title under 60 chars", "tags": ["tag1","tag2","tag3","tag4","tag5"], "one_sentence_description": "description under 120 chars"}
@@ -309,9 +322,9 @@ Rules:
 - one_sentence_description: summarizes the complete content in plain language
 
 Summary:
-%s`, rawText[:min(len(rawText), 6000)])
+%s`, summaryExcerpt)
 
-		metaResp, err := s.model.GenerateContent(ctx, genai.Text(metaPrompt))
+		metaResp, err := s.model.GenerateContent(metaCtx, genai.Text(metaPrompt))
 		if err == nil {
 			metaJSON := extractText(metaResp)
 			metaJSON = strings.TrimPrefix(metaJSON, "```json")
@@ -334,16 +347,23 @@ Summary:
 				if meta.Description != "" {
 					result.description = &meta.Description
 				}
+			} else {
+				log.Printf("metadata generation returned non-JSON payload for summary %s", job.ReferenceID)
 			}
+		} else {
+			log.Printf("metadata generation failed for summary %s: %v", job.ReferenceID, err)
 		}
-
-		metaCh <- result
-	}()
+	}(rawText[:min(len(rawText), 6000)])
 
 	// Count words while metadata call runs concurrently
 	wordCount := len(strings.Fields(rawText))
 
-	metaData := <-metaCh
+	metaData := metaResult{title: "Untitled Summary", tags: []string{}, description: nil}
+	select {
+	case metaData = <-metaCh:
+	case <-time.After(22 * time.Second):
+		log.Printf("metadata generation timeout for summary %s — using defaults", job.ReferenceID)
+	}
 	title := metaData.title
 	tags := metaData.tags
 	description := metaData.description
@@ -1739,6 +1759,18 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Notes alignment rule: each NOTES bullet must directly answer its matching CUE; first sentence answers immediately; do not broaden scope. WRONG: Cue asks 'How did Cold War extend to Asia?' but note is generic domino-theory policy. RIGHT: Cue asks that and note states China's 1949 revolution plus Korean War (1950-1953) brought Cold War conflict to Asia.\n")
 		b.WriteString("Cues should function as self-quiz questions a student could test themselves with.\n")
 		b.WriteString("The Summary section must synthesize — do not paraphrase the Notes section. Write the Summary as if explaining to someone who has not read the Notes.\n\n")
+		switch length {
+		case "concise":
+			b.WriteString("Cue count: generate 4-6 cues maximum. Do not exceed 6 cues under any circumstances.\n")
+		case "standard":
+			b.WriteString("Cue count: generate 6-8 cues maximum. Do not exceed 8 cues under any circumstances.\n")
+		case "detailed":
+			b.WriteString("Cue count: generate 9-12 cues maximum. Do not exceed 12 cues under any circumstances.\n")
+		case "comprehensive":
+			b.WriteString("Cue count: generate 13-18 cues maximum. Do not exceed 18 cues under any circumstances.\n")
+		default:
+			b.WriteString("Cue count: generate 6-8 cues maximum. Do not exceed 8 cues under any circumstances.\n")
+		}
 	case "bullets":
 		b.WriteString("Format: Use structured bullet points with clear headings and concise bullets.\n")
 		b.WriteString("Bullets output rules:\n")
@@ -1780,7 +1812,20 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Required sections (in this EXACT order, ALL sections are MANDATORY — never omit any):\n")
 		b.WriteString("1) Summary of Video Content — ALWAYS include this as the FIRST section. Write one concise narrative paragraph summarizing the overall topic and main points.\n")
 		b.WriteString("2) Key Insights and Core Concepts — deeper insights, implications, and connections.\n")
-		b.WriteString("3) [Topic-Appropriate Table] — a markdown table (2+ columns, 3+ data rows) covering the main entities/concepts from the content. Name this section based on the actual topic (e.g. 'Brain Structure and Functions', 'Key Historical Events', 'Algorithm Comparison').\n")
+		b.WriteString("3) Key Concepts Table — use EXACTLY this format, no exceptions:\n")
+		b.WriteString("   - Table title: 'Key Concepts'\n")
+		b.WriteString("   - EXACTLY 2 columns: 'Concept' and 'Explanation'\n")
+		b.WriteString("   - EXACTLY 4-6 data rows, one per key concept from the transcript\n")
+		b.WriteString("   - Every cell MUST contain real content — no dashes, no empty strings, no placeholders\n")
+		b.WriteString("   - Concept column: short name or term (1-5 words)\n")
+		b.WriteString("   - Explanation column: one clear sentence explaining the concept\n")
+		b.WriteString("   - Output ONLY ONE table. Do not output two tables.\n")
+		b.WriteString("   - Correct format example:\n")
+		b.WriteString("   | Concept | Explanation |\n")
+		b.WriteString("   | --- | --- |\n")
+		b.WriteString("   | Containment | US policy to prevent Soviet communism from spreading to new countries. |\n")
+		b.WriteString("   | Marshall Plan | American economic aid program to rebuild post-war Europe and resist communism. |\n")
+		b.WriteString("   | Berlin Wall | Physical barrier built in 1961 to stop East Germans defecting to the West. |\n\n")
 		b.WriteString("4) Additional Interesting Facts — 3-6 noteworthy facts as a markdown bullet list.\n\n")
 		b.WriteString("Output rules for Smart Summary: Use markdown headings and bullets. ALWAYS include at least one markdown table with at least 2 columns and 3 data rows. If the transcript has no obvious entities, create a table with columns: Concept | Explanation. Keep statements factual and avoid unsupported claims.\n")
 		b.WriteString("Terminology fidelity rules: reuse exact source terms from the transcript whenever possible (prefer direct phrasing over paraphrased/neologism terms). Do NOT invent renamed concepts.\n")
@@ -1804,13 +1849,7 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		if metadataOnlyMode {
 			b.WriteString("  CRITICAL: In metadata-only mode, this section must contain exactly one line: 'Key Insights cannot be generated from metadata alone. Please provide a video with an available transcript.'\n")
 		}
-		b.WriteString("- Table section: use a topic-appropriate title; this is the ONLY place for entity/concept descriptions in table form.\n")
-		b.WriteString("  The table MUST be a proper markdown table with header, separator, and at least 3 data rows.\n")
-		b.WriteString("  CRITICAL: Every table cell MUST contain actual content. Never use dashes (---), empty strings, or placeholder text in data cells. If information is unknown, write 'Not specified' instead.\n")
-		b.WriteString("  The separator row (| --- | --- |) MUST appear exactly once, immediately after the header row, before any data rows. It must NEVER appear as a data row.\n")
-		b.WriteString("  Example of correct table format:\n")
-		b.WriteString("  | Brain Part | Primary Function | Key Characteristics |\n  | --- | --- | --- |\n  | Cerebrum | Thinking and learning | Largest part and supports conscious processing |\n  | Cerebellum | Balance and motor coordination | Fine-tunes movement and posture |\n  | Brain Stem | Involuntary regulation | Links brain to spinal cord and controls breathing |\n")
-		b.WriteString("  Before outputting the table, verify: (1) separator row exists after header, (2) every data cell has real content, (3) all rows have the same number of columns.\n\n")
+		b.WriteString("CRITICAL: Output exactly ONE table with exactly 2 columns (Concept | Explanation) and 4-6 data rows. Every cell must have real content. No exceptions.\n\n")
 		b.WriteString("- Additional Interesting Facts: output ONLY as a markdown bullet list (3-6 bullets, each line starts with '- '). Include only non-duplicated noteworthy facts, with numbers/evidence when present; avoid trivial or playful statements.\n")
 		if metadataOnlyMode {
 			b.WriteString("  Only include facts directly stated in the metadata. Do not speculate about content, themes, or implications.\n")
@@ -2338,7 +2377,7 @@ func (s *GeminiService) ChatWithSummary(ctx context.Context, summaryContent, use
 	defer s.releaseRate()
 
 	// Create a chat-specific model instance with a system instruction
-	chatModel := s.client.GenerativeModel("gemini-2.5-flash")
+	chatModel := s.client.GenerativeModel("gemini-3-flash-preview")
 	chatModel.SetTemperature(0.4)
 	chatModel.SetTopP(0.95)
 

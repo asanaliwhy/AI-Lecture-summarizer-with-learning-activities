@@ -49,19 +49,22 @@ func (r *StudySessionRepo) Start(ctx context.Context, s *models.StudySession) er
 	)
 }
 
-func (r *StudySessionRepo) Heartbeat(ctx context.Context, sessionID, userID uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, `
+func (r *StudySessionRepo) Heartbeat(ctx context.Context, sessionID, userID uuid.UUID) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
 		UPDATE study_sessions
 		SET last_heartbeat_at = NOW()
 		WHERE id = $1
 		  AND user_id = $2
 		  AND ended_at IS NULL
 	`, sessionID, userID)
-	return err
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
 }
 
-func (r *StudySessionRepo) Stop(ctx context.Context, sessionID, userID uuid.UUID) error {
-	_, err := r.pool.Exec(ctx, `
+func (r *StudySessionRepo) Stop(ctx context.Context, sessionID, userID uuid.UUID) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
 		UPDATE study_sessions
 		SET ended_at = CASE WHEN ended_at IS NULL THEN NOW() ELSE ended_at END,
 			last_heartbeat_at = NOW(),
@@ -71,6 +74,10 @@ func (r *StudySessionRepo) Stop(ctx context.Context, sessionID, userID uuid.UUID
 			END
 		WHERE id = $1
 		  AND user_id = $2
+		  AND ended_at IS NULL
 	`, sessionID, userID)
-	return err
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
 }

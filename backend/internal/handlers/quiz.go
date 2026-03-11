@@ -19,9 +19,22 @@ import (
 
 type QuizHandler struct {
 	quizRepo    quizRepository
-	summaryRepo *repository.SummaryRepo
-	jobRepo     *repository.JobRepo
-	redis       *redis.Client
+	summaryRepo quizSummaryRepository
+	jobRepo     quizJobRepository
+	redis       queuePusher
+}
+
+type queuePusher interface {
+	LPush(ctx context.Context, key string, values ...interface{}) *redis.IntCmd
+}
+
+type quizSummaryRepository interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Summary, error)
+}
+
+type quizJobRepository interface {
+	Create(ctx context.Context, j *models.Job) error
+	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 }
 
 type quizRepository interface {
@@ -106,8 +119,18 @@ func (h *QuizHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.redis == nil {
+		_ = h.jobRepo.UpdateStatus(r.Context(), job.ID, "failed")
+		writeJSON(w, http.StatusInternalServerError, errorResp("QUEUE_ERROR", "Failed to queue generation job", r))
+		return
+	}
+
 	jobBytes, _ := json.Marshal(job)
-	h.redis.LPush(r.Context(), "queue:quiz-generation", string(jobBytes))
+	if err := h.redis.LPush(r.Context(), "queue:quiz-generation", string(jobBytes)).Err(); err != nil {
+		_ = h.jobRepo.UpdateStatus(r.Context(), job.ID, "failed")
+		writeJSON(w, http.StatusInternalServerError, errorResp("QUEUE_ERROR", "Failed to queue generation job", r))
+		return
+	}
 
 	writeJSON(w, http.StatusAccepted, map[string]interface{}{
 		"job_id":  job.ID,

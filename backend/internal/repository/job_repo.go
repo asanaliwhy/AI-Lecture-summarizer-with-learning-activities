@@ -65,6 +65,28 @@ func (r *JobRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string)
 	return err
 }
 
+// UpdateStatusIfNotTerminal updates status only if the current state is non-terminal.
+// Returns updated=false when the job is already in a terminal state.
+func (r *JobRepo) UpdateStatusIfNotTerminal(ctx context.Context, id uuid.UUID, status string) (bool, error) {
+	query := `
+		UPDATE jobs
+		SET status = $1,
+			completed_at = CASE
+				WHEN $1 IN ('completed', 'failed', 'cancelled') THEN NOW()
+				ELSE completed_at
+			END
+		WHERE id = $2
+		  AND status NOT IN ('completed', 'failed', 'cancelled')
+	`
+
+	tag, err := r.pool.Exec(ctx, query, status, id)
+	if err != nil {
+		return false, err
+	}
+
+	return tag.RowsAffected() == 1, nil
+}
+
 func updateStatusSetsCompletedAt(status string) bool {
 	return status == "completed" || status == "failed" || status == "cancelled"
 }

@@ -57,7 +57,7 @@ export function DashboardPage() {
   const hour = new Date().getHours()
   const greeting =
     hour < 5
-      ? 'Good late evening'
+      ? 'Good night'
       : hour < 12
         ? 'Good morning'
         : hour < 17

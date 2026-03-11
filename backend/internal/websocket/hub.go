@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
+	writeWait            = 10 * time.Second
+	pongWait             = 60 * time.Second
 	maxMessageSize int64 = 512
 	sendBufferSize       = 256
 )
@@ -114,22 +114,28 @@ func (h *Hub) enqueueUnregister(client *Client) {
 }
 
 func (h *Hub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	log.Printf("WebSocket upgrade request: origin=%s remoteAddr=%s ticket=%s",
+		r.Header.Get("Origin"), r.RemoteAddr, r.URL.Query().Get("ticket"))
+
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 		CheckOrigin: func(r *http.Request) bool {
 			origin := r.Header.Get("Origin")
 			if origin == "" {
+				log.Printf("WebSocket origin check: empty origin, allowing")
 				return true
 			}
 
 			allowed := strings.Split(h.frontendURL, ",")
 			for _, a := range allowed {
 				if strings.TrimSpace(a) == origin {
+					log.Printf("WebSocket origin check PASS: %s", origin)
 					return true
 				}
 			}
 
+			log.Printf("WebSocket origin check FAIL: got %q, allowed %q", origin, h.frontendURL)
 			return false
 		},
 	}

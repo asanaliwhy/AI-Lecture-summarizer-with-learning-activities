@@ -1228,7 +1228,12 @@ export function SummaryPage() {
 
       let y = margin
 
-      if (summary?.format !== 'smart' && summary?.format !== 'bullets' && summary?.format !== 'cornell') {
+      if (
+        summary?.format !== 'smart' &&
+        summary?.format !== 'bullets' &&
+        summary?.format !== 'cornell' &&
+        summary?.format !== 'paragraph'
+      ) {
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(18)
         doc.text(fileTitle, margin, y)
@@ -1544,11 +1549,11 @@ export function SummaryPage() {
         const badgeHeight = 16
         const badgeToTitleGap = 28
         ensurePageSpace(badgeHeight)
-        doc.setFillColor(237, 237, 249)
+        doc.setFillColor(26, 26, 46)
         doc.rect(margin, y, contentWidth, badgeHeight, 'F')
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(8)
-        doc.setTextColor(79, 70, 229)
+        doc.setTextColor(255, 255, 255)
         doc.text('CORNELL METHOD', margin + 8, y + 11)
         y += badgeHeight + badgeToTitleGap
 
@@ -1596,7 +1601,7 @@ export function SummaryPage() {
 
         // Cornell PDF SETTINGS: Accent divider
         ensurePageSpace(6)
-        doc.setFillColor(79, 70, 229)
+        doc.setFillColor(26, 26, 46)
         doc.rect(margin, y, contentWidth, 1.5, 'F')
         y += 14
 
@@ -1771,7 +1776,7 @@ export function SummaryPage() {
           doc.rect(margin, y, cueColumnWidth, rowHeight)
           doc.rect(margin + cueColumnWidth, y, noteColumnWidth, rowHeight)
 
-          doc.setTextColor(79, 70, 229)
+          doc.setTextColor(26, 26, 46)
           doc.setFont('helvetica', 'bold')
           doc.setFontSize(11)
           doc.text(`${i + 1}.`, margin + rowPaddingX, y + rowPaddingY + 10)
@@ -1933,11 +1938,11 @@ export function SummaryPage() {
         const badgeHeight = 16
         const badgeToTitleGap = 28
         ensurePageSpaceBullets(badgeHeight)
-        setFillHex(LIGHT_INDIGO)
+        setFillHex(NAVY)
         doc.rect(margin, yBullets, bulletContentWidth, badgeHeight, 'F')
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(8)
-        setTextHex(INDIGO)
+        doc.setTextColor(255, 255, 255)
         doc.text('BULLET POINTS', margin + 8, yBullets + 11)
         yBullets += badgeHeight + badgeToTitleGap
 
@@ -1989,10 +1994,10 @@ export function SummaryPage() {
         } else {
           yBullets += 10
         }
-        // 5) Indigo accent divider
+        // 5) Navy accent divider
         // Bullet PDF SETTINGS: accent divider color/thickness
         ensurePageSpaceBullets(2)
-        setFillHex(INDIGO)
+        setFillHex(NAVY)
         doc.rect(margin, yBullets, bulletContentWidth, 1.5, 'F')
         yBullets += 14
 
@@ -2029,7 +2034,7 @@ export function SummaryPage() {
         ensurePageSpaceBullets(overviewCardHeight)
         setFillHex(SECTION_BG)
         doc.rect(margin, yBullets, bulletContentWidth, overviewCardHeight, 'F')
-        setFillHex(INDIGO)
+        setFillHex(NAVY)
         doc.rect(margin, yBullets, 4, overviewCardHeight, 'F')
         setDrawHex(BORDER)
         doc.setLineWidth(0.5)
@@ -2222,7 +2227,7 @@ export function SummaryPage() {
 
           ensurePageSpaceBullets(factRowHeight)
 
-          setFillHex(INDIGO)
+          setFillHex(NAVY)
           doc.rect(margin, yBullets, numberCellWidth, factRowHeight, 'F')
           setFillHex(SECTION_BG)
           doc.rect(margin + numberCellWidth, yBullets, factTextWidth, factRowHeight, 'F')
@@ -2266,6 +2271,221 @@ export function SummaryPage() {
           }
           doc.text(`Lectura · Page ${pageNumber}`, pageWidth / 2, pageHeight - 20, { align: 'center' })
         }
+
+        doc.save(`${fileTitle}.pdf`)
+        toast.success('PDF exported')
+        return
+      }
+
+      if (summary?.format === 'paragraph') {
+        const NAVY = '#1a1a2e'
+        const SLATE = '#475569'
+        const BODY_COLOR = '#1e293b'
+        const OFF_WHITE = '#f8fafc'
+        const RULE = '#e2e8f0'
+
+        const hexToRgb = (hex: string): [number, number, number] => {
+          const clean = hex.replace('#', '').trim()
+          const normalized = clean.length === 3
+            ? clean.split('').map((char) => `${char}${char}`).join('')
+            : clean
+          const num = Number.parseInt(normalized, 16)
+          return [(num >> 16) & 255, (num >> 8) & 255, num & 255]
+        }
+
+        const setFillHex = (hex: string) => {
+          const [r, g, b] = hexToRgb(hex)
+          doc.setFillColor(r, g, b)
+        }
+
+        const setTextHex = (hex: string) => {
+          const [r, g, b] = hexToRgb(hex)
+          doc.setTextColor(r, g, b)
+        }
+
+        const setDrawHex = (hex: string) => {
+          const [r, g, b] = hexToRgb(hex)
+          doc.setDrawColor(r, g, b)
+        }
+
+        const paraPageWidth = doc.internal.pageSize.getWidth()
+        const paraPageHeight = doc.internal.pageSize.getHeight()
+        const paraContentWidth = paraPageWidth - margin * 2
+        let yPara = margin
+
+        const ensurePageSpacePara = (h: number) => {
+          if (yPara + h > paraPageHeight - margin) {
+            doc.addPage()
+            yPara = margin
+          }
+        }
+
+        const sourceRaw = String(summary.source || summary.source_type || '').toLowerCase()
+        const sourceLabel = sourceRaw.includes('youtube') || sourceRaw.includes('youtu') ? 'YouTube' : 'Document'
+        const dateLabel = formatPdfDate(summary.created_at)
+
+        // 1) Badge
+        const badgeHeight = 16
+        const badgeToTitleGap = 28
+        ensurePageSpacePara(badgeHeight)
+        setFillHex(NAVY)
+        doc.rect(margin, yPara, paraContentWidth, badgeHeight, 'F')
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(8)
+        doc.setTextColor(255, 255, 255)
+        doc.text('PARAGRAPH SUMMARY', margin + 8, yPara + 11)
+        yPara += badgeHeight + badgeToTitleGap
+
+        // 2) Title
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(22)
+        setTextHex(NAVY)
+        const paraTitleLines = doc.splitTextToSize(fileTitle, paraContentWidth) as string[]
+        for (const line of paraTitleLines) {
+          ensurePageSpacePara(28)
+          doc.text(line, margin, yPara)
+          yPara += 28
+        }
+        yPara += 6
+
+        // 3) Meta
+        ensurePageSpacePara(16)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        setTextHex(SLATE)
+        yPara += -7
+        doc.text(`Source: ${sourceLabel} · Generated: ${dateLabel}`, margin, yPara)
+        yPara += 16
+
+        // 4) Tag chips
+        const paraTags = (summary.tags || []).filter(Boolean).slice(0, 5)
+        if (paraTags.length > 0) {
+          const gap = 0
+          const chipHeight = 18
+          const chipWidth = (paraContentWidth - gap * (paraTags.length - 1)) / paraTags.length
+
+          ensurePageSpacePara(chipHeight + 10)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(8)
+
+          paraTags.forEach((tag, index) => {
+            const x = margin + index * (chipWidth + gap)
+            doc.setFillColor(209, 250, 229)
+            doc.rect(x, yPara, chipWidth, chipHeight, 'F')
+            doc.setTextColor(6, 95, 70)
+            const chipText = cleanInlineMarkdown(String(tag))
+            const chipLines = doc.splitTextToSize(chipText, chipWidth - 10) as string[]
+            doc.text(chipLines.slice(0, 1), x + 5, yPara + 12, { maxWidth: chipWidth - 10 })
+          })
+
+          yPara += chipHeight + 10
+        }
+
+        // 5) Navy accent divider
+        ensurePageSpacePara(2)
+        setFillHex(NAVY)
+        doc.rect(margin, yPara, paraContentWidth, 1.5, 'F')
+        yPara += 16
+
+        const drawParagraphBodyCard = (value: string, skipEnsure = false) => {
+          const bodyText = cleanInlineMarkdown(value || 'No content available.') || 'No content available.'
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          const bodyLines = doc.splitTextToSize(bodyText, Math.max(paraContentWidth - 4 - 24, 60)) as string[]
+          const cardHeight = Math.max(24 + bodyLines.length * 17, 41)
+
+          if (!skipEnsure) {
+            ensurePageSpacePara(cardHeight)
+          }
+          const cardY = yPara
+
+          setFillHex(NAVY)
+          doc.rect(margin, cardY, 4, cardHeight, 'F')
+
+          setFillHex(OFF_WHITE)
+          doc.rect(margin + 4, cardY, paraContentWidth - 4, cardHeight, 'F')
+          setDrawHex(RULE)
+          doc.setLineWidth(0.5)
+          doc.rect(margin + 4, cardY, paraContentWidth - 4, cardHeight)
+
+          setTextHex(BODY_COLOR)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          doc.text(bodyLines, margin + 4 + 12, cardY + 18, {
+            maxWidth: Math.max(paraContentWidth - 4 - 24, 60),
+            lineHeightFactor: 1.7,
+          })
+
+          yPara += cardHeight + 14
+        }
+
+        // 6) Sections loop
+        const parsedSections = splitIntoSections(rawMain || '')
+        const fallbackBody = normalizeGeneralSummaryText(rawMain || '') || 'No content available.'
+        const hasSingleUntitledSection = parsedSections.length === 1 && !parsedSections[0]?.title?.trim()
+
+        const paraSections = (
+          hasSingleUntitledSection
+            ? [{ title: '', body: fallbackBody }]
+            : parsedSections.length > 0
+              ? parsedSections.map((section) => ({
+                title: cleanInlineMarkdown(section.title || ''),
+                body: normalizeGeneralSummaryText(section.body || ''),
+              }))
+              : [{ title: '', body: fallbackBody }]
+        ).filter((section) => section.title.trim() || section.body.trim())
+
+        if (paraSections.length === 1 && !paraSections[0].title.trim()) {
+          drawParagraphBodyCard(paraSections[0].body || fallbackBody)
+        } else {
+          paraSections.forEach((section, index) => {
+            const heading = cleanInlineMarkdown(section.title || '').trim()
+            const body = normalizeGeneralSummaryText(section.body || '') || 'No content available.'
+            const bodyLines = doc.splitTextToSize(body, Math.max(paraContentWidth - 4 - 24, 60)) as string[]
+            const cardHeight = Math.max(24 + bodyLines.length * 17, 41)
+
+            if (heading) {
+              doc.setFont('helvetica', 'bold')
+              doc.setFontSize(12)
+              setTextHex(NAVY)
+              const headingLines = doc.splitTextToSize(heading, Math.max(paraContentWidth - 32, 60)) as string[]
+              const headingHeight = Math.max(22, Math.max(1, headingLines.length) * 16)
+
+              ensurePageSpacePara(headingHeight + cardHeight + 14)
+
+              setFillHex(NAVY)
+              doc.rect(margin, yPara, 22, 22, 'F')
+              doc.setTextColor(255, 255, 255)
+              doc.setFont('helvetica', 'bold')
+              doc.setFontSize(11)
+              doc.text(String(index + 1), margin + 11, yPara + 15, { align: 'center' })
+
+              setTextHex(NAVY)
+              doc.setFont('helvetica', 'bold')
+              doc.setFontSize(12)
+              doc.text(headingLines, margin + 22 + 10, yPara + 15, {
+                maxWidth: Math.max(paraContentWidth - 32, 60),
+              })
+
+              yPara += headingHeight + 6
+              drawParagraphBodyCard(body, true)
+            } else {
+              drawParagraphBodyCard(body)
+            }
+          })
+        }
+
+        // 7) Thin rule + footer
+        ensurePageSpacePara(2)
+        setDrawHex(RULE)
+        doc.setLineWidth(0.5)
+        doc.line(margin, yPara, margin + paraContentWidth, yPara)
+        yPara += 10
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        setTextHex(SLATE)
+        doc.text('Lectura · Page 1', paraPageWidth / 2, paraPageHeight - 20, { align: 'center' })
 
         doc.save(`${fileTitle}.pdf`)
         toast.success('PDF exported')

@@ -101,7 +101,7 @@ func main() {
 	dashboardHandler := handlers.NewDashboardHandler(pool, userRepo)
 	libraryHandler := handlers.NewLibraryHandler(pool)
 	userHandler := handlers.NewUserHandler(userRepo)
-	jobHandler := handlers.NewJobHandler(jobRepo)
+	jobHandler := handlers.NewJobHandler(jobRepo, summaryRepo)
 	chatHandler := handlers.NewChatHandler(summaryRepo, geminiService)
 
 	// ──── Step 6: Start Job Worker Pool ────
@@ -153,11 +153,14 @@ func main() {
 	)
 
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%s", cfg.Port),
-		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:        fmt.Sprintf(":%s", cfg.Port),
+		Handler:     r,
+		ReadTimeout: 15 * time.Second,
+		// WriteTimeout is intentionally omitted: it applies to the entire
+		// connection lifetime after request headers are read, which kills
+		// long-lived WebSocket connections.  Per-write deadlines are already
+		// enforced in writePump() via conn.SetWriteDeadline().
+		IdleTimeout: 60 * time.Second,
 	}
 
 	// Graceful shutdown

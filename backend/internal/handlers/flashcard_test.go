@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,12 +12,16 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/redis/go-redis/v9"
 
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
 )
 
 type stubFlashcardRepoForRateCard struct {
+	createDeckErr error
+	createdDecks  []*models.FlashcardDeck
+
 	card        *models.FlashcardCard
 	cardErr     error
 	deck        *models.FlashcardDeck
@@ -30,6 +35,13 @@ type stubFlashcardRepoForRateCard struct {
 }
 
 func (s *stubFlashcardRepoForRateCard) CreateDeck(ctx context.Context, d *models.FlashcardDeck) error {
+	if s.createDeckErr != nil {
+		return s.createDeckErr
+	}
+	if d.ID == uuid.Nil {
+		d.ID = uuid.New()
+	}
+	s.createdDecks = append(s.createdDecks, d)
 	return nil
 }
 
@@ -85,6 +97,53 @@ func (s *stubFlashcardRepoForRateCard) RateCard(ctx context.Context, cardID uuid
 
 func (s *stubFlashcardRepoForRateCard) GetDeckStats(ctx context.Context, deckID uuid.UUID) (*models.DeckStats, error) {
 	return &models.DeckStats{}, nil
+}
+
+type stubFlashcardSummaryRepo struct {
+	summary *models.Summary
+}
+
+func (s *stubFlashcardSummaryRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Summary, error) {
+	if s.summary == nil {
+		return nil, context.Canceled
+	}
+	return s.summary, nil
+}
+
+type stubFlashcardJobRepo struct {
+	created         []*models.Job
+	updatedStatuses []string
+	updatedIDs      []uuid.UUID
+}
+
+func (s *stubFlashcardJobRepo) Create(ctx context.Context, j *models.Job) error {
+	if j.ID == uuid.Nil {
+		j.ID = uuid.New()
+	}
+	j.Status = "pending"
+	s.created = append(s.created, j)
+	return nil
+}
+
+func (s *stubFlashcardJobRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
+	s.updatedIDs = append(s.updatedIDs, id)
+	s.updatedStatuses = append(s.updatedStatuses, status)
+	return nil
+}
+
+type flashcardFakeQueuePusher struct {
+	err    error
+	key    string
+	values []interface{}
+}
+
+func (f *flashcardFakeQueuePusher) LPush(ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+	f.key = key
+	f.values = append(f.values, values...)
+	if f.err != nil {
+		return redis.NewIntResult(0, f.err)
+	}
+	return redis.NewIntResult(1, nil)
 }
 
 func makeRateCardRequest(t *testing.T, userID uuid.UUID, cardID uuid.UUID, body string) *http.Request {
@@ -329,5 +388,82 @@ func TestGetDeckStats_DeckNotFound_Returns404(t *testing.T) {
 	}
 	if code := errorCodeFromBody(t, rr); code != "NOT_FOUND" {
 		t.Fatalf("expected NOT_FOUND, got %q", code)
+	}
+}
+
+func TestFlashcardGenerate_QueueFailure_MarksJobFailed(t *testing.T) {
+	userID := uuid.New()
+	summaryID := uuid.New()
+
+	flashRepo := &stubFlashcardRepoForRateCard{}
+	summaryRepo := &stubFlashcardSummaryRepo{summary: &models.Summary{ID: summaryID, UserID: userID}}
+	jobRepo := &stubFlashcardJobRepo{}
+	queue := &flashcardFakeQueuePusher{err: errors.New("redis down")}
+
+	h := &FlashcardHandler{flashRepo: flashRepo, summaryRepo: summaryRepo, jobRepo: jobRepo, redis: queue}
+
+	body := `{"summary_id":"` + summaryID.String() + `","title":"Deck","num_cards":8,"strategy":"term_definition"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/flashcards/generate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	rr := httptest.NewRecorder()
+
+	h.Generate(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, rr.Code)
+	}
+	if code := errorCodeFromBody(t, rr); code != "QUEUE_ERROR" {
+		t.Fatalf("expected QUEUE_ERROR, got %q", code)
+	}
+	if len(flashRepo.createdDecks) != 1 {
+		t.Fatalf("expected deck to be created before enqueue failure")
+	}
+	if len(jobRepo.created) != 1 {
+		t.Fatalf("expected job to be created before enqueue failure")
+	}
+	if len(jobRepo.updatedStatuses) == 0 || jobRepo.updatedStatuses[len(jobRepo.updatedStatuses)-1] != "failed" {
+		t.Fatalf("expected job status to be marked failed")
+	}
+	if queue.key != "queue:flashcard-generation" {
+		t.Fatalf("expected queue key queue:flashcard-generation, got %q", queue.key)
+	}
+}
+
+func TestFlashcardGenerate_QueueSuccess_Returns202(t *testing.T) {
+	userID := uuid.New()
+	summaryID := uuid.New()
+
+	flashRepo := &stubFlashcardRepoForRateCard{}
+	summaryRepo := &stubFlashcardSummaryRepo{summary: &models.Summary{ID: summaryID, UserID: userID}}
+	jobRepo := &stubFlashcardJobRepo{}
+	queue := &flashcardFakeQueuePusher{}
+
+	h := &FlashcardHandler{flashRepo: flashRepo, summaryRepo: summaryRepo, jobRepo: jobRepo, redis: queue}
+
+	body := `{"summary_id":"` + summaryID.String() + `","title":"Deck","num_cards":8,"strategy":"term_definition"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/flashcards/generate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	rr := httptest.NewRecorder()
+
+	h.Generate(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected status %d, got %d", http.StatusAccepted, rr.Code)
+	}
+	if len(jobRepo.updatedStatuses) != 0 {
+		t.Fatalf("did not expect failed status updates on successful enqueue")
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if payload["job_id"] == nil {
+		t.Fatalf("expected job_id in response")
+	}
+	if payload["deck_id"] == nil {
+		t.Fatalf("expected deck_id in response")
 	}
 }

@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,9 +16,20 @@ import (
 	"lectura-backend/internal/services"
 )
 
+const (
+	maxChatMessageLength = 4000
+	maxChatHistoryItems  = 20
+	maxChatHistoryBytes  = 32000
+	maxChatBodyBytes     = 64 * 1024
+)
+
+type chatService interface {
+	ChatWithSummary(ctx context.Context, summaryContent, userMessage string, history []models.ChatMessage) (string, error)
+}
+
 type ChatHandler struct {
 	summaryRepo   summaryRepository
-	geminiService *services.GeminiService
+	geminiService chatService
 }
 
 func NewChatHandler(summaryRepo summaryRepository, geminiService *services.GeminiService) *ChatHandler {
@@ -26,8 +39,48 @@ func NewChatHandler(summaryRepo summaryRepository, geminiService *services.Gemin
 	}
 }
 
+func trimChatHistory(history []models.ChatMessage) []models.ChatMessage {
+	trimmed := history
+	if len(trimmed) > maxChatHistoryItems {
+		trimmed = trimmed[len(trimmed)-maxChatHistoryItems:]
+	}
+
+	normalized := make([]models.ChatMessage, 0, len(trimmed))
+	for _, msg := range trimmed {
+		content := strings.TrimSpace(msg.Content)
+		if content == "" {
+			continue
+		}
+
+		if len([]rune(content)) > maxChatMessageLength {
+			content = string([]rune(content)[:maxChatMessageLength])
+		}
+
+		role := "user"
+		if msg.Role == "assistant" {
+			role = "assistant"
+		}
+
+		normalized = append(normalized, models.ChatMessage{Role: role, Content: content})
+	}
+
+	historyBytes := func(items []models.ChatMessage) int {
+		total := 0
+		for _, m := range items {
+			total += len(m.Role) + len(m.Content)
+		}
+		return total
+	}
+
+	for len(normalized) > 0 && historyBytes(normalized) > maxChatHistoryBytes {
+		normalized = normalized[1:]
+	}
+
+	return normalized
+}
+
 func (h *ChatHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
-	const maxChatMessageLength = 2000
+	r.Body = http.MaxBytesReader(w, r.Body, maxChatBodyBytes)
 
 	summaryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -36,7 +89,14 @@ func (h *ChatHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.ChatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Request body too large", r))
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
 		return
 	}
@@ -50,6 +110,8 @@ func (h *ChatHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", fmt.Sprintf("Message exceeds maximum length of %d characters", maxChatMessageLength), r))
 		return
 	}
+
+	history := trimChatHistory(req.History)
 
 	// Load summary and verify ownership
 	summary, err := h.summaryRepo.GetByID(r.Context(), summaryID)
@@ -88,7 +150,7 @@ func (h *ChatHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Call Gemini chat
-	reply, err := h.geminiService.ChatWithSummary(r.Context(), summaryContent, req.Message, req.History)
+	reply, err := h.geminiService.ChatWithSummary(r.Context(), summaryContent, req.Message, history)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("AI_ERROR", "Failed to get AI response", r))
 		return

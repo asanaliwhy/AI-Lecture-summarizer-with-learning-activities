@@ -15,6 +15,13 @@ const mocked = vi.hoisted(() => ({
 }))
 
 vi.mock('../lib/api', () => ({
+    ApiError: class ApiError extends Error {
+        status: number
+        constructor(status: number, message: string) {
+            super(message)
+            this.status = status
+        }
+    },
     api: {
         jobs: mocked.jobsApi,
     },
@@ -117,7 +124,7 @@ describe('ProcessingPage runtime flows', () => {
             vi.advanceTimersByTime(1500)
         })
 
-        expect(mocked.navigate).toHaveBeenCalledWith('/summary/summary-777')
+        expect(mocked.navigate).toHaveBeenCalledWith('/summary/summary-777', { replace: true })
 
         vi.useRealTimers()
     })

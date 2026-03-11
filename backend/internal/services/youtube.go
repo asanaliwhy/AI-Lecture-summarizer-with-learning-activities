@@ -39,7 +39,7 @@ type textXML struct {
 
 func NewYouTubeService() *YouTubeService {
 	return &YouTubeService{
-		httpClient:    &http.Client{Timeout: 30 * time.Second},
+		httpClient:    YouTubeHTTPClient,
 		transcriptAPI: ytapi.NewYouTubeTranscriptApi(),
 		ytClient:      &yt.Client{},
 	}
@@ -112,6 +112,7 @@ func (s *YouTubeService) getTranscriptViaPython(videoID string) (string, error) 
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, pythonBin, scriptPath, videoID)
+	cmd.WaitDelay = 2 * time.Second
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 
 	var stdout, stderr bytes.Buffer
@@ -119,6 +120,9 @@ func (s *YouTubeService) getTranscriptViaPython(videoID string) (string, error) 
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("python transcript fetch timed out after 30s")
+		}
 		return "", fmt.Errorf("python script error: %s (exit: %v)", strings.TrimSpace(stderr.String()), err)
 	}
 
@@ -176,7 +180,10 @@ func findPythonScript() string {
 
 func (s *YouTubeService) getTranscriptViaTimedText(videoID string) (string, error) {
 	pageURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
-	req, _ := http.NewRequest("GET", pageURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, pageURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("getTranscriptViaTimedText: build page request: %w", err)
+	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
@@ -185,8 +192,11 @@ func (s *YouTubeService) getTranscriptViaTimedText(videoID string) (string, erro
 		return "", fmt.Errorf("failed to fetch YouTube page: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("getTranscriptViaTimedText: unexpected page status %d", resp.StatusCode)
+	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {
 		return "", fmt.Errorf("failed to read YouTube page: %w", err)
 	}
@@ -199,13 +209,21 @@ func (s *YouTubeService) getTranscriptViaTimedText(videoID string) (string, erro
 		return "", err
 	}
 
-	captionResp, err := s.httpClient.Get(captionURL)
+	captionReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, captionURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("getTranscriptViaTimedText: build captions request: %w", err)
+	}
+
+	captionResp, err := s.httpClient.Do(captionReq)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch captions: %w", err)
 	}
 	defer captionResp.Body.Close()
+	if captionResp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("getTranscriptViaTimedText: unexpected captions status %d", captionResp.StatusCode)
+	}
 
-	captionBody, err := io.ReadAll(captionResp.Body)
+	captionBody, err := io.ReadAll(io.LimitReader(captionResp.Body, 1<<20))
 	if err != nil {
 		return "", fmt.Errorf("failed to read captions: %w", err)
 	}
@@ -311,16 +329,26 @@ func (s *YouTubeService) DownloadAudio(videoURL string) ([]byte, string, error) 
 // EstimateDuration parses duration from YouTube page HTML
 func (s *YouTubeService) GetVideoMetadata(videoID string) (title, channel, thumbnail, description string, durationSec int, err error) {
 	pageURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
-	req, _ := http.NewRequest("GET", pageURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, pageURL, nil)
+	if err != nil {
+		return "", "", "", "", 0, fmt.Errorf("GetVideoMetadata: build request: %w", err)
+	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return "", "", "", "", 0, err
+		return "", "", "", "", 0, fmt.Errorf("GetVideoMetadata: request failed: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", "", "", "", 0, fmt.Errorf("GetVideoMetadata: unexpected status %d", resp.StatusCode)
+	}
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return "", "", "", "", 0, fmt.Errorf("GetVideoMetadata: read body: %w", err)
+	}
 	html := string(body)
 
 	// Extract title

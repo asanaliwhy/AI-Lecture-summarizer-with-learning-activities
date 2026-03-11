@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import { useWebSocket } from '../lib/useWebSocket'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
@@ -18,11 +18,27 @@ import { cn } from '../lib/utils'
 export function ProcessingPage() {
   const navigate = useNavigate()
   const { jobId } = useParams()
+  const POLL_MAX_FAILURES = 6
+  const POLL_BASE_MS = 5000
+  const POLL_MAX_MS = 30000
+  const FINALIZING_STALE_MS = 60000
   const [currentStep, setCurrentStep] = useState(0)
   const [stepName, setStepName] = useState('Analyzing content...')
   const [job, setJob] = useState<any>(null)
   const [error, setError] = useState('')
   const [isComplete, setIsComplete] = useState(false)
+  const [pollWarning, setPollWarning] = useState('')
+  const finalizingSinceRef = useRef<number | null>(null)
+  const currentStepRef = useRef(0)
+  const stepNameRef = useRef('Analyzing content...')
+
+  useEffect(() => {
+    currentStepRef.current = currentStep
+  }, [currentStep])
+
+  useEffect(() => {
+    stepNameRef.current = stepName
+  }, [stepName])
 
   const getSteps = (jobType?: string) => {
     if (jobType === 'quiz-generation') {
@@ -102,27 +118,34 @@ export function ProcessingPage() {
         const stepFromBackend = Number(payload.step || 1)
         setCurrentStep(Math.max(0, stepFromBackend - 1))
         setStepName(payload.step_name || '')
+
+        if (stepFromBackend >= 4) {
+          if (finalizingSinceRef.current === null) {
+            finalizingSinceRef.current = Date.now()
+          }
+        } else {
+          finalizingSinceRef.current = null
+        }
       }
     },
     onCompleted: (payload) => {
       if (payload.job_id === jobId || !jobId) {
+        finalizingSinceRef.current = null
         setIsComplete(true)
-        // Navigate to the result
-        setTimeout(() => {
-          if (payload.result_type === 'summary') {
-            navigate(`/summary/${payload.result_id}`)
-          } else if (payload.result_type === 'quiz') {
-            navigate(`/quiz/take/${payload.result_id}`)
-          } else if (payload.result_type === 'flashcard') {
-            navigate(`/flashcards/study/${payload.result_id}`)
-          } else {
-            navigate('/dashboard')
-          }
-        }, 1500)
+        if (payload.result_type === 'summary') {
+          navigate(`/summary/${payload.result_id}`, { replace: true })
+        } else if (payload.result_type === 'quiz') {
+          navigate(`/quiz/take/${payload.result_id}`, { replace: true })
+        } else if (payload.result_type === 'flashcard') {
+          navigate(`/flashcards/study/${payload.result_id}`, { replace: true })
+        } else {
+          navigate('/dashboard', { replace: true })
+        }
       }
     },
     onError: (payload) => {
       if (payload.job_id === jobId || !jobId) {
+        finalizingSinceRef.current = null
         setError(payload.error_message || 'Processing failed')
       }
     },
@@ -131,22 +154,49 @@ export function ProcessingPage() {
   // Poll job status as fallback if WebSocket isn't connected
   useEffect(() => {
     if (!jobId || isComplete || error) return
-    const interval = setInterval(async () => {
+
+    let cancelled = false
+    let timeoutId: number | undefined
+    let consecutiveFailures = 0
+
+    const scheduleNext = (delay: number) => {
+      if (cancelled) return
+      timeoutId = window.setTimeout(runPoll, delay)
+    }
+
+    const runPoll = async () => {
+      if (cancelled) return
+
       try {
         const data = await api.jobs.get(jobId)
+
+        consecutiveFailures = 0
+        setPollWarning('')
         setJob(data)
-        if (data.status === 'completed') {
-          setIsComplete(true)
-          clearInterval(interval)
-          if (data.type === 'summary-generation') {
-            navigate(`/summary/${data.reference_id}`)
-          } else if (data.type === 'quiz-generation') {
-            navigate(`/quiz/take/${data.reference_id}`)
-          } else if (data.type === 'flashcard-generation') {
-            navigate(`/flashcards/study/${data.reference_id}`)
-          } else {
-            navigate('/dashboard')
+
+        const stepNameLower = String(stepNameRef.current || '').toLowerCase()
+        const isFinalizingSignal = currentStepRef.current >= 3 || stepNameLower.includes('final')
+        if (isFinalizingSignal) {
+          if (finalizingSinceRef.current === null) {
+            finalizingSinceRef.current = Date.now()
           }
+        } else {
+          finalizingSinceRef.current = null
+        }
+
+        if (data.status === 'completed') {
+          finalizingSinceRef.current = null
+          setIsComplete(true)
+          if (data.type === 'summary-generation') {
+            navigate(`/summary/${data.reference_id}`, { replace: true })
+          } else if (data.type === 'quiz-generation') {
+            navigate(`/quiz/take/${data.reference_id}`, { replace: true })
+          } else if (data.type === 'flashcard-generation') {
+            navigate(`/flashcards/study/${data.reference_id}`, { replace: true })
+          } else {
+            navigate('/dashboard', { replace: true })
+          }
+          return // Stop polling
         } else if (data.status === 'failed') {
           setError(data.error_message || 'Processing failed')
 
@@ -161,11 +211,83 @@ export function ProcessingPage() {
             setCurrentStep(2)
           }
 
-          clearInterval(interval)
+          return
         }
-      } catch { }
-    }, 5000)
-    return () => clearInterval(interval)
+
+        if (
+          data.status === 'processing' &&
+          data.type === 'summary-generation' &&
+          data.reference_id &&
+          finalizingSinceRef.current !== null &&
+          Date.now() - finalizingSinceRef.current >= FINALIZING_STALE_MS
+        ) {
+          try {
+            const summary = await api.summaries?.get?.(data.reference_id)
+            const hasReadyContent = Boolean(
+              summary &&
+              (summary.content_raw || summary.cornell_summary || summary.content || summary.body),
+            )
+
+            if (hasReadyContent) {
+              setIsComplete(true)
+              navigate(`/summary/${data.reference_id}`, { replace: true })
+              return
+            }
+          } catch {
+            // keep polling when summary is not ready yet
+          }
+        }
+
+        scheduleNext(POLL_BASE_MS)
+      } catch (err: unknown) {
+        if (err instanceof ApiError) {
+          if (err.status === 401) {
+            setError('Session expired. Redirecting to login...')
+            navigate('/login', { replace: true })
+            return
+          }
+
+          if (err.status === 403) {
+            setError('You do not have access to this job.')
+            navigate('/dashboard', { replace: true })
+            return
+          }
+
+          if (err.status === 404) {
+            setError('Job not found.')
+            navigate('/dashboard', { replace: true })
+            return
+          }
+        }
+
+        consecutiveFailures += 1
+
+        const message = err instanceof Error ? err.message : 'Unknown polling error'
+        console.error(
+          `[ProcessingPage] job polling failed (${consecutiveFailures}/${POLL_MAX_FAILURES}) for ${jobId}:`,
+          message,
+        )
+
+        const backoffMs = Math.min(POLL_BASE_MS * Math.pow(2, consecutiveFailures - 1), POLL_MAX_MS)
+        setPollWarning(`Live updates are unstable. Retrying in ${Math.round(backoffMs / 1000)}s...`)
+
+        if (consecutiveFailures >= POLL_MAX_FAILURES) {
+          navigate('/summaries')
+          return
+        }
+
+        scheduleNext(backoffMs)
+      }
+    }
+
+    runPoll()
+
+    return () => {
+      cancelled = true
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
   }, [jobId, isComplete, error, navigate])
 
   return (
@@ -182,6 +304,11 @@ export function ProcessingPage() {
                 ? error
                 : 'Please wait while we generate your study materials.'}
           </p>
+          {!error && pollWarning && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+              {pollWarning}
+            </p>
+          )}
         </div>
 
         <Card className="mb-8">

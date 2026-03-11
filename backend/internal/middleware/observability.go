@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"sort"
 	"sync"
@@ -26,6 +28,21 @@ func (sr *statusRecorder) Write(b []byte) (int, error) {
 	n, err := sr.ResponseWriter.Write(b)
 	sr.bytes += n
 	return n, err
+}
+
+// Hijack implements http.Hijacker so that WebSocket upgrades work through this middleware.
+func (sr *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := sr.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, fmt.Errorf("underlying ResponseWriter does not support hijacking")
+}
+
+// Flush implements http.Flusher for streaming responses.
+func (sr *statusRecorder) Flush() {
+	if fl, ok := sr.ResponseWriter.(http.Flusher); ok {
+		fl.Flush()
+	}
 }
 
 type metricsCollector struct {
@@ -138,4 +155,3 @@ func MetricsHandler(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprintf(w, "lectura_requests_by_status{code=\"%d\"} %d\n", row[0], row[1])
 	}
 }
-

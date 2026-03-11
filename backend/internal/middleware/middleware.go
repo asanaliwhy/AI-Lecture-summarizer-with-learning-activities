@@ -11,8 +11,12 @@ import (
 // RequestID adds a unique request ID to each request
 func RequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := r.Header.Get("X-Request-ID")
-		if requestID == "" {
+		requestID := strings.TrimSpace(r.Header.Get("X-Request-ID"))
+		if requestID != "" {
+			if _, err := uuid.Parse(requestID); err != nil {
+				requestID = uuid.New().String()
+			}
+		} else {
 			requestID = uuid.New().String()
 		}
 		w.Header().Set("X-Request-ID", requestID)

@@ -16,6 +16,7 @@ import { Slider } from '../components/ui/Slider'
 import { Label } from '../components/ui/Label'
 import { Badge } from '../components/ui/Badge'
 import {
+  AlertCircle,
   UploadCloud,
   Youtube,
   FileText,
@@ -63,6 +64,7 @@ export function ContentInputPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [validationError, setValidationError] = useState('')
+  const [fileError, setFileError] = useState<string | null>(null)
   const [isDragActive, setIsDragActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const validationRequestIdRef = useRef(0)
@@ -76,6 +78,7 @@ export function ContentInputPage() {
     setIsValidating(false)
     setIsGenerating(false)
     setValidationError('')
+    setFileError(null)
 
     if (sourceType === 'youtube') {
       setUploadedFile(null)
@@ -120,18 +123,17 @@ export function ContentInputPage() {
   }
 
   const handleSelectedFile = (file: File | null) => {
+    setFileError(null)
     if (!file) return
 
-    const fileError = validateSelectedFile(file)
-    if (fileError) {
+    const error = validateSelectedFile(file)
+    if (error) {
+      setFileError(error)
       setUploadedFile(null)
-      setValidationError(fileError)
-      toast.error(fileError)
       return
     }
 
     setUploadedFile(file)
-    setValidationError('')
   }
 
   const handleValidate = async () => {
@@ -434,6 +436,12 @@ export function ContentInputPage() {
                         </div>
                       )}
                     </div>
+                    {fileError && (
+                      <p className="text-sm text-destructive flex items-center justify-center text-center gap-1.5 mt-1">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        {fileError}
+                      </p>
+                    )}
                   </TabsContent>
                 </Tabs>
               </CardContent>
@@ -683,7 +691,7 @@ export function ContentInputPage() {
                   Generate Summary
                 </Button>
                 <p className="text-xs text-center text-muted-foreground mt-3">
-                  Estimated processing time: ~2 minutes
+                  Estimated processing time: ~1 minutes
                 </p>
               </div>
             </div>

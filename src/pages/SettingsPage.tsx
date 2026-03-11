@@ -99,6 +99,7 @@ export function SettingsPage() {
     useState<ThemePreference>(() => getStoredThemePreference())
   const [notificationPreferences, setNotificationPreferences] =
     useState<NotificationPreferencesResponse>(DEFAULT_NOTIFICATION_PREFERENCES)
+  const [isSettingsSyncing, setIsSettingsSyncing] = useState(false)
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(true)
   const [savingNotificationKey, setSavingNotificationKey] =
     useState<UpdateNotificationPreferencePayload['key'] | null>(null)
@@ -116,6 +117,39 @@ export function SettingsPage() {
       setEmail(user.email || '')
       setAvatarUrl(user.avatar_url || '')
       setBio(user.bio || '')
+    }
+  }, [user])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadSettings = async () => {
+      if (!user) return
+
+      try {
+        const settings = await api.user.getSettings()
+        if (!isActive) return
+
+        const backendLength = parseSummaryLengthPreference(settings?.default_summary_length)
+        const backendFormat = parseSummaryFormatPreference(settings?.default_format)
+
+        setDefaultSummaryLength(backendLength)
+        setDefaultSummaryFormat(backendFormat)
+
+        saveStoredSummaryLengthPreference(backendLength)
+        saveStoredSummaryFormatPreference(backendFormat)
+      } catch {
+        if (!isActive) return
+
+        setDefaultSummaryLength(getStoredSummaryLengthPreference())
+        setDefaultSummaryFormat(getStoredSummaryFormatPreference())
+      }
+    }
+
+    loadSettings()
+
+    return () => {
+      isActive = false
     }
   }, [user])
 
@@ -318,18 +352,38 @@ export function SettingsPage() {
     }
   }
 
-  const handleDefaultSummaryLengthChange = (value: string) => {
+  const handleDefaultSummaryLengthChange = async (value: string) => {
     const normalizedValue = parseSummaryLengthPreference(value)
     setDefaultSummaryLength(normalizedValue)
     saveStoredSummaryLengthPreference(normalizedValue)
-    toast.success('Default summary length saved.')
+
+    setIsSettingsSyncing(true)
+    try {
+      await api.user.updateSettings({ default_summary_length: normalizedValue })
+      toast.success('Default summary length saved.')
+    } catch (err) {
+      console.error('Failed to persist summary length preference:', err)
+      toast.error('Saved locally. Cloud sync failed.')
+    } finally {
+      setIsSettingsSyncing(false)
+    }
   }
 
-  const handleDefaultSummaryFormatChange = (value: string) => {
+  const handleDefaultSummaryFormatChange = async (value: string) => {
     const normalizedValue = parseSummaryFormatPreference(value)
     setDefaultSummaryFormat(normalizedValue)
     saveStoredSummaryFormatPreference(normalizedValue)
-    toast.success('Default summary format saved.')
+
+    setIsSettingsSyncing(true)
+    try {
+      await api.user.updateSettings({ default_format: normalizedValue })
+      toast.success('Default summary format saved.')
+    } catch (err) {
+      console.error('Failed to persist summary format preference:', err)
+      toast.error('Saved locally. Cloud sync failed.')
+    } finally {
+      setIsSettingsSyncing(false)
+    }
   }
 
   const handleThemeToggle = (enabled: boolean) => {
@@ -656,6 +710,9 @@ export function SettingsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {isSettingsSyncing && (
+                  <p className="text-xs text-muted-foreground">Syncing preference to cloud...</p>
+                )}
               </CardContent>
             </Card>
 

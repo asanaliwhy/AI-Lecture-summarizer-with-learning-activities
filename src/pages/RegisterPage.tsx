@@ -19,6 +19,7 @@ export function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [termsAccepted, setTermsAccepted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -45,6 +46,7 @@ export function RegisterPage() {
   }
   const strength = getPasswordStrength(password)
   const passwordsMatch = password && confirmPassword && password === confirmPassword
+  const hasConfirmMismatch = !!confirmPassword && password !== confirmPassword
 
   const validateForm = () => {
     const errors: Record<string, string> = {}
@@ -61,6 +63,7 @@ export function RegisterPage() {
     else if (strength.score < 2) errors.password = 'Password is too weak. Add uppercase, numbers or symbols.'
     if (!confirmPassword) errors.confirmPassword = 'Please confirm your password'
     else if (password !== confirmPassword) errors.confirmPassword = 'Passwords do not match'
+    if (!termsAccepted) errors.terms = 'You must agree to the Terms of Service'
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -76,9 +79,10 @@ export function RegisterPage() {
       const normalizedFirstName = firstName.trim()
       const normalizedLastName = lastName.trim()
       const fullName = `${normalizedFirstName} ${normalizedLastName}`.trim()
+      const normalizedEmail = email.trim().toLowerCase()
 
-      await register(fullName, email, password)
-      localStorage.setItem('pending_verification_email', email.trim().toLowerCase())
+      await register(fullName, normalizedEmail, password)
+      localStorage.setItem('pending_verification_email', normalizedEmail)
       toastSuccess('Account created! Check your email to verify.')
       navigate('/verify-email')
     } catch (err) {
@@ -121,7 +125,7 @@ export function RegisterPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} noValidate className="space-y-6">
             <div className="grid gap-5 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="first-name">First Name</Label>
@@ -130,7 +134,6 @@ export function RegisterPage() {
                   placeholder="John"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  required
                 />
                 {fieldErrors.firstName && <p className="text-xs text-destructive">{fieldErrors.firstName}</p>}
               </div>
@@ -142,7 +145,6 @@ export function RegisterPage() {
                   placeholder="Doe"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  required
                 />
                 {fieldErrors.lastName && <p className="text-xs text-destructive">{fieldErrors.lastName}</p>}
               </div>
@@ -152,7 +154,7 @@ export function RegisterPage() {
 
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input id="email" type="text" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
               {fieldErrors.email && <p className="text-xs text-destructive">{fieldErrors.email}</p>}
             </div>
 
@@ -164,7 +166,6 @@ export function RegisterPage() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
                 />
                 <button
                   type="button"
@@ -201,6 +202,7 @@ export function RegisterPage() {
                   </p>
                 </div>
               )}
+              {fieldErrors.password && <p className="text-xs text-destructive">{fieldErrors.password}</p>}
             </div>
 
             <div className="space-y-2">
@@ -211,24 +213,27 @@ export function RegisterPage() {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={
-                    passwordsMatch
-                      ? 'border-green-500 focus-visible:ring-green-500'
-                      : ''
-                  }
-                  required
+                  className={cn(
+                    passwordsMatch && 'border-green-500 focus-visible:ring-green-500',
+                    hasConfirmMismatch && 'border-destructive focus-visible:ring-destructive',
+                  )}
                 />
                 {passwordsMatch && (
                   <Check className="absolute right-3 top-2.5 h-4 w-4 text-green-500" />
                 )}
+                {hasConfirmMismatch && (
+                  <X className="absolute right-3 top-2.5 h-4 w-4 text-destructive" />
+                )}
               </div>
+              {fieldErrors.confirmPassword && <p className="text-xs text-destructive">{fieldErrors.confirmPassword}</p>}
             </div>
 
             <div className="flex items-start space-x-2 pt-2">
               <input
                 type="checkbox"
                 id="terms"
-                required
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
                 className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
               />
               <label
@@ -246,6 +251,7 @@ export function RegisterPage() {
                 .
               </label>
             </div>
+            {fieldErrors.terms && <p className="text-xs text-destructive -mt-4">{fieldErrors.terms}</p>}
 
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? 'Creating account...' : 'Create Account'}

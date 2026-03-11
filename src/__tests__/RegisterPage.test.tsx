@@ -125,7 +125,7 @@ describe('RegisterPage signup flows', () => {
         })
         await flush()
 
-        expect(mocked.register).toHaveBeenCalledWith('Ada Lovelace', 'Ada@Example.com', 'StrongPass123!')
+        expect(mocked.register).toHaveBeenCalledWith('Ada Lovelace', 'ada@example.com', 'StrongPass123!')
         expect(localStorage.getItem('pending_verification_email')).toBe('ada@example.com')
         expect(mocked.toast.success).toHaveBeenCalledWith('Account created! Check your email to verify.')
         expect(mocked.navigate).toHaveBeenCalledWith('/verify-email')

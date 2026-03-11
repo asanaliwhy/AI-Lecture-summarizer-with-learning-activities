@@ -58,6 +58,42 @@ func RunMigrations(pool *pgxpool.Pool, migrationsDir string) error {
 		return fmt.Errorf("failed to read migrations directory: %w", err)
 	}
 
+	appliedVersions := make(map[int]struct{})
+	maxVersion := 0
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		if len(name) < 4 {
+			continue
+		}
+		version := 0
+		fmt.Sscanf(name[:3], "%d", &version)
+		if version == 0 {
+			continue
+		}
+
+		appliedVersions[version] = struct{}{}
+		if version > maxVersion {
+			maxVersion = version
+		}
+	}
+
+	if maxVersion > 0 {
+		missing := make([]int, 0)
+		for i := 1; i <= maxVersion; i++ {
+			if _, ok := appliedVersions[i]; !ok {
+				missing = append(missing, i)
+			}
+		}
+		if len(missing) > 0 {
+			fmt.Printf("Migration version gaps detected (informational): %v\n", missing)
+		}
+	}
+
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue

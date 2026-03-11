@@ -880,11 +880,15 @@ func (h *UserHandler) UpdateNotificationSetting(w http.ResponseWriter, r *http.R
 // Job handler
 
 type JobHandler struct {
-	jobRepo *repository.JobRepo
+	jobRepo     *repository.JobRepo
+	summaryRepo *repository.SummaryRepo
 }
 
-func NewJobHandler(jobRepo *repository.JobRepo) *JobHandler {
-	return &JobHandler{jobRepo: jobRepo}
+func NewJobHandler(jobRepo *repository.JobRepo, summaryRepo *repository.SummaryRepo) *JobHandler {
+	return &JobHandler{
+		jobRepo:     jobRepo,
+		summaryRepo: summaryRepo,
+	}
 }
 
 func (h *JobHandler) GetJob(w http.ResponseWriter, r *http.Request) {
@@ -938,6 +942,16 @@ func (h *JobHandler) CancelJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.jobRepo.UpdateStatus(r.Context(), id, "cancelled")
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Job cancelled"})
+	if err := h.jobRepo.UpdateStatus(r.Context(), id, "cancelled"); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to cancel job", r))
+		return
+	}
+
+	if job.Type == "summary-generation" && job.ReferenceID != uuid.Nil {
+		if err := h.summaryRepo.Delete(r.Context(), job.ReferenceID); err != nil {
+			log.Printf("CancelJob: failed to delete orphaned summary %s: %v", job.ReferenceID, err)
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

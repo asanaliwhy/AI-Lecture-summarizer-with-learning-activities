@@ -19,6 +19,8 @@ const mocked = vi.hoisted(() => ({
         updateMe: vi.fn(),
         changePassword: vi.fn(),
         deleteMe: vi.fn(),
+        getSettings: vi.fn(),
+        updateSettings: vi.fn(),
         getNotifications: vi.fn(),
         updateNotification: vi.fn(),
     },
@@ -209,6 +211,11 @@ describe('SettingsPage avatar persistence', () => {
         mocked.userApi.updateMe.mockResolvedValue({ ...mocked.user })
         mocked.userApi.changePassword.mockResolvedValue({})
         mocked.userApi.deleteMe.mockResolvedValue({})
+        mocked.userApi.getSettings.mockResolvedValue({
+            default_summary_length: 'standard',
+            default_format: 'cornell',
+        })
+        mocked.userApi.updateSettings.mockResolvedValue({})
         mocked.userApi.getNotifications.mockResolvedValue({
             processing_complete: true,
             weekly_digest: false,
@@ -387,6 +394,7 @@ describe('SettingsPage avatar persistence', () => {
         await flush()
 
         expect(localStorage.getItem(SUMMARY_LENGTH_STORAGE_KEY)).toBe('detailed')
+        expect(mocked.userApi.updateSettings).toHaveBeenCalledWith({ default_summary_length: 'detailed' })
 
         clickButton('Account')
         await flush()
@@ -410,6 +418,7 @@ describe('SettingsPage avatar persistence', () => {
         await flush()
 
         expect(localStorage.getItem(SUMMARY_FORMAT_STORAGE_KEY)).toBe('smart')
+        expect(mocked.userApi.updateSettings).toHaveBeenCalledWith({ default_format: 'smart' })
 
         clickButton('Security')
         await flush()
@@ -611,6 +620,32 @@ describe('SettingsPage avatar persistence', () => {
         expect(container.querySelector('[data-testid="confirm-dialog"]')).toBeNull()
         expect(mocked.userApi.deleteMe).not.toHaveBeenCalled()
         expect(mocked.logout).not.toHaveBeenCalled()
+    })
+
+    it('loads summary preferences from backend settings before localStorage fallback', async () => {
+        localStorage.setItem(SUMMARY_LENGTH_STORAGE_KEY, 'concise')
+        localStorage.setItem(SUMMARY_FORMAT_STORAGE_KEY, 'paragraph')
+
+        mocked.userApi.getSettings.mockResolvedValue({
+            default_summary_length: 'detailed',
+            default_format: 'smart',
+        })
+
+        await act(async () => {
+            root.render(<SettingsPage />)
+        })
+        await flush()
+
+        clickButton('Preferences')
+        await flush()
+
+        const selectRoots = Array.from(container.querySelectorAll('[data-testid="default-summary-length-select"]'))
+        expect(selectRoots.length).toBeGreaterThanOrEqual(2)
+        expect(selectRoots[0]?.getAttribute('data-value')).toBe('detailed')
+        expect(selectRoots[1]?.getAttribute('data-value')).toBe('smart')
+
+        expect(localStorage.getItem(SUMMARY_LENGTH_STORAGE_KEY)).toBe('detailed')
+        expect(localStorage.getItem(SUMMARY_FORMAT_STORAGE_KEY)).toBe('smart')
     })
 })
 

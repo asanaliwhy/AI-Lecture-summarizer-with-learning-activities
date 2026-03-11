@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,10 +12,106 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
 )
+
+type stubQuizRepoForGenerate struct {
+	created []*models.Quiz
+}
+
+func (s *stubQuizRepoForGenerate) Create(ctx context.Context, q *models.Quiz) error {
+	if q.ID == uuid.Nil {
+		q.ID = uuid.New()
+	}
+	s.created = append(s.created, q)
+	return nil
+}
+
+func (s *stubQuizRepoForGenerate) ListByUser(ctx context.Context, userID uuid.UUID) ([]*models.Quiz, error) {
+	return nil, nil
+}
+
+func (s *stubQuizRepoForGenerate) GetByID(ctx context.Context, id uuid.UUID) (*models.Quiz, error) {
+	return nil, context.Canceled
+}
+
+func (s *stubQuizRepoForGenerate) Delete(ctx context.Context, id uuid.UUID) error {
+	return nil
+}
+
+func (s *stubQuizRepoForGenerate) ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+	return nil
+}
+
+func (s *stubQuizRepoForGenerate) TouchLastAccessed(ctx context.Context, id uuid.UUID) (bool, error) {
+	return true, nil
+}
+
+func (s *stubQuizRepoForGenerate) CreateAttempt(ctx context.Context, a *models.QuizAttempt) error {
+	return nil
+}
+
+func (s *stubQuizRepoForGenerate) GetAttemptByID(ctx context.Context, id uuid.UUID) (*models.QuizAttempt, error) {
+	return nil, context.Canceled
+}
+
+func (s *stubQuizRepoForGenerate) SaveProgress(ctx context.Context, attemptID uuid.UUID, answers json.RawMessage) error {
+	return nil
+}
+
+func (s *stubQuizRepoForGenerate) SubmitAttempt(ctx context.Context, attemptID uuid.UUID, score float64, correct int, answers json.RawMessage) error {
+	return nil
+}
+
+type stubQuizSummaryRepo struct {
+	summary *models.Summary
+}
+
+func (s *stubQuizSummaryRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Summary, error) {
+	if s.summary == nil {
+		return nil, context.Canceled
+	}
+	return s.summary, nil
+}
+
+type stubQuizJobRepo struct {
+	created         []*models.Job
+	updatedStatuses []string
+	updatedIDs      []uuid.UUID
+}
+
+func (s *stubQuizJobRepo) Create(ctx context.Context, j *models.Job) error {
+	if j.ID == uuid.Nil {
+		j.ID = uuid.New()
+	}
+	j.Status = "pending"
+	s.created = append(s.created, j)
+	return nil
+}
+
+func (s *stubQuizJobRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
+	s.updatedIDs = append(s.updatedIDs, id)
+	s.updatedStatuses = append(s.updatedStatuses, status)
+	return nil
+}
+
+type quizFakeQueuePusher struct {
+	err    error
+	key    string
+	values []interface{}
+}
+
+func (f *quizFakeQueuePusher) LPush(ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+	f.key = key
+	f.values = append(f.values, values...)
+	if f.err != nil {
+		return redis.NewIntResult(0, f.err)
+	}
+	return redis.NewIntResult(1, nil)
+}
 
 type stubQuizRepoForMutations struct {
 	quiz            *models.Quiz
@@ -254,5 +351,82 @@ func TestGetAttempt_DeniesWhenQuizOwnershipMismatch(t *testing.T) {
 
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rr.Code)
+	}
+}
+
+func TestQuizGenerate_QueueFailure_MarksJobFailed(t *testing.T) {
+	userID := uuid.New()
+	summaryID := uuid.New()
+
+	quizRepo := &stubQuizRepoForGenerate{}
+	summaryRepo := &stubQuizSummaryRepo{summary: &models.Summary{ID: summaryID, UserID: userID}}
+	jobRepo := &stubQuizJobRepo{}
+	queue := &quizFakeQueuePusher{err: errors.New("redis down")}
+
+	h := &QuizHandler{quizRepo: quizRepo, summaryRepo: summaryRepo, jobRepo: jobRepo, redis: queue}
+
+	body := `{"summary_id":"` + summaryID.String() + `","title":"Quiz","num_questions":5,"difficulty":"medium","question_types":["mcq"],"topics":[]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/quizzes/generate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	rr := httptest.NewRecorder()
+
+	h.Generate(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, rr.Code)
+	}
+	if code := errorCodeFromBody(t, rr); code != "QUEUE_ERROR" {
+		t.Fatalf("expected QUEUE_ERROR, got %q", code)
+	}
+	if len(quizRepo.created) != 1 {
+		t.Fatalf("expected quiz to be created before enqueue failure")
+	}
+	if len(jobRepo.created) != 1 {
+		t.Fatalf("expected job to be created before enqueue failure")
+	}
+	if len(jobRepo.updatedStatuses) == 0 || jobRepo.updatedStatuses[len(jobRepo.updatedStatuses)-1] != "failed" {
+		t.Fatalf("expected job status to be marked failed")
+	}
+	if queue.key != "queue:quiz-generation" {
+		t.Fatalf("expected queue key queue:quiz-generation, got %q", queue.key)
+	}
+}
+
+func TestQuizGenerate_QueueSuccess_Returns202(t *testing.T) {
+	userID := uuid.New()
+	summaryID := uuid.New()
+
+	quizRepo := &stubQuizRepoForGenerate{}
+	summaryRepo := &stubQuizSummaryRepo{summary: &models.Summary{ID: summaryID, UserID: userID}}
+	jobRepo := &stubQuizJobRepo{}
+	queue := &quizFakeQueuePusher{}
+
+	h := &QuizHandler{quizRepo: quizRepo, summaryRepo: summaryRepo, jobRepo: jobRepo, redis: queue}
+
+	body := `{"summary_id":"` + summaryID.String() + `","title":"Quiz","num_questions":5,"difficulty":"medium","question_types":["mcq"],"topics":[]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/quizzes/generate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	rr := httptest.NewRecorder()
+
+	h.Generate(rr, req)
+
+	if rr.Code != http.StatusAccepted {
+		t.Fatalf("expected status %d, got %d", http.StatusAccepted, rr.Code)
+	}
+	if len(jobRepo.updatedStatuses) != 0 {
+		t.Fatalf("did not expect failed status updates on successful enqueue")
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if payload["job_id"] == nil {
+		t.Fatalf("expected job_id in response")
+	}
+	if payload["quiz_id"] == nil {
+		t.Fatalf("expected quiz_id in response")
 	}
 }

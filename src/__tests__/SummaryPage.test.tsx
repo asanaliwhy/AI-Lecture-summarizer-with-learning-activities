@@ -29,7 +29,9 @@ const mocked = vi.hoisted(() => {
             addPage: vi.fn(),
             setDrawColor: vi.fn(),
             setFillColor: vi.fn(),
+            setLineWidth: vi.fn(),
             rect: vi.fn(),
+            line: vi.fn(),
         },
         ApiError: MockApiError,
         summariesApi: {
@@ -92,7 +94,9 @@ vi.mock('jspdf', () => {
         addPage = mocked.pdf.addPage
         setDrawColor = mocked.pdf.setDrawColor
         setFillColor = mocked.pdf.setFillColor
+        setLineWidth = mocked.pdf.setLineWidth
         rect = mocked.pdf.rect
+        line = mocked.pdf.line
         save = mocked.pdf.save
     }
 
@@ -357,12 +361,12 @@ describe('SummaryPage production behaviors', () => {
         clickButton('Export')
         await flush()
 
-        const firstTextCall = mocked.pdf.text.mock.calls[0]
-        expect(firstTextCall?.[0]).toBe('AI Basics')
+        const allTextCalls = mocked.pdf.text.mock.calls.map((call) => call[0])
+        expect(allTextCalls).toContain('AI Basics')
 
         const fontSizeCalls = mocked.pdf.setFontSize.mock.calls.map((call) => call[0])
-        expect(fontSizeCalls).toContain(18)
-        expect(fontSizeCalls).toContain(11)
+        expect(fontSizeCalls).toContain(22)
+        expect(fontSizeCalls).toContain(10)
     })
 
     it('snapshot: jsPDF text calls match expected structure', async () => {

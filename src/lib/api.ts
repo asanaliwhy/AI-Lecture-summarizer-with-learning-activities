@@ -87,12 +87,22 @@ async function apiFetch<T>(
 
     // Try refresh on 401
     if (res.status === 401) {
-        const refreshed = await tryRefresh()
+        const refreshed = await tryRefreshOnce()
         if (refreshed) {
-            headers['Authorization'] = `Bearer ${getAccessToken()}`
+            const refreshedToken = getAccessToken()
+            if (refreshedToken) {
+                headers['Authorization'] = `Bearer ${refreshedToken}`
+            } else {
+                delete headers['Authorization']
+            }
             const retry = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' })
             if (!retry.ok) {
                 const err = await retry.json().catch(() => ({}))
+                if (retry.status === 401) {
+                    clearTokens()
+                    window.location.href = '/login'
+                    throw new ApiError(401, 'Session expired')
+                }
                 throw new ApiError(retry.status, err?.error?.message || 'Request failed', err?.error?.fields)
             }
             return retry.json()
@@ -133,8 +143,22 @@ async function tryRefresh(): Promise<boolean> {
     }
 }
 
+let refreshPromise: Promise<boolean> | null = null
+
+export async function tryRefreshOnce(): Promise<boolean> {
+    if (refreshPromise) {
+        return refreshPromise
+    }
+
+    refreshPromise = tryRefresh().finally(() => {
+        refreshPromise = null
+    })
+
+    return refreshPromise
+}
+
 export async function refreshAccessToken(): Promise<string | null> {
-    const ok = await tryRefresh()
+    const ok = await tryRefreshOnce()
     return ok ? getAccessToken() : null
 }
 
