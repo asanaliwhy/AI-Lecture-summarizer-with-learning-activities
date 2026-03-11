@@ -882,12 +882,16 @@ func (h *UserHandler) UpdateNotificationSetting(w http.ResponseWriter, r *http.R
 type JobHandler struct {
 	jobRepo     *repository.JobRepo
 	summaryRepo *repository.SummaryRepo
+	quizRepo    *repository.QuizRepo
+	flashcardRepo *repository.FlashcardRepo
 }
 
-func NewJobHandler(jobRepo *repository.JobRepo, summaryRepo *repository.SummaryRepo) *JobHandler {
+func NewJobHandler(jobRepo *repository.JobRepo, summaryRepo *repository.SummaryRepo, quizRepo *repository.QuizRepo, flashcardRepo *repository.FlashcardRepo) *JobHandler {
 	return &JobHandler{
 		jobRepo:     jobRepo,
 		summaryRepo: summaryRepo,
+		quizRepo:    quizRepo,
+		flashcardRepo: flashcardRepo,
 	}
 }
 
@@ -947,9 +951,20 @@ func (h *JobHandler) CancelJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if job.Type == "summary-generation" && job.ReferenceID != uuid.Nil {
-		if err := h.summaryRepo.Delete(r.Context(), job.ReferenceID); err != nil {
-			log.Printf("CancelJob: failed to delete orphaned summary %s: %v", job.ReferenceID, err)
+	if job.ReferenceID != uuid.Nil {
+		switch job.Type {
+		case "summary-generation":
+			if err := h.summaryRepo.Delete(r.Context(), job.ReferenceID); err != nil {
+				log.Printf("CancelJob: failed to delete orphaned summary %s: %v", job.ReferenceID, err)
+			}
+		case "quiz-generation":
+			if err := h.quizRepo.Delete(r.Context(), job.ReferenceID); err != nil {
+				log.Printf("CancelJob: failed to delete orphaned quiz %s: %v", job.ReferenceID, err)
+			}
+		case "flashcard-generation":
+			if err := h.flashcardRepo.DeleteDeck(r.Context(), job.ReferenceID); err != nil {
+				log.Printf("CancelJob: failed to delete orphaned flashcard deck %s: %v", job.ReferenceID, err)
+			}
 		}
 	}
 

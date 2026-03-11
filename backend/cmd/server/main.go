@@ -101,7 +101,7 @@ func main() {
 	dashboardHandler := handlers.NewDashboardHandler(pool, userRepo)
 	libraryHandler := handlers.NewLibraryHandler(pool)
 	userHandler := handlers.NewUserHandler(userRepo)
-	jobHandler := handlers.NewJobHandler(jobRepo, summaryRepo)
+	jobHandler := handlers.NewJobHandler(jobRepo, summaryRepo, quizRepo, flashcardRepo)
 	chatHandler := handlers.NewChatHandler(summaryRepo, geminiService)
 
 	// ──── Step 6: Start Job Worker Pool ────
