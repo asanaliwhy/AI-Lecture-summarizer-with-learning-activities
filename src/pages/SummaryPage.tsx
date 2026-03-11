@@ -1344,186 +1344,618 @@ export function SummaryPage() {
       }
 
       if (summary?.format === 'smart') {
-        const ensurePageSpace = (heightNeeded: number) => {
-          if (y + heightNeeded > pageHeight - margin) {
+        const NAVY = '#1a1a2e'
+        const SLATE = '#475569'
+        const BODY_COLOR = '#1e293b'
+        const OFF_WHITE = '#f8fafc'
+        const RULE = '#e2e8f0'
+        const TAG_BG = '#d1fae5'
+        const TAG_FG = '#065f46'
+        const EX_BG = '#f0f0f8'
+        const ROW_ALT = '#f1f5f9'
+
+        const hexToRgb = (hex: string): [number, number, number] => {
+          const clean = hex.replace('#', '').trim()
+          const normalized = clean.length === 3
+            ? clean.split('').map((char) => `${char}${char}`).join('')
+            : clean
+          const num = Number.parseInt(normalized, 16)
+          return [(num >> 16) & 255, (num >> 8) & 255, num & 255]
+        }
+
+        const setFillHex = (hex: string) => {
+          const [r, g, b] = hexToRgb(hex)
+          doc.setFillColor(r, g, b)
+        }
+
+        const setTextHex = (hex: string) => {
+          const [r, g, b] = hexToRgb(hex)
+          doc.setTextColor(r, g, b)
+        }
+
+        const setDrawHex = (hex: string) => {
+          const [r, g, b] = hexToRgb(hex)
+          doc.setDrawColor(r, g, b)
+        }
+
+        const smartPageWidth = doc.internal.pageSize.getWidth()
+        const smartPageHeight = doc.internal.pageSize.getHeight()
+        const smartContentWidth = smartPageWidth - margin * 2
+        let ySmart = margin
+
+        const ensurePageSpaceSmart = (h: number) => {
+          if (ySmart + h > smartPageHeight - margin) {
             doc.addPage()
-            y = margin
+            ySmart = margin
           }
-        }
-
-        const drawParagraph = (value: string) => {
-          const wrapped = doc.splitTextToSize(value, contentWidth) as string[]
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(12)
-          for (const row of wrapped) {
-            ensurePageSpace(16)
-            doc.text(row, margin, y)
-            y += 16
-          }
-          y += 4
-        }
-
-        const drawBullets = (items: string[]) => {
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(12)
-
-          for (const item of items) {
-            const wrapped = doc.splitTextToSize(item, contentWidth - 16) as string[]
-            if (wrapped.length === 0) continue
-
-            ensurePageSpace(16)
-            doc.text('•', margin, y)
-            doc.text(wrapped[0], margin + 12, y)
-            y += 16
-
-            for (const extra of wrapped.slice(1)) {
-              ensurePageSpace(16)
-              doc.text(extra, margin + 12, y)
-              y += 16
-            }
-          }
-
-          y += 4
-        }
-
-        const drawKeyCard = (label: string, title: string, detail: string) => {
-          const cardX = margin + 6
-          const cardWidth = contentWidth - 6
-          const cardPadX = 10
-          const titleText = `${label}: ${title}`
-          const titleLines = doc.splitTextToSize(titleText, cardWidth - cardPadX * 2 - 6) as string[]
-          const detailLines = detail
-            ? (doc.splitTextToSize(detail, cardWidth - cardPadX * 2 - 6) as string[])
-            : []
-          const titleHeight = titleLines.length * 14
-          const detailHeight = detailLines.length * 13
-          const cardHeight = Math.max(42, 10 + titleHeight + (detailLines.length > 0 ? 6 : 0) + detailHeight + 10)
-
-          ensurePageSpace(cardHeight + 8)
-
-          doc.setFillColor(238, 242, 255)
-          doc.rect(cardX, y, cardWidth, cardHeight, 'F')
-
-          doc.setFillColor(79, 70, 229)
-          doc.rect(cardX + cardWidth - 2, y, 2, cardHeight, 'F')
-
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(12)
-          doc.text(titleLines, cardX + cardPadX, y + 16, { maxWidth: cardWidth - cardPadX * 2 - 6 })
-
-          if (detailLines.length > 0) {
-            doc.setFont('helvetica', 'normal')
-            doc.setFontSize(11)
-            doc.text(detailLines, cardX + cardPadX, y + 16 + titleHeight + 4, {
-              maxWidth: cardWidth - cardPadX * 2 - 6,
-            })
-          }
-
-          y += cardHeight + 8
         }
 
         const smartSourceRaw = String(summary.source || summary.source_type || '').toLowerCase()
         const smartSourceLabel = smartSourceRaw.includes('youtube') || smartSourceRaw.includes('youtu') ? 'YouTube' : 'Document'
         const smartDateLabel = formatPdfDate(summary.created_at)
         const smartTags = (summary.tags || []).filter(Boolean).slice(0, 5)
-        const smartSections = parseSmartPdfSections(rawSmart)
 
-        // Badge
-        ensurePageSpace(20)
-        doc.setFillColor(232, 236, 247)
-        doc.rect(margin, y, contentWidth, 16, 'F')
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        doc.text('SMART SUMMARY', margin + 8, y + 11)
-        y += 28
+        const normalizedSmart = normalizeSmartSummaryMarkdown(rawSmart || '')
 
-        // Title
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(25)
-        const titleLines = doc.splitTextToSize(fileTitle, contentWidth) as string[]
-        for (const line of titleLines) {
-          ensurePageSpace(26)
-          doc.text(line, margin, y)
-          y += 26
+        const parseHeadingSections = (value: string): Array<{ title: string; body: string }> => {
+          const lines = value.replace(/\r\n/g, '\n').split('\n')
+          const out: Array<{ title: string; body: string }> = []
+          let currentTitle = ''
+          let currentBody: string[] = []
+
+          const flush = () => {
+            const body = currentBody.join('\n').trim()
+            if (currentTitle || body) {
+              out.push({ title: currentTitle || 'Overview', body })
+            }
+            currentBody = []
+          }
+
+          for (const rawLine of lines) {
+            const line = rawLine.trim()
+            const headingMatch = line.match(/^##\s+(.+)$/)
+            if (headingMatch) {
+              flush()
+              currentTitle = cleanInlineMarkdown(headingMatch[1] || '').replace(/:\s*$/, '').trim() || 'Overview'
+              continue
+            }
+            currentBody.push(rawLine)
+          }
+
+          flush()
+          return out.filter((section) => section.title.trim() || section.body.trim())
         }
-        y += 2
 
-        // Meta
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(11)
-        ensurePageSpace(16)
-        doc.text(`Source: ${smartSourceLabel} · Generated: ${smartDateLabel}`, margin, y)
-        y += 12
+        const splitSections = splitIntoSections(rawSmart || '')
+        const headingSections = parseHeadingSections(normalizedSmart)
+        const sections = headingSections.length > 0 ? headingSections : splitSections
 
-        // Tag chips
-        if (smartTags.length > 0) {
-          const gap = 6
-          const chipWidth = (contentWidth - gap * (smartTags.length - 1)) / smartTags.length
-          const chipHeight = 18
-          ensurePageSpace(chipHeight + 12)
+        const fallbackSection = {
+          title: 'Overview',
+          body: normalizeGeneralSummaryText(rawSmart || '') || 'No content available.',
+        }
+        const safeSections = sections.length > 0 ? sections : [fallbackSection]
 
-          smartTags.forEach((tag, idx) => {
-            const x = margin + idx * (chipWidth + gap)
-            doc.setFillColor(209, 250, 229)
-            doc.rect(x, y, chipWidth, chipHeight, 'F')
+        const findByTitle = (regex: RegExp) =>
+          safeSections.find((section) => regex.test((section.title || '').toLowerCase()))
+
+        const overviewSection =
+          findByTitle(/summary|overview/i) ||
+          safeSections[0] ||
+          fallbackSection
+
+        let insightsSection =
+          findByTitle(/insight|key concept/i) ||
+          safeSections[1] ||
+          safeSections[0] ||
+          fallbackSection
+
+        let conceptsSection =
+          findByTitle(/core concepts|entities|table/i) ||
+          safeSections[2] ||
+          safeSections[1] ||
+          safeSections[0] ||
+          fallbackSection
+
+        if (insightsSection === conceptsSection) {
+          const insightsIdx = safeSections.indexOf(insightsSection)
+          const conceptFallback =
+            safeSections.find((section, idx) => idx !== insightsIdx && /core concepts|entities|table/i.test((section.title || '').toLowerCase())) ||
+            safeSections.find((_, idx) => idx !== insightsIdx && idx >= 2) ||
+            safeSections.find((_, idx) => idx !== insightsIdx && idx === 1) ||
+            safeSections.find((_, idx) => idx !== insightsIdx)
+
+          if (conceptFallback) {
+            conceptsSection = conceptFallback
+          }
+        }
+
+        const factsSection =
+          findByTitle(/fact|interesting/i) ||
+          safeSections[safeSections.length - 1] ||
+          fallbackSection
+
+        const getBodyLines = (value: string, maxWidth: number) => {
+          const flow = cleanInlineMarkdown(value || 'No content available.') || 'No content available.'
+          return doc.splitTextToSize(flow, maxWidth) as string[]
+        }
+
+        const drawOverviewCard = (bodyValue: string) => {
+          const overviewText = normalizeGeneralSummaryText(bodyValue || '') || 'No overview available.'
+          const overviewFlowText = cleanInlineMarkdown(overviewText)
+          const overviewInnerWidth = smartContentWidth - 4
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          const overviewLines = doc.splitTextToSize(overviewFlowText, Math.max(overviewInnerWidth - 24, 60)) as string[]
+          const overviewLineHeight = 17
+          const overviewPad = 12
+          const overviewBaselineOffset = 11
+          const overviewTextBlockHeight =
+            overviewLines.length > 0
+              ? overviewBaselineOffset + Math.max(0, overviewLines.length - 1) * overviewLineHeight
+              : overviewBaselineOffset
+          const overviewCardHeight = Math.max(48, overviewPad + overviewTextBlockHeight + overviewPad + 4)
+
+          ensurePageSpaceSmart(overviewCardHeight)
+          setFillHex(OFF_WHITE)
+          doc.rect(margin, ySmart, smartContentWidth, overviewCardHeight, 'F')
+          setFillHex(NAVY)
+          doc.rect(margin, ySmart, 4, overviewCardHeight, 'F')
+          setDrawHex(RULE)
+          doc.setLineWidth(0.5)
+          doc.rect(margin, ySmart, smartContentWidth, overviewCardHeight)
+
+          setTextHex(BODY_COLOR)
+          let overviewTextY = ySmart + overviewPad + overviewBaselineOffset
+          for (const line of overviewLines) {
+            doc.text(line, margin + 4 + overviewPad, overviewTextY)
+            overviewTextY += overviewLineHeight
+          }
+
+          ySmart += overviewCardHeight + 14
+        }
+
+        const parseKeyInsights = (body: string) => {
+          const insights: Array<{
+            concept: string
+            body: string
+            example: string | null
+          }> = []
+
+          const lines = body
+            .replace(/\r\n/g, '\n')
+            .split('\n')
+            .map((line) =>
+              cleanInlineMarkdown(line.replace(/^[-*+•]\s+/, '').replace(/^>\s+/, '')).trim(),
+            )
+            .filter(Boolean)
+
+          let current: { concept: string; body: string; example: string | null } | null = null
+
+          for (const line of lines) {
+            if (/^key concept(?:\s*:\s*|\s+)/i.test(line)) {
+              if (current) insights.push(current)
+              const concept = line.replace(/^key concept(?:\s*:\s*|\s+)/i, '').trim()
+              current = { concept, body: '', example: null }
+            } else if (/^example(?:\s*:\s*|\s+)/i.test(line) && current) {
+              current.example = line.replace(/^example(?:\s*:\s*|\s+)/i, '').trim()
+            } else if (current) {
+              current.body = current.body ? `${current.body} ${line}` : line
+            }
+          }
+
+          if (current) insights.push(current)
+          return insights
+        }
+
+        const drawKeyInsightCard = (conceptTitle: string, bodyTextValue: string, exampleTextValue: string | null) => {
+          const bodyText = cleanInlineMarkdown(bodyTextValue || '').trim() || 'No content available.'
+          const bodyInnerWidth = smartContentWidth
+          const bodyTextMaxWidth = Math.max(bodyInnerWidth - 24, 60)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          const bodyLines = getBodyLines(bodyText, bodyTextMaxWidth)
+          const bodyLineHeight = 17
+          const bodyPad = 12
+          const bodyBaselineOffset = 11
+          const bodyTextBlockHeight =
+            bodyLines.length > 0
+              ? bodyBaselineOffset + Math.max(0, bodyLines.length - 1) * bodyLineHeight
+              : bodyBaselineOffset
+          const bodyHeight = Math.max(48, bodyPad + bodyTextBlockHeight + bodyPad + 4)
+
+          const exampleText = cleanInlineMarkdown(exampleTextValue || '').trim()
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          const exampleLines = exampleText
+            ? (doc.splitTextToSize(exampleText, Math.max(smartContentWidth - 24 - 20, 60)) as string[])
+            : []
+          const exampleLineHeight = 15
+          const exampleLabelY = 14
+          const exampleTextStartY = 35
+          const exampleBottomPad = 8
+          const exampleHeight = exampleLines.length > 0
+            ? Math.max(
+              48,
+              exampleTextStartY + Math.max(0, exampleLines.length - 1) * exampleLineHeight + exampleBottomPad,
+            )
+            : 0
+
+          const headerHeight = 28
+          const cardHeight = headerHeight + bodyHeight + (exampleHeight > 0 ? exampleHeight : 0)
+
+          ensurePageSpaceSmart(cardHeight + 10)
+
+          setFillHex(NAVY)
+          doc.rect(margin, ySmart, smartContentWidth, headerHeight, 'F')
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(11)
+          doc.setTextColor(255, 255, 255)
+          const headerLabel = `Key Concept: ${cleanInlineMarkdown(conceptTitle || 'Concept')}`
+          const headerLines = doc.splitTextToSize(headerLabel, Math.max(smartContentWidth - 24, 60)) as string[]
+          doc.text(headerLines.slice(0, 1), margin + 12, ySmart + 18, { maxWidth: Math.max(smartContentWidth - 24, 60) })
+
+          let bodyY = ySmart + headerHeight
+          setFillHex(OFF_WHITE)
+          doc.rect(margin, bodyY, smartContentWidth, bodyHeight, 'F')
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          setTextHex(BODY_COLOR)
+          let bodyTextY = bodyY + bodyPad + bodyBaselineOffset
+          for (const line of bodyLines) {
+            doc.text(line, margin + bodyPad, bodyTextY)
+            bodyTextY += bodyLineHeight
+          }
+
+          bodyY += bodyHeight
+
+          if (exampleHeight > 0) {
+            const exampleX = margin
+            const exampleY = bodyY
+            const exampleWidth = smartContentWidth
+
+            setFillHex(EX_BG)
+            doc.rect(exampleX, exampleY, exampleWidth, exampleHeight, 'F')
+
             doc.setFont('helvetica', 'bold')
+            doc.setFontSize(8)
+            setTextHex(SLATE)
+            doc.text('EXAMPLE', exampleX + 10, exampleY + exampleLabelY)
+
+            doc.setFont('helvetica', 'normal')
             doc.setFontSize(10)
-            const chipText = cleanInlineMarkdown(tag)
+            setTextHex(BODY_COLOR)
+            doc.text(exampleLines, exampleX + 10, exampleY + exampleTextStartY, {
+              maxWidth: Math.max(exampleWidth - 20, 60),
+              lineHeightFactor: exampleLineHeight / 10,
+            })
+          }
+
+          setDrawHex(RULE)
+          doc.setLineWidth(0.5)
+          doc.rect(margin, ySmart, smartContentWidth, cardHeight)
+
+          setFillHex(NAVY)
+          doc.rect(margin, ySmart, 2.5, cardHeight, 'F')
+
+          ySmart += cardHeight + 10
+        }
+
+        // 1) Badge
+        const badgeHeight = 16
+        const badgeToTitleGap = 28
+        ensurePageSpaceSmart(badgeHeight)
+        setFillHex(NAVY)
+        doc.rect(margin, ySmart, smartContentWidth, badgeHeight, 'F')
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(8)
+        doc.setTextColor(255, 255, 255)
+        doc.text('SMART SUMMARY', margin + 8, ySmart + 11)
+        ySmart += badgeHeight + badgeToTitleGap
+
+        // 2) Title
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(22)
+        setTextHex(NAVY)
+        const smartTitleLines = doc.splitTextToSize(fileTitle, smartContentWidth) as string[]
+        for (const line of smartTitleLines) {
+          ensurePageSpaceSmart(28)
+          doc.text(line, margin, ySmart)
+          ySmart += 28
+        }
+        ySmart += 6
+
+        // 3) Meta line
+        ensurePageSpaceSmart(16)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        doc.setTextColor(100, 100, 100)
+        ySmart += -10
+        doc.text(`Source: ${smartSourceLabel} · Generated: ${smartDateLabel}`, margin, ySmart)
+        ySmart += 14
+
+        // 4) Tag chips
+        if (smartTags.length > 0) {
+          const chipHeight = 18
+          const gap = 0
+          const chipWidth = (smartContentWidth - gap * (smartTags.length - 1)) / smartTags.length
+
+          ensurePageSpaceSmart(chipHeight + 10)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(8)
+
+          smartTags.forEach((tag, index) => {
+            const x = margin + index * (chipWidth + gap)
+            setFillHex(TAG_BG)
+            doc.rect(x, ySmart, chipWidth, chipHeight, 'F')
+            setTextHex(TAG_FG)
+            const chipText = cleanInlineMarkdown(String(tag || ''))
             const chipLines = doc.splitTextToSize(chipText, chipWidth - 10) as string[]
-            doc.text(chipLines.slice(0, 1), x + 5, y + 12, { maxWidth: chipWidth - 10 })
+            doc.text(chipLines.slice(0, 1), x + 5, ySmart + 12, { maxWidth: chipWidth - 10 })
           })
 
-          y += chipHeight + 10
+          ySmart += chipHeight + 10
         }
 
-        // Accent divider
-        ensurePageSpace(2)
-        doc.setFillColor(79, 70, 229)
-        doc.rect(margin, y, contentWidth, 1.5, 'F')
-        y += 14
+        // 5) Navy accent divider
+        ensurePageSpaceSmart(2)
+        setFillHex(NAVY)
+        doc.rect(margin, ySmart, smartContentWidth, 1.5, 'F')
+        ySmart += 16
 
-        // Sections
-        smartSections.forEach((section, index) => {
-          ensurePageSpace(20)
-          if (typeof (doc as unknown as { setFillColor?: (...args: number[]) => void }).setFillColor === 'function') {
-            doc.setFillColor(79, 70, 229)
-          }
-          if (typeof (doc as unknown as { circle?: (...args: number[]) => void }).circle === 'function') {
-            doc.circle(margin + 3.2, y - 4.6, 3.2, 'F')
-          } else {
-            doc.rect(margin, y - 8, 6, 6, 'F')
-          }
+        // 6) Overview / Summary of Video Content section
+        const overviewHeading = cleanInlineMarkdown(overviewSection.title || 'Overview') || 'Overview'
+        const overviewBody = normalizeGeneralSummaryText(overviewSection.body || '') || 'No content available.'
+
+        ensurePageSpaceSmart(22)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(13)
+        setTextHex(NAVY)
+        ySmart += 16
+        doc.text(overviewHeading.toUpperCase(), margin, ySmart)
+        ySmart += 10
+
+        drawOverviewCard(overviewBody)
+
+        // 7) Key Insights section
+        const insightItemsFromSection = parseKeyInsights(insightsSection?.body || '')
+        const insightItems = insightItemsFromSection.length > 0
+          ? insightItemsFromSection
+          : parseKeyInsights(normalizedSmart)
+
+        ensurePageSpaceSmart(22)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(13)
+        setTextHex(NAVY)
+        ySmart += 20
+        doc.text('KEY INSIGHTS AND CORE CONCEPTS', margin, ySmart)
+        ySmart += 12
+
+        if (insightItems.length === 0) {
+          drawKeyInsightCard('No content available.', 'No content available.', null)
+        } else {
+          insightItems.forEach((item) => {
+            drawKeyInsightCard(item.concept || 'Concept', item.body || '', item.example)
+          })
+        }
+
+        // 8) Core Concepts and Entities table
+        const parseConceptsTable = (body: string) => {
+          const isHeaderPair = (key: string, value: string) =>
+            /^concept\s*\/?\s*entity$/i.test(key.trim()) && /^description$/i.test(value.trim())
+
+          return body
+            .replace(/\r\n/g, '\n')
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .filter((line) => !/^concept/i.test(line) && !/^entity/i.test(line) && !/^key concept/i.test(line) && !/^example/i.test(line))
+            .map((line) => {
+              if (line.startsWith('|') && line.endsWith('|')) {
+                const cells = parseMarkdownTableRow(line)
+                if (cells.length >= 2 && !cells.every((cell) => /^:?-{2,}:?$/.test(cell.trim()))) {
+                  const key = cleanInlineMarkdown(cells[0] || '').trim()
+                  const value = cleanInlineMarkdown(cells.slice(1).join(' — ') || '').trim()
+                  if (isHeaderPair(key, value)) return { key: '', value: '' }
+                  return {
+                    key,
+                    value,
+                  }
+                }
+              }
+
+              const tabIdx = line.indexOf('\t')
+              if (tabIdx > 0) {
+                return {
+                  key: cleanInlineMarkdown(line.slice(0, tabIdx).trim()),
+                  value: cleanInlineMarkdown(line.slice(tabIdx + 1).trim()),
+                }
+              }
+
+              const spaced = line.match(/^(.+?)\s{2,}(.+)$/)
+              if (spaced) {
+                return {
+                  key: cleanInlineMarkdown(spaced[1].trim()),
+                  value: cleanInlineMarkdown(spaced[2].trim()),
+                }
+              }
+
+              return { key: cleanInlineMarkdown(line), value: '' }
+            })
+            .filter((row) => row.key && row.value)
+        }
+
+        const conceptRowsFromSection = parseConceptsTable(conceptsSection?.body || '')
+        const conceptRows = conceptRowsFromSection.length > 0
+          ? conceptRowsFromSection
+          : parseConceptsTable(normalizedSmart)
+
+        const safeConceptRows = conceptRows.length > 0
+          ? conceptRows
+          : [{ key: 'No content available.', value: 'No description available.' }]
+
+        ensurePageSpaceSmart(22)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(13)
+        setTextHex(NAVY)
+        ySmart += 20
+        doc.text('CORE CONCEPTS & ENTITIES', margin, ySmart)
+        ySmart += 12
+
+        const conceptColWidth = smartContentWidth * 0.3
+        const descColWidth = smartContentWidth * 0.7
+        const rowFontSize = 10
+        const rowLineHeight = 15
+
+        const drawTableHeader = () => {
+          const headerHeight = 28
+          ensurePageSpaceSmart(headerHeight)
+
+          setFillHex(NAVY)
+          doc.rect(margin, ySmart, conceptColWidth, headerHeight, 'F')
+          doc.rect(margin + conceptColWidth, ySmart, descColWidth, headerHeight, 'F')
+
+          setDrawHex(RULE)
+          doc.setLineWidth(0.5)
+          doc.rect(margin, ySmart, conceptColWidth, headerHeight)
+          doc.rect(margin + conceptColWidth, ySmart, descColWidth, headerHeight)
 
           doc.setFont('helvetica', 'bold')
-          doc.setFontSize(16)
-          const headingLines = doc.splitTextToSize(section.heading, contentWidth - 16) as string[]
-          doc.text(headingLines, margin + 13, y)
-          y += Math.max(18, headingLines.length * 16)
+          doc.setFontSize(10)
+          doc.setTextColor(255, 255, 255)
+          doc.text('Concept / Entity', margin + 10, ySmart + 18, { maxWidth: conceptColWidth - 16 })
+          doc.text('Description', margin + conceptColWidth + 10, ySmart + 18, { maxWidth: descColWidth - 16 })
 
-          section.parts.forEach((part) => {
-            if (part.type === 'paragraph') {
-              drawParagraph(part.text)
-              return
-            }
-            if (part.type === 'bullets') {
-              drawBullets(part.items)
-              return
-            }
-            if (part.type === 'key') {
-              drawKeyCard(part.label, part.title, part.detail)
-              return
-            }
+          ySmart += headerHeight
+        }
 
-            renderMarkdownTable(part.headers, part.rows)
+        drawTableHeader()
+
+        safeConceptRows.forEach((row, index) => {
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(rowFontSize)
+          const conceptLines = doc.splitTextToSize(cleanInlineMarkdown(row.key || '—'), Math.max(conceptColWidth - 20, 24)) as string[]
+          const descriptionLines = doc.splitTextToSize(cleanInlineMarkdown(row.value || '—'), Math.max(descColWidth - 20, 24)) as string[]
+          const lines = Math.max(conceptLines.length || 1, descriptionLines.length || 1)
+          const rowHeight = Math.max(lines * rowLineHeight, 20) + 16
+
+          ensurePageSpaceSmart(rowHeight)
+
+          setFillHex(index % 2 === 0 ? ROW_ALT : '#ffffff')
+          doc.rect(margin, ySmart, smartContentWidth, rowHeight, 'F')
+
+          setFillHex(NAVY)
+          doc.rect(margin, ySmart, 2.5, rowHeight, 'F')
+
+          setDrawHex(RULE)
+          doc.setLineWidth(0.5)
+          doc.rect(margin, ySmart, conceptColWidth, rowHeight)
+          doc.rect(margin + conceptColWidth, ySmart, descColWidth, rowHeight)
+
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(10)
+          setTextHex(NAVY)
+          doc.text(conceptLines.length > 0 ? conceptLines : ['—'], margin + 10, ySmart + 18, {
+            maxWidth: conceptColWidth - 20,
+            lineHeightFactor: rowLineHeight / rowFontSize,
           })
 
-          if (index < smartSections.length - 1) {
-            ensurePageSpace(12)
-            doc.setFillColor(229, 231, 235)
-            doc.rect(margin, y, contentWidth, 1, 'F')
-            y += 14
-          }
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          setTextHex(BODY_COLOR)
+          doc.text(descriptionLines.length > 0 ? descriptionLines : ['—'], margin + conceptColWidth + 10, ySmart + 18, {
+            maxWidth: descColWidth - 20,
+            lineHeightFactor: rowLineHeight / rowFontSize,
+          })
+
+          ySmart += rowHeight
         })
+
+        ySmart += 18
+
+        // 9) Interesting Facts section
+        const facts = (factsSection?.body || '')
+          .replace(/\r\n/g, '\n')
+          .split('\n')
+          .map((line) => cleanInlineMarkdown(line.replace(/^[-*+•]\s+/, '').replace(/^\d+[.)]\s+/, '').trim()))
+          .filter(Boolean)
+
+        const safeFacts = facts.length > 0 ? facts : ['No content available.']
+        const factLineHeight = 15
+        const factTextTop = 18
+
+        const getFactRowHeight = (value: string) => {
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          const factFlowText = cleanInlineMarkdown(value || '') || 'No content available.'
+          const factWrapped = doc.splitTextToSize(factFlowText, Math.max(smartContentWidth - 24 - 18, 60)) as string[]
+          const factRowHeight = Math.max(factWrapped.length * factLineHeight, 20) + factTextTop
+          return { factFlowText, factWrapped, factRowHeight }
+        }
+
+        const firstFactLayout = getFactRowHeight(safeFacts[0] || 'No content available.')
+        // Keep heading + first fact together on same page (preflight before drawing either)
+        const interestingFactsBlockBeforeFirstRow = 2 + 14 + 20 + 12 + firstFactLayout.factRowHeight
+        ensurePageSpaceSmart(interestingFactsBlockBeforeFirstRow)
+
+        ensurePageSpaceSmart(2)
+        setDrawHex(RULE)
+        doc.setLineWidth(0.5)
+        doc.line(margin, ySmart, margin + smartContentWidth, ySmart)
+        ySmart += 14
+
+        ensurePageSpaceSmart(22)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(13)
+        setTextHex(NAVY)
+        ySmart += 20
+        doc.text('INTERESTING FACTS', margin, ySmart)
+        ySmart += 12
+
+        safeFacts.forEach((fact, index) => {
+          const numberCellWidth = 24
+          const factCellWidth = smartContentWidth - numberCellWidth
+          const { factWrapped, factRowHeight } = getFactRowHeight(fact)
+
+          ensurePageSpaceSmart(factRowHeight)
+
+          setFillHex(NAVY)
+          doc.rect(margin, ySmart, numberCellWidth, factRowHeight, 'F')
+          setFillHex(OFF_WHITE)
+          doc.rect(margin + numberCellWidth, ySmart, factCellWidth, factRowHeight, 'F')
+
+          setDrawHex(RULE)
+          doc.setLineWidth(0.5)
+          doc.rect(margin, ySmart, smartContentWidth, factRowHeight)
+
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(10)
+          doc.setTextColor(255, 255, 255)
+          doc.text(String(index + 1), margin + numberCellWidth / 2, ySmart + factTextTop, { align: 'center' })
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          setTextHex(BODY_COLOR)
+          doc.text(factWrapped, margin + numberCellWidth + 10, ySmart + factTextTop, {
+            maxWidth: Math.max(factCellWidth - 18, 60),
+          })
+
+          ySmart += factRowHeight + 5
+        })
+
+        // 10) Footer
+        ensurePageSpaceSmart(2)
+        setDrawHex(RULE)
+        doc.setLineWidth(0.5)
+        doc.line(margin, ySmart, margin + smartContentWidth, ySmart)
+        ySmart += 10
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        setTextHex(SLATE)
+        doc.text('Lectura · Page 1', smartPageWidth / 2, smartPageHeight - 20, { align: 'center' })
 
         doc.save(`${fileTitle}.pdf`)
         toast.success('PDF exported')
@@ -2212,6 +2644,8 @@ export function SummaryPage() {
           .filter(Boolean)
 
         const safeFacts = facts.length > 0 ? facts : ['No facts available.']
+        const bulletFactLineHeight = 14
+        const bulletFactTextTop = 18
 
         safeFacts.forEach((fact, index) => {
           const numberCellWidth = 26
@@ -2223,7 +2657,7 @@ export function SummaryPage() {
             factFlowText,
             factTextWidth - 18,
           ) as string[]
-          const factRowHeight = Math.max(factWrapped.length * 14, 20) + 14
+          const factRowHeight = Math.max(factWrapped.length * bulletFactLineHeight, 20) + bulletFactTextTop
 
           ensurePageSpaceBullets(factRowHeight)
 
@@ -2241,13 +2675,13 @@ export function SummaryPage() {
           doc.setFont('helvetica', 'bold')
           doc.setFontSize(10)
           doc.setTextColor(255, 255, 255)
-          doc.text(String(index + 1), margin + numberCellWidth / 2, yBullets + factRowHeight / 2 + 4, { align: 'center' })
+          doc.text(String(index + 1), margin + numberCellWidth / 2, yBullets + bulletFactTextTop, { align: 'center' })
 
           // Bullet PDF SETTINGS: fact body typography
           doc.setFont('helvetica', 'normal')
           doc.setFontSize(10)
           setTextHex(BODY_TEXT)
-          doc.text(factWrapped, margin + numberCellWidth + 10, yBullets + 14)
+          doc.text(factWrapped, margin + numberCellWidth + 10, yBullets + bulletFactTextTop)
 
           yBullets += factRowHeight + 8
         })
