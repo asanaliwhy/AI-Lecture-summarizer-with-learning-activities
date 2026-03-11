@@ -1228,7 +1228,7 @@ export function SummaryPage() {
 
       let y = margin
 
-      if (summary?.format !== 'smart' && summary?.format !== 'cornell') {
+      if (summary?.format !== 'smart' && summary?.format !== 'bullets' && summary?.format !== 'cornell') {
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(18)
         doc.text(fileTitle, margin, y)
@@ -1540,15 +1540,19 @@ export function SummaryPage() {
         const dateLabel = formatPdfDate(summary.created_at)
         const tags = (summary.tags || []).filter(Boolean).slice(0, 5)
 
-        ensurePageSpace(24)
-        doc.setFillColor(232, 236, 247)
-        doc.rect(margin, y, contentWidth, 18, 'F')
-        doc.setTextColor(79, 70, 229)
+        // Cornell PDF SETTINGS: Badge (same spacing/sizing model as Bullet badge)
+        const badgeHeight = 16
+        const badgeToTitleGap = 28
+        ensurePageSpace(badgeHeight)
+        doc.setFillColor(237, 237, 249)
+        doc.rect(margin, y, contentWidth, badgeHeight, 'F')
         doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        doc.text('CORNELL METHOD', margin + 8, y + 12)
-        y += 50
+        doc.setFontSize(8)
+        doc.setTextColor(79, 70, 229)
+        doc.text('CORNELL METHOD', margin + 8, y + 11)
+        y += badgeHeight + badgeToTitleGap
 
+        // Cornell PDF SETTINGS: Title (font family/style/size + wrapping)
         doc.setTextColor(30, 30, 50)
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(22)
@@ -1558,8 +1562,9 @@ export function SummaryPage() {
           doc.text(line, margin, y)
           y += 24
         }
-        y += 2
+        y += 0
 
+        // Cornell PDF SETTINGS: Meta line (source/date typography + color)
         ensurePageSpace(16)
         doc.setTextColor(100, 100, 100)
         doc.setFont('helvetica', 'normal')
@@ -1567,8 +1572,9 @@ export function SummaryPage() {
         doc.text(`Source: ${sourceLabel} · Generated: ${dateLabel}`, margin, y)
         y += 14
 
+        // Cornell PDF SETTINGS: Tag chips (chip fill + tag typography)
         if (tags.length > 0) {
-          const gap = 6
+          const gap = 0
           const chipHeight = 18
           const chipWidth = (contentWidth - gap * (tags.length - 1)) / tags.length
           ensurePageSpace(chipHeight + 10)
@@ -1579,7 +1585,7 @@ export function SummaryPage() {
             doc.rect(x, y, chipWidth, chipHeight, 'F')
             doc.setTextColor(6, 95, 70)
             doc.setFont('helvetica', 'bold')
-            doc.setFontSize(10)
+            doc.setFontSize(8)
             const chipText = cleanInlineMarkdown(String(tag))
             const chipLines = doc.splitTextToSize(chipText, chipWidth - 10) as string[]
             doc.text(chipLines.slice(0, 1), x + 5, y + 12, { maxWidth: chipWidth - 10 })
@@ -1588,6 +1594,7 @@ export function SummaryPage() {
           y += chipHeight + 10
         }
 
+        // Cornell PDF SETTINGS: Accent divider
         ensurePageSpace(6)
         doc.setFillColor(79, 70, 229)
         doc.rect(margin, y, contentWidth, 1.5, 'F')
@@ -1595,27 +1602,27 @@ export function SummaryPage() {
 
         const cueColumnWidth = contentWidth * 0.36
         const noteColumnWidth = contentWidth * 0.64
-        const rowPaddingY = 8
-        const rowPaddingX = 10
+        const rowPaddingY = 14
+        const rowPaddingX = 12
         const rowLineHeight = 14
-        const headerHeight = 22
+        const tableHeaderHeight = 32
 
+        // Cornell PDF SETTINGS: CUES/NOTES table header row (colors + typography)
         const drawCornellHeader = () => {
-          ensurePageSpace(headerHeight)
-          doc.setFillColor(30, 30, 50)
-          doc.rect(margin, y, contentWidth, headerHeight, 'F')
+          ensurePageSpace(tableHeaderHeight)
+          doc.setFillColor(26, 26, 46)
+          doc.rect(margin, y, contentWidth, tableHeaderHeight, 'F')
 
           doc.setDrawColor(220, 220, 235)
           doc.setLineWidth(0.5)
-          doc.rect(margin, y, cueColumnWidth, headerHeight)
-          doc.rect(margin + cueColumnWidth, y, noteColumnWidth, headerHeight)
+          doc.line(margin + cueColumnWidth, y, margin + cueColumnWidth, y + tableHeaderHeight)
 
           doc.setTextColor(255, 255, 255)
           doc.setFont('helvetica', 'bold')
-          doc.setFontSize(10.5)
-          doc.text('CUES', margin + rowPaddingX, y + 14)
-          doc.text('NOTES', margin + cueColumnWidth + rowPaddingX, y + 14)
-          y += headerHeight
+          doc.setFontSize(11)
+          doc.text('CUES', margin + 12, y + tableHeaderHeight / 2 + 4)
+          doc.text('NOTES', margin + cueColumnWidth + 12, y + tableHeaderHeight / 2 + 4)
+          y += tableHeaderHeight
         }
 
         const parseCornellItems = (rawValue: string, normalizedValue: string): string[] => {
@@ -1699,17 +1706,52 @@ export function SummaryPage() {
         const cueItems = parseCornellItems(summary?.cornell_cues || '', cues)
         const noteItems = parseCornellItems(summary?.cornell_notes || '', notes)
 
+        const getCornellRowHeight = (cueText: string, noteText: string) => {
+          const cueLinesRaw = doc.splitTextToSize(cueText || '—', Math.max(cueColumnWidth - rowPaddingX * 2 - 14, 24)) as string[]
+          const noteLinesRaw = doc.splitTextToSize(noteText || '—', Math.max(noteColumnWidth - rowPaddingX * 2, 24)) as string[]
+          const cueLines = cueLinesRaw.map((line) => line.trim()).filter(Boolean)
+          const noteLines = noteLinesRaw.map((line) => line.trim()).filter(Boolean)
+          const safeCueLines = cueLines.length > 0 ? cueLines : ['—']
+          const safeNoteLines = noteLines.length > 0 ? noteLines : ['—']
+          const maxLines = Math.max(safeCueLines.length, safeNoteLines.length, 1)
+          const rowTextTop = rowPaddingY + 10
+          const rowTextBottomPad = 4
+          const rowHeight = Math.max(
+            22,
+            rowTextTop + Math.max(0, maxLines - 1) * rowLineHeight + rowTextBottomPad,
+          )
+
+          return { safeCueLines, safeNoteLines, rowHeight }
+        }
+
         const maxRows = Math.max(cueItems.length, noteItems.length, 1)
         drawCornellHeader()
 
+        // Cornell PDF SETTINGS: CUES/NOTES body rows (zebra fill, index style, body text style)
         for (let i = 0; i < maxRows; i += 1) {
           const cueText = cueItems[i] || ''
           const noteText = noteItems[i] || ''
 
-          const cueLines = doc.splitTextToSize(cueText || '—', Math.max(cueColumnWidth - rowPaddingX * 2 - 14, 24)) as string[]
-          const noteLines = doc.splitTextToSize(noteText || '—', Math.max(noteColumnWidth - rowPaddingX * 2, 24)) as string[]
-          const maxLines = Math.max(cueLines.length, noteLines.length, 1)
-          const rowHeight = maxLines * rowLineHeight + rowPaddingY * 2
+          const { safeCueLines, safeNoteLines, rowHeight } = getCornellRowHeight(cueText, noteText)
+
+          const remainingRows = maxRows - i
+          const remainingSpace = pageHeight - margin - y
+          if (remainingRows <= 2 && remainingSpace < 60) {
+            let remainingRowsHeight = 0
+            for (let j = i; j < maxRows; j += 1) {
+              const remainingCueText = cueItems[j] || ''
+              const remainingNoteText = noteItems[j] || ''
+              remainingRowsHeight += getCornellRowHeight(remainingCueText, remainingNoteText).rowHeight
+            }
+
+            const singlePageContentHeight = pageHeight - margin * 2
+            const remainingBlockHeightOnFreshPage = tableHeaderHeight + remainingRowsHeight
+            if (remainingBlockHeightOnFreshPage <= singlePageContentHeight) {
+              doc.addPage()
+              y = margin
+              drawCornellHeader()
+            }
+          }
 
           if (y + rowHeight > pageHeight - margin) {
             doc.addPage()
@@ -1737,14 +1779,14 @@ export function SummaryPage() {
           doc.setTextColor(50, 50, 60)
           doc.setFont('helvetica', 'normal')
           doc.setFontSize(10.5)
-          doc.text(cueLines, margin + rowPaddingX + 14, y + rowPaddingY + 10, {
+          doc.text(safeCueLines, margin + rowPaddingX + 14, y + rowPaddingY + 10, {
             maxWidth: Math.max(cueColumnWidth - rowPaddingX * 2 - 14, 24),
           })
 
           doc.setTextColor(50, 50, 50)
           doc.setFont('helvetica', 'normal')
           doc.setFontSize(10.5)
-          doc.text(noteLines, margin + cueColumnWidth + rowPaddingX, y + rowPaddingY + 10, {
+          doc.text(safeNoteLines, margin + cueColumnWidth + rowPaddingX, y + rowPaddingY + 10, {
             maxWidth: Math.max(noteColumnWidth - rowPaddingX * 2, 24),
           })
 
@@ -1753,19 +1795,31 @@ export function SummaryPage() {
 
         y += 14
 
-        const summaryHeaderHeight = 22
+        // Cornell PDF SETTINGS: SUMMARY block header (header color + typography)
+        const summaryHeaderHeight = tableHeaderHeight
         ensurePageSpace(summaryHeaderHeight)
-        doc.setFillColor(30, 30, 50)
+        doc.setFillColor(26, 26, 46)
         doc.rect(margin, y, contentWidth, summaryHeaderHeight, 'F')
         doc.setTextColor(255, 255, 255)
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(11)
-        doc.text('SUMMARY', margin + rowPaddingX, y + 14)
+        doc.text('SUMMARY', margin + 12, y + summaryHeaderHeight / 2 + 4)
         y += summaryHeaderHeight
 
+        // Cornell PDF SETTINGS: SUMMARY block body text (background + body typography)
         const summaryText = cornellSummaryText || 'No summary available.'
-        const summaryLines = doc.splitTextToSize(summaryText, contentWidth - 20) as string[]
-        const summaryBodyHeight = Math.max(34, summaryLines.length * 17 + 16)
+        const summaryFlowText = summaryText
+          .replace(/\r\n/g, '\n')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .join(' ')
+        const summaryTextPadLeft = 12
+        const summaryTextPadRight = 8
+        const summaryLineHeight = 17
+        const summaryTextMaxWidth = contentWidth - summaryTextPadLeft - summaryTextPadRight
+        const summaryLines = doc.splitTextToSize(summaryFlowText, summaryTextMaxWidth) as string[]
+        const summaryBodyHeight = Math.max(34, summaryLines.length * summaryLineHeight + 16)
         ensurePageSpace(summaryBodyHeight)
         doc.setFillColor(245, 245, 255)
         doc.rect(margin, y, contentWidth, summaryBodyHeight, 'F')
@@ -1774,16 +1828,444 @@ export function SummaryPage() {
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(11)
         let summaryY = y + 16
-        for (const line of summaryLines) {
-          doc.text(line, margin + 10, summaryY, { maxWidth: contentWidth - 20 })
-          summaryY += 17
+        for (let lineIndex = 0; lineIndex < summaryLines.length; lineIndex += 1) {
+          const line = summaryLines[lineIndex]
+          const isLastLine = lineIndex === summaryLines.length - 1
+          doc.text(line, margin + summaryTextPadLeft, summaryY, {
+            maxWidth: summaryTextMaxWidth,
+            align: isLastLine ? 'left' : 'justify',
+          })
+          summaryY += summaryLineHeight
         }
         y += summaryBodyHeight
 
+        // Cornell PDF SETTINGS: Footer typography + color
         doc.setTextColor(120, 120, 120)
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
         doc.text('Lectura · Page 1', pageWidth / 2, pageHeight - 20, { align: 'center' })
+
+        doc.save(`${fileTitle}.pdf`)
+        toast.success('PDF exported')
+        return
+      }
+
+      if (summary?.format === 'bullets') {
+        const NAVY = '#1a1a2e'
+        const INDIGO = '#4f46e5'
+        const INDIGO_MUTED = '#ededf9'
+        const SLATE = '#475569'
+        const BODY = '#1e293b'
+        const OFF_WHITE = '#f8fafc'
+        const RULE = '#e2e8f0'
+        const TAG_BG = '#f0fdf4'
+        const TAG_FG = '#166534'
+        const LABEL_BG = '#f1f5f9'
+
+        const DARK_NAVY = NAVY
+        const LIGHT_INDIGO = INDIGO_MUTED
+        const LIGHT_GREEN = TAG_BG
+        const GREEN_TEXT = TAG_FG
+        const GRAY_TEXT = SLATE
+        const BODY_TEXT = BODY
+        const SECTION_BG = OFF_WHITE
+        const BORDER = RULE
+
+        const hexToRgb = (hex: string): [number, number, number] => {
+          const clean = hex.replace('#', '').trim()
+          const normalized = clean.length === 3
+            ? clean.split('').map((char) => `${char}${char}`).join('')
+            : clean
+          const num = Number.parseInt(normalized, 16)
+          return [(num >> 16) & 255, (num >> 8) & 255, num & 255]
+        }
+
+        const setFillHex = (hex: string) => {
+          const [r, g, b] = hexToRgb(hex)
+          doc.setFillColor(r, g, b)
+        }
+
+        const setTextHex = (hex: string) => {
+          const [r, g, b] = hexToRgb(hex)
+          doc.setTextColor(r, g, b)
+        }
+
+        const setDrawHex = (hex: string) => {
+          const [r, g, b] = hexToRgb(hex)
+          doc.setDrawColor(r, g, b)
+        }
+
+        let yBullets = margin
+        const bulletContentWidth = pageWidth - margin * 2
+
+        const ensurePageSpaceBullets = (heightNeeded: number) => {
+          if (yBullets + heightNeeded > pageHeight - margin) {
+            doc.addPage()
+            yBullets = margin
+          }
+        }
+
+        const renderedContentRaw = rawMain || 'No content available.'
+        const sections = splitIntoSections(renderedContentRaw)
+
+        const overviewSection =
+          sections.find((section) => section.title.trim().toLowerCase() === 'overview') ||
+          sections[0] ||
+          { title: 'Overview', body: renderedContentRaw }
+
+        const coreSection =
+          sections.find((section) => section.title.toLowerCase().includes('core structures')) ||
+          sections[1] ||
+          sections[0] ||
+          { title: 'Core Structures', body: '' }
+
+        const factsSection =
+          sections.find((section) => /interesting\s+facts?|facts?/i.test(section.title)) ||
+          sections[sections.length - 1] ||
+          { title: 'Interesting Facts', body: '' }
+
+        const sourceRaw = String(summary.source || summary.source_type || '').toLowerCase()
+        const sourceLabel = sourceRaw.includes('youtube') || sourceRaw.includes('youtu') ? 'YouTube' : 'Document'
+        const dateLabel = formatPdfDate(summary.created_at)
+
+        // 1) Badge
+        // Bullet PDF SETTINGS: badge background + badge text typography/content
+        const badgeHeight = 16
+        const badgeToTitleGap = 28
+        ensurePageSpaceBullets(badgeHeight)
+        setFillHex(LIGHT_INDIGO)
+        doc.rect(margin, yBullets, bulletContentWidth, badgeHeight, 'F')
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(8)
+        setTextHex(INDIGO)
+        doc.text('BULLET POINTS', margin + 8, yBullets + 11)
+        yBullets += badgeHeight + badgeToTitleGap
+
+        // 2) Title
+        // Bullet PDF SETTINGS: title typography (font/style/size + wrapping)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(22)
+        setTextHex(DARK_NAVY)
+        const bulletTitleLines = doc.splitTextToSize(fileTitle, bulletContentWidth) as string[]
+        for (const line of bulletTitleLines) {
+          ensurePageSpaceBullets(28)
+          doc.text(line, margin, yBullets)
+          yBullets += 28
+        }
+        yBullets += -7
+
+        // 3) Meta
+        // Bullet PDF SETTINGS: meta line typography + color
+        ensurePageSpaceBullets(16)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        setTextHex(GRAY_TEXT)
+        doc.text(`Source: ${sourceLabel} · Generated: ${dateLabel}`, margin, yBullets)
+        yBullets += 12
+
+        // 4) Tag chips
+        // Bullet PDF SETTINGS: chip fill + chip text typography
+        const tags = (summary.tags || []).filter(Boolean).slice(0, 5)
+        if (tags.length > 0) {
+          const chipHeight = 18
+          const chipGap = 0
+          const chipWidth = (bulletContentWidth - chipGap * (tags.length - 1)) / tags.length
+
+          ensurePageSpaceBullets(chipHeight + 10)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(8)
+
+          tags.forEach((tag, index) => {
+            const chipX = margin + index * (chipWidth + chipGap)
+            doc.setFillColor(209, 250, 229)
+            doc.rect(chipX, yBullets, chipWidth, chipHeight, 'F')
+            doc.setTextColor(6, 95, 70)
+            const chipText = cleanInlineMarkdown(String(tag))
+            const chipLines = doc.splitTextToSize(chipText, chipWidth - 10) as string[]
+            doc.text(chipLines.slice(0, 1), chipX + 5, yBullets + 12, { maxWidth: chipWidth - 10 })
+          })
+
+          yBullets += chipHeight + 10
+        } else {
+          yBullets += 10
+        }
+        // 5) Indigo accent divider
+        // Bullet PDF SETTINGS: accent divider color/thickness
+        ensurePageSpaceBullets(2)
+        setFillHex(INDIGO)
+        doc.rect(margin, yBullets, bulletContentWidth, 1.5, 'F')
+        yBullets += 14
+
+        // 6) OVERVIEW section
+        // Bullet PDF SETTINGS: section heading typography
+        ensurePageSpaceBullets(22)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(13)
+        setTextHex(DARK_NAVY)
+        yBullets += 16
+        doc.text('OVERVIEW', margin, yBullets)
+        yBullets += 10
+
+        const overviewText =
+          normalizeGeneralSummaryText(overviewSection.body || renderedContentRaw || '') || 'No overview available.'
+        const overviewFlowText = cleanInlineMarkdown(overviewText)
+        const overviewInnerWidth = bulletContentWidth - 4
+
+        // Bullet PDF SETTINGS: overview body text typography + wrapping metrics
+        // IMPORTANT: set final text font before splitTextToSize so wrap width
+        // is calculated with the same metrics used for drawing.
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        const overviewLines = doc.splitTextToSize(overviewFlowText, overviewInnerWidth - 24) as string[]
+        const overviewLineHeight = 17
+        const overviewPad = 12
+        const overviewBaselineOffset = 11
+        const overviewTextBlockHeight =
+          overviewLines.length > 0
+            ? overviewBaselineOffset + Math.max(0, overviewLines.length - 1) * overviewLineHeight
+            : overviewBaselineOffset
+        const overviewCardHeight = Math.max(48, overviewPad + overviewTextBlockHeight + overviewPad + 4)
+
+        ensurePageSpaceBullets(overviewCardHeight)
+        setFillHex(SECTION_BG)
+        doc.rect(margin, yBullets, bulletContentWidth, overviewCardHeight, 'F')
+        setFillHex(INDIGO)
+        doc.rect(margin, yBullets, 4, overviewCardHeight, 'F')
+        setDrawHex(BORDER)
+        doc.setLineWidth(0.5)
+        doc.rect(margin, yBullets, bulletContentWidth, overviewCardHeight)
+
+        setTextHex(BODY_TEXT)
+        let overviewTextY = yBullets + overviewPad + overviewBaselineOffset
+        for (const line of overviewLines) {
+          doc.text(line, margin + 4 + overviewPad, overviewTextY)
+          overviewTextY += overviewLineHeight
+        }
+        yBullets += overviewCardHeight + 14
+
+        // 7) CORE STRUCTURES section heading
+        // Bullet PDF SETTINGS: section heading typography
+        ensurePageSpaceBullets(28)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(13)
+        setTextHex(DARK_NAVY)
+        yBullets += 16
+        doc.text('CORE STRUCTURES', margin, yBullets)
+        yBullets += 16
+
+        const rawCoreItems = parseBulletHierarchy(coreSection.body || '')
+        const coreItems = rawCoreItems.reduce((acc, item) => {
+          if (/^key takeaway/i.test(item.text) && acc.length > 0) {
+            const prev = acc[acc.length - 1]
+            const alreadyHasKT = prev.children.some((child) => /^key takeaway/i.test(child))
+            if (!alreadyHasKT) {
+              prev.children.push(item.text)
+            }
+            return acc
+          }
+
+          acc.push(item)
+          return acc
+        }, [] as typeof rawCoreItems)
+
+        const getChild = (children: string[], label: string) => {
+          const match = children.find((child) => child.toLowerCase().startsWith(label.toLowerCase()))
+          if (!match) return ''
+          const colonIdx = match.indexOf(':')
+          return colonIdx >= 0 ? match.slice(colonIdx + 1).trim() : match
+        }
+
+        const buildRows = (children: string[]) => {
+          const definition = getChild(children, 'definition')
+          const function_ = getChild(children, 'function')
+          const examples = getChild(children, 'examples')
+          const takeaway = getChild(children, 'key takeaway')
+
+          return [
+            { label: 'DEFINITION', value: definition || '—' },
+            { label: 'FUNCTION', value: function_ || '—' },
+            { label: 'EXAMPLES', value: examples || '—' },
+            { label: 'KEY TAKEAWAY', value: takeaway || '—' },
+          ]
+        }
+
+        const drawCoreCard = (cardTitle: string, rows: Array<{ label: string; value: string }>) => {
+          const headerHeight = 28
+          const labelColWidth = 88
+          const valueColWidth = bulletContentWidth - labelColWidth
+          const rowFontSize = 10
+          const rowLineHeight = 14
+          const rowLineHeightFactor = rowLineHeight / rowFontSize
+          const rowTextTop = 14
+          const rowBottomPad = 8
+          const cardAfterGap = 10
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(rowFontSize)
+
+          const rowLayouts = rows.map((row) => {
+            const valueFlowText = cleanInlineMarkdown(row.value || '—') || '—'
+            const valueLines = doc.splitTextToSize(valueFlowText, valueColWidth - 20) as string[]
+            const lineCount = Math.max(1, valueLines.length)
+            const textBlockHeight = rowTextTop + (lineCount - 1) * rowLineHeight
+            const rowHeight = Math.max(24, textBlockHeight + rowBottomPad)
+            return { rowHeight, valueLines: valueLines.length > 0 ? valueLines : ['—'] }
+          })
+
+          const cardHeight =
+            headerHeight + rowLayouts.reduce((sum, layout) => sum + layout.rowHeight, 0)
+          const singlePageContentHeight = pageHeight - margin * 2
+
+          // Bullet PDF SETTINGS: core structure card header typography/colors
+          const drawCardHeader = () => {
+            setFillHex(NAVY)
+            doc.rect(margin, yBullets, bulletContentWidth, headerHeight, 'F')
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(11)
+            doc.setTextColor(255, 255, 255)
+            doc.text(cleanInlineMarkdown(cardTitle || 'Core Structure'), margin + 3 + 10, yBullets + 18, {
+              maxWidth: bulletContentWidth - 24,
+            })
+            yBullets += headerHeight
+          }
+
+          if (cardHeight <= singlePageContentHeight) {
+            ensurePageSpaceBullets(cardHeight + cardAfterGap)
+          }
+          drawCardHeader()
+
+          rows.forEach((row, rowIndex) => {
+            const { rowHeight, valueLines } = rowLayouts[rowIndex]
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(rowFontSize)
+
+            setFillHex(SECTION_BG)
+            doc.rect(margin, yBullets, bulletContentWidth, rowHeight, 'F')
+
+            // Always LABEL_BG for label column
+            setFillHex(LABEL_BG)
+            doc.rect(margin, yBullets, labelColWidth, rowHeight, 'F')
+
+            setDrawHex(BORDER)
+            doc.setLineWidth(0.5)
+            doc.rect(margin, yBullets, bulletContentWidth, rowHeight)
+            doc.line(margin + labelColWidth, yBullets, margin + labelColWidth, yBullets + rowHeight)
+
+            // Bullet PDF SETTINGS: card label typography (DEFINITION/FUNCTION/...)
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(8)
+            setTextHex(GRAY_TEXT)
+            doc.text(row.label, margin + 8, yBullets + 14, { maxWidth: labelColWidth - 16 })
+
+            // Bullet PDF SETTINGS: card value/body typography
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(10)
+            setTextHex(BODY_TEXT)
+            doc.text(valueLines, margin + labelColWidth + 10, yBullets + rowTextTop, {
+              lineHeightFactor: rowLineHeightFactor,
+            })
+
+            yBullets += rowHeight
+          })
+
+          yBullets += cardAfterGap
+        }
+
+        if (coreItems.length === 0) {
+          drawCoreCard('Core Structure', buildRows([]))
+        } else {
+          coreItems.forEach((item) => {
+            drawCoreCard(item.text || 'Core Structure', buildRows(item.children))
+          })
+        }
+
+        // 8) Thin divider before facts
+        ensurePageSpaceBullets(2)
+        setDrawHex(BORDER)
+        doc.setLineWidth(0.5)
+        doc.line(margin, yBullets, margin + bulletContentWidth, yBullets)
+        yBullets += 14
+
+        // 9) INTERESTING FACTS section heading
+        // Bullet PDF SETTINGS: section heading typography
+        ensurePageSpaceBullets(30)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(13)
+        setTextHex(DARK_NAVY)
+        yBullets += 16
+        doc.text('INTERESTING FACTS', margin, yBullets)
+        yBullets += 16
+
+        const factLinesRaw = (factsSection.body || '')
+          .replace(/\r\n/g, '\n')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+
+        const facts = factLinesRaw
+          .map((line) => cleanInlineMarkdown(line.replace(/^[-*+•]\s+/, '').replace(/^\d+[.)]\s+/, '').trim()))
+          .filter(Boolean)
+
+        const safeFacts = facts.length > 0 ? facts : ['No facts available.']
+
+        safeFacts.forEach((fact, index) => {
+          const numberCellWidth = 26
+          const factTextWidth = bulletContentWidth - numberCellWidth
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          const factFlowText = cleanInlineMarkdown(fact) || 'No facts available.'
+          const factWrapped = doc.splitTextToSize(
+            factFlowText,
+            factTextWidth - 18,
+          ) as string[]
+          const factRowHeight = Math.max(factWrapped.length * 14, 20) + 14
+
+          ensurePageSpaceBullets(factRowHeight)
+
+          setFillHex(INDIGO)
+          doc.rect(margin, yBullets, numberCellWidth, factRowHeight, 'F')
+          setFillHex(SECTION_BG)
+          doc.rect(margin + numberCellWidth, yBullets, factTextWidth, factRowHeight, 'F')
+
+          setDrawHex(BORDER)
+          doc.setLineWidth(0.5)
+          doc.rect(margin, yBullets, bulletContentWidth, factRowHeight)
+          doc.line(margin + numberCellWidth, yBullets, margin + numberCellWidth, yBullets + factRowHeight)
+
+          // Bullet PDF SETTINGS: fact number typography
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(10)
+          doc.setTextColor(255, 255, 255)
+          doc.text(String(index + 1), margin + numberCellWidth / 2, yBullets + factRowHeight / 2 + 4, { align: 'center' })
+
+          // Bullet PDF SETTINGS: fact body typography
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          setTextHex(BODY_TEXT)
+          doc.text(factWrapped, margin + numberCellWidth + 10, yBullets + 14)
+
+          yBullets += factRowHeight + 8
+        })
+
+        // 10) Footer
+        // Bullet PDF SETTINGS: footer typography + color
+        const docWithPages = doc as unknown as {
+          getNumberOfPages?: () => number
+          setPage?: (pageNumber: number) => void
+        }
+        const totalPages = typeof docWithPages.getNumberOfPages === 'function'
+          ? docWithPages.getNumberOfPages()
+          : 1
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        setTextHex(GRAY_TEXT)
+        for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+          if (typeof docWithPages.setPage === 'function') {
+            docWithPages.setPage(pageNumber)
+          }
+          doc.text(`Lectura · Page ${pageNumber}`, pageWidth / 2, pageHeight - 20, { align: 'center' })
+        }
 
         doc.save(`${fileTitle}.pdf`)
         toast.success('PDF exported')
