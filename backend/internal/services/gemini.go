@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -81,13 +82,33 @@ func (s *GeminiService) acquireRate(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-time.After(5 * time.Minute):
+	case <-time.After(10 * time.Minute):
 		return fmt.Errorf("timeout waiting for Gemini rate slot")
 	}
 }
 
 func (s *GeminiService) releaseRate() {
 	s.rateChan <- struct{}{}
+}
+
+func generateContentWithTimeout(
+	ctx context.Context,
+	model *genai.GenerativeModel,
+	timeout time.Duration,
+	parts ...genai.Part,
+) (*genai.GenerateContentResponse, error) {
+	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	resp, err := model.GenerateContent(callCtx, parts...)
+	if err != nil {
+		if errors.Is(callCtx.Err(), context.DeadlineExceeded) {
+			return nil, fmt.Errorf("Gemini call timed out after %s", timeout)
+		}
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 // PublishUpdate sends a WebSocket update via Redis pub/sub
@@ -136,7 +157,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	})
 
 	// Call Gemini
-	resp, err := summaryModel.GenerateContent(ctx, genai.Text(prompt))
+	resp, err := generateContentWithTimeout(ctx, summaryModel, 10*time.Minute, genai.Text(prompt))
 	if err != nil {
 		return fmt.Errorf("Gemini API error: %w", err)
 	}
@@ -176,7 +197,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		}
 
 		restructurePrompt := buildSmartSummaryStructureFallbackPrompt(rawText, metadataOnlyMode)
-		resp2, err := summaryModel.GenerateContent(ctx, genai.Text(restructurePrompt))
+		resp2, err := generateContentWithTimeout(ctx, summaryModel, 90*time.Second, genai.Text(restructurePrompt))
 		if err == nil {
 			rawText2 := extractText(resp2)
 			if strings.TrimSpace(rawText2) != "" {
@@ -206,6 +227,28 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 			if !hasValidSmartSummaryTable(rawText) {
 				rawText = ensureSmartSummaryTable(rawText)
 				log.Println("INFO: Smart summary table restored after fidelity rewrite")
+			}
+		}
+
+		// Safety net: detect missing "Summary of Video Content" and auto-generate it
+		if !strings.Contains(strings.ToLower(rawText), "summary of video content") {
+			log.Println("WARNING: Smart summary missing 'Summary of Video Content' section — auto-generating")
+			excerpt := rawText[:min(len(rawText), 3000)]
+			microPrompt := fmt.Sprintf(`Read the following summary and write ONE concise narrative paragraph (3-5 sentences) that summarizes the overall topic and main points of the video. Return ONLY the paragraph text, no headings, no markdown.
+
+Summary:
+%s`, excerpt)
+			microCtx, microCancel := context.WithTimeout(ctx, 60*time.Second)
+			defer microCancel()
+			microResp, microErr := s.model.GenerateContent(microCtx, genai.Text(microPrompt))
+			if microErr == nil {
+				paragraph := strings.TrimSpace(extractText(microResp))
+				if paragraph != "" {
+					rawText = "## Summary of Video Content\n" + paragraph + "\n\n" + rawText
+					log.Println("INFO: Smart summary 'Summary of Video Content' section auto-repaired")
+				}
+			} else {
+				log.Printf("WARNING: Failed to auto-generate Summary of Video Content: %v", microErr)
 			}
 		}
 	}
@@ -310,7 +353,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 			}
 		}()
 
-		metaCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		metaCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 		defer cancel()
 
 		metaPrompt := fmt.Sprintf(`Given this summary, return ONLY a valid JSON object with these fields:
@@ -361,7 +404,7 @@ Summary:
 	metaData := metaResult{title: "Untitled Summary", tags: []string{}, description: nil}
 	select {
 	case metaData = <-metaCh:
-	case <-time.After(22 * time.Second):
+	case <-time.After(10 * time.Minute):
 		log.Printf("metadata generation timeout for summary %s — using defaults", job.ReferenceID)
 	}
 	title := metaData.title
@@ -480,7 +523,7 @@ func (s *GeminiService) GenerateQuiz(ctx context.Context, job *models.Job, summa
 		},
 	})
 
-	resp, err := s.model.GenerateContent(ctx, genai.Text(prompt))
+	resp, err := generateContentWithTimeout(ctx, s.model, 10*time.Minute, genai.Text(prompt))
 	if err != nil {
 		return fmt.Errorf("Gemini API error: %w", err)
 	}
@@ -544,7 +587,7 @@ func (s *GeminiService) GenerateFlashcards(ctx context.Context, job *models.Job,
 		},
 	})
 
-	resp, err := s.model.GenerateContent(ctx, genai.Text(prompt))
+	resp, err := generateContentWithTimeout(ctx, s.model, 10*time.Minute, genai.Text(prompt))
 	if err != nil {
 		return fmt.Errorf("Gemini API error: %w", err)
 	}
@@ -1752,6 +1795,8 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 	case "cornell":
 		b.WriteString("Format: Use the Cornell Method. Provide three clearly labeled sections with these exact headers and order:\n[CUES]\n[NOTES]\n[SUMMARY]\n")
 		b.WriteString("Output rules for Cornell: plain text only; DO NOT use markdown tables; DO NOT use pipes (|); DO NOT use HTML tags; keep CUES as short prompt lines and NOTES as readable bullet paragraphs.\n")
+		b.WriteString("CRITICAL FORMATTING RULE: Both CUES and NOTES must be numbered lists using '1. ', '2. ', '3. ', etc. Each cue gets its own numbered line. Each note gets its own numbered line with the SAME number as its matching cue. Cue N answers Note N — they MUST be paired 1:1.\n")
+		b.WriteString("Example output structure:\n[CUES]\n1. What percentage of brain mass does the cerebrum occupy?\n2. Which brain region coordinates voluntary movement?\n[NOTES]\n1. The cerebrum occupies approximately 85% of total brain mass and is responsible for higher-order thinking.\n2. The cerebellum coordinates voluntary movements, balance, and motor learning.\n[SUMMARY]\nThe brain consists of...\n\n")
 		b.WriteString("Cue formatting rule: Each cue MUST be a specific retrieval question, not a topic label.\n")
 		b.WriteString("WRONG: \"Cerebrum's role?\"\n")
 		b.WriteString("RIGHT: \"What percentage of brain mass does the cerebrum occupy?\"\n")
@@ -1774,10 +1819,22 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 	case "bullets":
 		b.WriteString("Format: Use structured bullet points with clear headings and concise bullets.\n")
 		b.WriteString("Bullets output rules:\n")
-		b.WriteString("1) Required section flow (exact order): Overview -> Core Structures -> Interesting Facts.\n")
+		b.WriteString("1) Required section flow (exact order): Overview -> Core Structures -> Interesting Facts. These are the ONLY three top-level headings allowed.\n")
 		b.WriteString("2) Do NOT include redundant wrapper titles like 'Executive Summary:' and do NOT repeat section headings (e.g., 'Overview' twice).\n")
 		b.WriteString("3) Keep wording plain and concrete; avoid unnecessarily academic jargon when simpler wording is possible.\n")
-		b.WriteString("4) For each major item in Core Structures (e.g., a brain part), use a consistent micro-structure in this order:\n")
+		b.WriteString("CRITICAL NESTING RULE: ALL items in Core Structures MUST be bullet points nested UNDER the single 'Core Structures' heading. Do NOT create separate headings for each item. Each item is a bullet (- ItemName) with sub-bullets for Definition/Function/Examples/Key Takeaway.\n")
+		b.WriteString("CORRECT structure example:\n")
+		b.WriteString("## Core Structures\n")
+		b.WriteString("- **Variables**\n")
+		b.WriteString("  - Definition: Named identifiers storing data values.\n")
+		b.WriteString("  - Function: Label and reference information.\n")
+		b.WriteString("  - Examples: item = \"banana\", age = 28.\n")
+		b.WriteString("  - Key Takeaway: Case-sensitivity prevents data conflicts.\n")
+		b.WriteString("- **Data Types**\n")
+		b.WriteString("  - Definition: Classifications defining a variable's value type.\n")
+		b.WriteString("  ...\n\n")
+		b.WriteString("WRONG: Creating separate '## Variables', '## Data Types', '## Conditional Statements' headings. They must ALL be bullets under ONE '## Core Structures' heading.\n")
+		b.WriteString("4) For each major item in Core Structures, use a consistent micro-structure in this order:\n")
 		b.WriteString("   - Definition: <what it is>\n")
 		b.WriteString("   - Function: <what it does>\n")
 		b.WriteString("   - Examples: <brief, specific examples; short phrase list, not long sentences>\n")
@@ -1815,7 +1872,7 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("3) Key Concepts Table — use EXACTLY this format, no exceptions:\n")
 		b.WriteString("   - Table title: 'Key Concepts'\n")
 		b.WriteString("   - EXACTLY 2 columns: 'Concept' and 'Explanation'\n")
-		b.WriteString("   - EXACTLY 4-6 data rows, one per key concept from the transcript\n")
+		b.WriteString("   - EXACTLY 4-6 data rows, one per key concept from the transcript. HARD MAXIMUM: 6 rows. Do NOT output more than 6 data rows under any circumstances. Stop after the 6th row.\n")
 		b.WriteString("   - Every cell MUST contain real content — no dashes, no empty strings, no placeholders\n")
 		b.WriteString("   - Concept column: short name or term (1-5 words)\n")
 		b.WriteString("   - Explanation column: one clear sentence explaining the concept\n")
@@ -1843,13 +1900,16 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("  Format each insight EXACTLY like this example (note the blank lines and spacing):\n")
 		b.WriteString("  **Key Concept: Concept Title Here**\n")
 		b.WriteString("  Explanation paragraph here with 1-2 sentences.\n\n")
+		b.WriteString("  Example: A specific example from the transcript.\n\n")
 		b.WriteString("  CRITICAL: Always put a space after the colon in 'Key Concept: Title'. Always put the explanation on a SEPARATE line (not on the same line as the title).\n")
+		b.WriteString("  FORBIDDEN inside Key Insights section: Do NOT use markdown tables (| pipes), bullet lists (* or -), or any markdown formatting other than **bold** for the Key Concept title. Each insight is ONLY: bold title line, explanation paragraph, optional Example line. Nothing else.\n")
 		b.WriteString("  Do NOT output repetitive 'Definition' lines for every item.\n")
 		b.WriteString("  Include 'Example:' ONLY if explicitly present in transcript; otherwise omit the Example line entirely.\n")
+		b.WriteString("  Example lines must be plain text starting with 'Example:' — do NOT wrap in blockquotes (> ...), do NOT bold the word Example, do NOT use code fences (```). Just: Example: your text here.\n")
 		if metadataOnlyMode {
 			b.WriteString("  CRITICAL: In metadata-only mode, this section must contain exactly one line: 'Key Insights cannot be generated from metadata alone. Please provide a video with an available transcript.'\n")
 		}
-		b.WriteString("CRITICAL: Output exactly ONE table with exactly 2 columns (Concept | Explanation) and 4-6 data rows. Every cell must have real content. No exceptions.\n\n")
+		b.WriteString("CRITICAL: Output exactly ONE table with exactly 2 columns (Concept | Explanation) and STRICTLY 4-6 data rows. NEVER exceed 6 rows. If the transcript contains more than 6 concepts, select only the 6 most important ones. Every cell must have real content. No exceptions.\n\n")
 		b.WriteString("- Additional Interesting Facts: output ONLY as a markdown bullet list (3-6 bullets, each line starts with '- '). Include only non-duplicated noteworthy facts, with numbers/evidence when present; avoid trivial or playful statements.\n")
 		if metadataOnlyMode {
 			b.WriteString("  Only include facts directly stated in the metadata. Do not speculate about content, themes, or implications.\n")
@@ -1857,7 +1917,8 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 		b.WriteString("Forbidden sections: DO NOT output 'Conclusions', 'Summary Highlights', or 'Summary Table'.\n")
 		b.WriteString("For section 'Key Insights and Core Concepts', keep concept names faithful to transcript terminology and avoid invented terms.\n")
 		b.WriteString("If transcript evidence is weak, explicitly mark uncertainty instead of fabricating details.\n")
-		b.WriteString("Markdown structure rule for Additional Interesting Facts: this section MUST be a markdown unordered list ('- item'). Do NOT write it as a paragraph.\n\n")
+		b.WriteString("Markdown structure rule for Additional Interesting Facts: this section MUST be a markdown unordered list ('- item'). Do NOT write it as a paragraph.\n")
+		b.WriteString("FINAL OUTPUT RULE: Do NOT wrap the output in code fences (``` or ```markdown). Output raw markdown only. Do NOT add trailing ``` at the end.\n\n")
 	}
 
 	// Layer 3 — Length (strict bands, adjusted per format)
@@ -1946,6 +2007,11 @@ func buildSummaryPrompt(format, length string, focusAreas []string, audience, la
 	b.WriteString("---TRANSCRIPT START---\n")
 	b.WriteString(transcript)
 	b.WriteString("\n---TRANSCRIPT END---\n")
+
+	// Layer 8 — Final reinforcement for Smart Summary (fights "lost in the middle")
+	if format == "smart" {
+		b.WriteString("\nREMINDER: Your FIRST section MUST be '## Summary of Video Content' with a concise narrative paragraph. Do NOT skip it. Start your output with that section.\n")
+	}
 
 	return b.String()
 }

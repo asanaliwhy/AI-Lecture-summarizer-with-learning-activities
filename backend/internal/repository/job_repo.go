@@ -72,14 +72,14 @@ func (r *JobRepo) UpdateStatusIfNotTerminal(ctx context.Context, id uuid.UUID, s
 		UPDATE jobs
 		SET status = $1,
 			completed_at = CASE
-				WHEN $1 IN ('completed', 'failed', 'cancelled') THEN NOW()
+				WHEN $2 IN ('completed', 'failed', 'cancelled') THEN NOW()
 				ELSE completed_at
 			END
-		WHERE id = $2
+		WHERE id = $3
 		  AND status NOT IN ('completed', 'failed', 'cancelled')
 	`
 
-	tag, err := r.pool.Exec(ctx, query, status, id)
+	tag, err := r.pool.Exec(ctx, query, status, status, id)
 	if err != nil {
 		return false, err
 	}

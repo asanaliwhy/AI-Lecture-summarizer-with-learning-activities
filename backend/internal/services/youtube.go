@@ -60,11 +60,13 @@ func (s *YouTubeService) GetTranscript(videoID string) (string, error) {
 		log.Printf("Python transcript failed for %s: %v — trying Go fallbacks", videoID, pyErr)
 	}
 
-	// Fallback 1: Go transcript API
-	transcript, err := s.transcriptAPI.GetTranscript(videoID, []string{"en", "en-US", "en-GB"})
+	// Fallback 1: Go transcript API (with 30-second timeout to prevent hangs)
+	transcript, err := s.getTranscriptViaGoAPIWithTimeout(videoID, []string{"en", "en-US", "en-GB"}, 30*time.Second)
 	if err != nil {
-		transcript, err = s.transcriptAPI.GetTranscript(videoID, nil)
+		log.Printf("Go transcript API (English) failed for %s: %v — trying any language", videoID, err)
+		transcript, err = s.getTranscriptViaGoAPIWithTimeout(videoID, nil, 30*time.Second)
 		if err != nil {
+			log.Printf("Go transcript API (any) failed for %s: %v — trying timedtext XML", videoID, err)
 			// Fallback 2: timedtext XML
 			legacyTranscript, legacyErr := s.getTranscriptViaTimedText(videoID)
 			if legacyErr == nil {
@@ -94,6 +96,28 @@ func (s *YouTubeService) GetTranscript(videoID string) (string, error) {
 	}
 
 	return cleaned, nil
+}
+
+// getTranscriptViaGoAPIWithTimeout wraps the Go transcript API with a timeout
+// to prevent indefinite blocking when YouTube is slow to respond.
+func (s *YouTubeService) getTranscriptViaGoAPIWithTimeout(videoID string, languages []string, timeout time.Duration) (*ytapi.Transcript, error) {
+	type result struct {
+		transcript *ytapi.Transcript
+		err        error
+	}
+
+	ch := make(chan result, 1)
+	go func() {
+		t, err := s.transcriptAPI.GetTranscript(videoID, languages)
+		ch <- result{transcript: t, err: err}
+	}()
+
+	select {
+	case res := <-ch:
+		return res.transcript, res.err
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("Go transcript API timed out after %s", timeout)
+	}
 }
 
 // getTranscriptViaPython shells out to the Python youtube-transcript-api
@@ -179,8 +203,12 @@ func findPythonScript() string {
 }
 
 func (s *YouTubeService) getTranscriptViaTimedText(videoID string) (string, error) {
+	// 30-second timeout for the entire timedtext flow
+	timedTextCtx, timedTextCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer timedTextCancel()
+
 	pageURL := fmt.Sprintf("https://www.youtube.com/watch?v=%s", videoID)
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, pageURL, nil)
+	req, err := http.NewRequestWithContext(timedTextCtx, http.MethodGet, pageURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("getTranscriptViaTimedText: build page request: %w", err)
 	}
@@ -209,7 +237,7 @@ func (s *YouTubeService) getTranscriptViaTimedText(videoID string) (string, erro
 		return "", err
 	}
 
-	captionReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, captionURL, nil)
+	captionReq, err := http.NewRequestWithContext(timedTextCtx, http.MethodGet, captionURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("getTranscriptViaTimedText: build captions request: %w", err)
 	}
@@ -285,45 +313,67 @@ func parseCaptionsXML(data []byte) (string, error) {
 
 // DownloadAudio downloads the best available audio-only stream for a YouTube URL.
 func (s *YouTubeService) DownloadAudio(videoURL string) ([]byte, string, error) {
-	video, err := s.ytClient.GetVideo(videoURL)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to fetch YouTube video metadata: %w", err)
+	type result struct {
+		audioBytes []byte
+		mimeType   string
+		err        error
 	}
 
-	formats := video.Formats.WithAudioChannels()
-	if len(formats) == 0 {
-		return nil, "", fmt.Errorf("no audio formats available")
-	}
+	ch := make(chan result, 1)
 
-	best := formats[0]
-	for _, f := range formats {
-		if f.Bitrate > best.Bitrate {
-			best = f
+	go func() {
+		video, err := s.ytClient.GetVideo(videoURL)
+		if err != nil {
+			ch <- result{err: fmt.Errorf("failed to fetch YouTube video metadata: %w", err)}
+			return
 		}
-	}
 
-	stream, _, err := s.ytClient.GetStream(video, &best)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to open audio stream: %w", err)
-	}
-	defer stream.Close()
+		formats := video.Formats.WithAudioChannels()
+		if len(formats) == 0 {
+			ch <- result{err: fmt.Errorf("no audio formats available")}
+			return
+		}
 
-	const maxAudioBytes = 100 * 1024 * 1024 // 100MB safety cap
-	limited := io.LimitReader(stream, maxAudioBytes+1)
-	audioBytes, err := io.ReadAll(limited)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to read audio stream: %w", err)
-	}
-	if len(audioBytes) > maxAudioBytes {
-		return nil, "", fmt.Errorf("audio stream exceeds %d MB limit", maxAudioBytes/(1024*1024))
-	}
+		best := formats[0]
+		for _, f := range formats {
+			if f.Bitrate > best.Bitrate {
+				best = f
+			}
+		}
 
-	mimeType := strings.TrimSpace(strings.Split(best.MimeType, ";")[0])
-	if mimeType == "" {
-		mimeType = "audio/mp4"
-	}
+		stream, _, err := s.ytClient.GetStream(video, &best)
+		if err != nil {
+			ch <- result{err: fmt.Errorf("failed to open audio stream: %w", err)}
+			return
+		}
+		defer stream.Close()
 
-	return audioBytes, mimeType, nil
+		const maxAudioBytes = 100 * 1024 * 1024 // 100MB safety cap
+		limited := io.LimitReader(stream, maxAudioBytes+1)
+		audioBytes, err := io.ReadAll(limited)
+		if err != nil {
+			ch <- result{err: fmt.Errorf("failed to read audio stream: %w", err)}
+			return
+		}
+		if len(audioBytes) > maxAudioBytes {
+			ch <- result{err: fmt.Errorf("audio stream exceeds %d MB limit", maxAudioBytes/(1024*1024))}
+			return
+		}
+
+		mimeType := strings.TrimSpace(strings.Split(best.MimeType, ";")[0])
+		if mimeType == "" {
+			mimeType = "audio/mp4"
+		}
+
+		ch <- result{audioBytes: audioBytes, mimeType: mimeType, err: nil}
+	}()
+
+	select {
+	case res := <-ch:
+		return res.audioBytes, res.mimeType, res.err
+	case <-time.After(90 * time.Second): // 90-second max for downloading audio
+		return nil, "", fmt.Errorf("audio download timed out after 90s")
+	}
 }
 
 // EstimateDuration parses duration from YouTube page HTML

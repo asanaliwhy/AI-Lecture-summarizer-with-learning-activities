@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net"
 	"strings"
 	"time"
 
@@ -72,7 +73,7 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshTokenCookie(w, tokens.RefreshToken, h.isProduction)
+	setRefreshTokenCookie(w, tokens.RefreshToken, shouldUseSecureCookie(r, h.isProduction))
 	writeAuthResponse(w, http.StatusOK, tokens)
 }
 
@@ -89,7 +90,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshTokenCookie(w, tokens.RefreshToken, h.isProduction)
+	setRefreshTokenCookie(w, tokens.RefreshToken, shouldUseSecureCookie(r, h.isProduction))
 	writeAuthResponse(w, http.StatusOK, tokens)
 }
 
@@ -110,7 +111,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshTokenCookie(w, tokens.RefreshToken, h.isProduction)
+	setRefreshTokenCookie(w, tokens.RefreshToken, shouldUseSecureCookie(r, h.isProduction))
 	writeAuthResponse(w, http.StatusOK, tokens)
 }
 
@@ -124,7 +125,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	if refreshToken != "" {
 		h.authService.Logout(r.Context(), refreshToken)
 	}
-	clearRefreshTokenCookie(w, h.isProduction)
+	clearRefreshTokenCookie(w, shouldUseSecureCookie(r, h.isProduction))
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Logged out successfully"})
 }
 
@@ -146,7 +147,7 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshTokenCookie(w, tokens.RefreshToken, h.isProduction)
+	setRefreshTokenCookie(w, tokens.RefreshToken, shouldUseSecureCookie(r, h.isProduction))
 	writeAuthResponse(w, http.StatusOK, tokens)
 }
 
@@ -168,7 +169,7 @@ func (h *AuthHandler) GoogleCodeLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshTokenCookie(w, tokens.RefreshToken, h.isProduction)
+	setRefreshTokenCookie(w, tokens.RefreshToken, shouldUseSecureCookie(r, h.isProduction))
 	writeAuthResponse(w, http.StatusOK, tokens)
 }
 
@@ -300,4 +301,28 @@ func readRefreshTokenFromRequest(r *http.Request) (string, error) {
 	}
 
 	return strings.TrimSpace(req.RefreshToken), nil
+}
+
+func shouldUseSecureCookie(r *http.Request, isProduction bool) bool {
+	if !isProduction {
+		return false
+	}
+
+	host := strings.TrimSpace(r.Host)
+	if host == "" {
+		return true
+	}
+
+	if strings.Contains(host, ":") {
+		if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+			host = parsedHost
+		}
+	}
+
+	host = strings.Trim(strings.ToLower(host), "[]")
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return false
+	}
+
+	return true
 }

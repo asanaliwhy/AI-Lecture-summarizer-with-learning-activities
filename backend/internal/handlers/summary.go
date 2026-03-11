@@ -119,8 +119,8 @@ func (h *SummaryHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 
-	if limit <= 0 || limit > 50 {
-		limit = 20
+	if limit <= 0 || limit > 1000 {
+		limit = 1000 // High default to support frontend's unpaginated full-list filtering
 	}
 
 	summaries, total, err := h.summaryRepo.ListByUser(r.Context(), userID, search, sortBy, limit, offset)
