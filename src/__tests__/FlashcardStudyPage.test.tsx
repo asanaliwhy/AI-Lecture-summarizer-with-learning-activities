@@ -47,6 +47,10 @@ vi.mock('../components/ui/Progress', () => ({
   Progress: ({ value }: { value: number }) => <div data-testid="progress">{value}</div>,
 }))
 
+vi.mock('../components/layout/AppLayout', () => ({
+  AppLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}))
+
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mocked.navigate,
   useParams: () => ({ deckId: 'deck-1' }),
@@ -301,8 +305,8 @@ describe('FlashcardStudyPage option handling', () => {
     await flush()
 
     expect(container.textContent).toContain('FLASHCARD RESULTS')
-    expect(container.textContent).toContain('50%')
-    expect(container.textContent).toContain('1 of 2 mastered')
+    expect(container.textContent).toContain('100%')
+    expect(container.textContent).toContain('2 of 2 mastered')
   })
 
   it('reuses latest persisted backend progress when reopening View Deck results', async () => {

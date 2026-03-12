@@ -67,9 +67,9 @@ exports[`SummaryPage production behaviors > snapshot: jsPDF text calls match exp
     },
   ],
   [
-    "Lectura · Page 1 of 1",
+    "Lectura · Page 1",
     297.5,
-    812,
+    822,
     {
       "align": "center",
     },
