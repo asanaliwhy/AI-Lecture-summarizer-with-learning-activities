@@ -105,7 +105,6 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
             reconnectDelayRef.current = 3000
             reconnectAttemptsRef.current = 0
             isConnectingRef.current = false
-            console.log('[WebSocket] connected:', wsUrl)
         }
 
         ws.onmessage = (event) => {
