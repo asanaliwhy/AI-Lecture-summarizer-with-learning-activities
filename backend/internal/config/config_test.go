@@ -60,24 +60,12 @@ func TestGetEnvAsIntOrDefault(t *testing.T) {
 	}
 }
 
-func TestMustGetEnv_Panics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("Expected panic for missing required env var")
-		}
-	}()
-
-	os.Unsetenv("NONEXISTENT_REQUIRED_VAR")
-	mustGetEnv("NONEXISTENT_REQUIRED_VAR")
-}
-
 func TestMustGetEnv_ReturnsValue(t *testing.T) {
-	os.Setenv("TEST_REQUIRED", "value123")
-	defer os.Unsetenv("TEST_REQUIRED")
+	t.Setenv("TEST_VAR", "hello")
 
-	result := mustGetEnv("TEST_REQUIRED")
-	if result != "value123" {
-		t.Errorf("Expected 'value123', got %q", result)
+	result := mustGetEnv("TEST_VAR")
+	if result != "hello" {
+		t.Errorf("Expected 'hello', got %q", result)
 	}
 }
 

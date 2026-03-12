@@ -20,8 +20,91 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
+type QuizAttemptAnswerEntry = {
+  question_index?: number | string
+  questionIndex?: number | string
+  answer_index?: number | string
+  answerIndex?: number | string
+  selected_index?: number | string
+}
+
+type QuizReviewQuestion = {
+  id?: string | number
+  questionNumber?: number | string
+  question?: string
+  text?: string
+  options?: string[]
+  answers?: string[]
+  user_answer_index?: number | string
+  answer_index?: number | string
+  selected_index?: number | string
+  user_answer?: number | string
+  userAnswer?: string
+  correct_index?: number | string
+  correctIndex?: number | string
+  correct_answer?: string
+  correctAnswer?: string
+  is_correct?: boolean
+  isCorrect?: boolean
+  explanation?: string
+}
+
+type QuizAttemptMeta = {
+  score_percent?: number | string
+  score?: number | string
+  total_questions?: number | string
+  correct_count?: number | string
+  time_taken_seconds?: number | string | null
+  time_taken?: number | string | null
+  duration?: number | string | null
+  quiz_id?: string | null
+  summary_id?: string | null
+  quiz_title?: string
+  answers?: unknown
+  answers_json?: unknown
+}
+
+type QuizMeta = {
+  id?: string
+  title?: string
+  created_at?: string
+  timeTaken?: number | string | null
+  duration?: number | string | null
+  time_taken_seconds?: number | string | null
+  time_taken?: number | string | null
+  question_count?: number | string
+  last_score?: number | string | null
+  summary_id?: string | null
+  questions?: unknown
+}
+
+type QuizAttemptResponse = {
+  attempt?: QuizAttemptMeta
+  quiz?: QuizMeta
+  id?: string
+  created_at?: string
+  timeTaken?: number | string | null
+  questions?: unknown
+  review?: unknown
+  answers?: unknown
+  answers_json?: unknown
+  score_percent?: number | string | null
+  score?: number | string | null
+  total_questions?: number | string | null
+  correct_count?: number | string | null
+  time_taken_seconds?: number | string | null
+  time_taken?: number | string | null
+  duration?: number | string | null
+  quiz_id?: string | null
+  summary_id?: string | null
+  quiz_title?: string
+  title?: string
+  question_count?: number | string
+  last_score?: number | string | null
+}
+
 export async function exportQuizResultsPdf(params: {
-  attemptData: any
+  attemptData: QuizAttemptResponse
   preferredFileTitle?: string
 }) {
   const { attemptData, preferredFileTitle } = params
@@ -60,7 +143,7 @@ export async function exportQuizResultsPdf(params: {
 
   const answerMap = new Map<number, number>()
   if (Array.isArray(rawAttemptAnswers)) {
-    rawAttemptAnswers.forEach((entry: any) => {
+    rawAttemptAnswers.forEach((entry: QuizAttemptAnswerEntry) => {
       const qIdx = toNumber(entry?.question_index ?? entry?.questionIndex)
       const aIdx = toNumber(entry?.answer_index ?? entry?.answerIndex ?? entry?.selected_index)
       if (qIdx !== null && aIdx !== null) {
@@ -188,7 +271,7 @@ export async function exportQuizResultsPdf(params: {
   const RED = '#b91c1c'
   const RED_BG = '#fff1f2'
 
-  const pdfQuestions = reviewQuestions.map((questionItem: any, index: number) => {
+  const pdfQuestions = reviewQuestions.map((questionItem: QuizReviewQuestion, index: number) => {
     const options = Array.isArray(questionItem?.options)
       ? questionItem.options
       : Array.isArray(questionItem?.answers)
@@ -492,89 +575,6 @@ export function QuizResultsPage() {
   const toast = useToast()
   const { attemptId } = useParams()
 
-  type QuizAttemptAnswerEntry = {
-    question_index?: number | string
-    questionIndex?: number | string
-    answer_index?: number | string
-    answerIndex?: number | string
-    selected_index?: number | string
-  }
-
-  type QuizReviewQuestion = {
-    id?: string | number
-    questionNumber?: number | string
-    question?: string
-    text?: string
-    options?: string[]
-    answers?: string[]
-    user_answer_index?: number | string
-    answer_index?: number | string
-    selected_index?: number | string
-    user_answer?: number | string
-    userAnswer?: string
-    correct_index?: number | string
-    correctIndex?: number | string
-    correct_answer?: string
-    correctAnswer?: string
-    is_correct?: boolean
-    isCorrect?: boolean
-    explanation?: string
-  }
-
-  type QuizAttemptMeta = {
-    score_percent?: number | string
-    score?: number | string
-    total_questions?: number | string
-    correct_count?: number | string
-    time_taken_seconds?: number | string
-    time_taken?: number | string
-    duration?: number | string
-    quiz_id?: string
-    summary_id?: string
-    quiz_title?: string
-    answers?: unknown
-    answers_json?: unknown
-  }
-
-  type QuizMeta = {
-    id?: string
-    title?: string
-    created_at?: string
-    timeTaken?: number | string
-    duration?: number | string
-    time_taken_seconds?: number | string
-    time_taken?: number | string
-    question_count?: number | string
-    last_score?: number | string
-    summary_id?: string
-    questions?: unknown
-  }
-
-  type QuizAttemptResponse = {
-    attempt?: QuizAttemptMeta
-    quiz?: QuizMeta
-    id?: string
-    created_at?: string
-    timeTaken?: number | string
-    questions?: unknown
-    review?: unknown
-    answers?: unknown
-    answers_json?: unknown
-    score_percent?: number | string
-    score?: number | string
-    total_questions?: number | string
-    correct_count?: number | string
-    time_taken_seconds?: number | string
-    time_taken?: number | string
-    duration?: number | string
-    quiz_id?: string
-    summary_id?: string
-    quiz_title?: string
-    title?: string
-    question_count?: number | string
-    last_score?: number | string
-  }
-
   const [attempt, setAttempt] = useState<QuizAttemptResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -668,7 +668,7 @@ export function QuizResultsPage() {
 
   const answerMap = new Map<number, number>()
   if (Array.isArray(rawAttemptAnswers)) {
-    rawAttemptAnswers.forEach((entry: any) => {
+    rawAttemptAnswers.forEach((entry: QuizAttemptAnswerEntry) => {
       const qIdx = toNumber(entry?.question_index ?? entry?.questionIndex)
       const aIdx = toNumber(entry?.answer_index ?? entry?.answerIndex ?? entry?.selected_index)
       if (qIdx !== null && aIdx !== null) {

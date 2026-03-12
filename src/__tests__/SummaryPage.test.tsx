@@ -176,6 +176,17 @@ describe('SummaryPage production behaviors', () => {
         })
     }
 
+    const waitForCondition = async (predicate: () => boolean, timeoutMs = 2000) => {
+        const start = Date.now()
+        while (Date.now() - start < timeoutMs) {
+            if (predicate()) return
+            await act(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 20))
+            })
+        }
+        throw new Error('Timed out waiting for condition')
+    }
+
     const clickButton = (text: string, index = 0) => {
         const targets = Array.from(document.body.querySelectorAll('button')).filter((btn) =>
             (btn.textContent || '').includes(text),
@@ -353,7 +364,9 @@ describe('SummaryPage production behaviors', () => {
         await flush()
 
         clickButton('Export')
-        await flush()
+        await waitForCondition(
+            () => mocked.toast.success.mock.calls.some((call) => call[0] === 'PDF exported'),
+        )
 
         expect(mocked.toast.error).not.toHaveBeenCalledWith('Failed to export PDF')
         expect(mocked.toast.success).toHaveBeenCalledWith('PDF exported')
