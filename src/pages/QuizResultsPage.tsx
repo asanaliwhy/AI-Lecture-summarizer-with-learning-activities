@@ -20,6 +20,32 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
+interface QuizQuestion {
+  id: string
+  text: string
+  options: string[]
+  correctIndex: number
+  explanation: string
+  userAnswer?: number
+  isCorrect?: boolean
+}
+
+interface QuizAttempt {
+  score: number
+  correctCount: number
+  totalCount: number
+  passed: boolean
+  timeTaken: number
+  answers: QuizAnswer[]
+}
+
+interface QuizAnswer {
+  questionId: string
+  userAnswer: string
+  correctAnswer: string
+  isCorrect: boolean
+}
+
 type QuizAttemptAnswerEntry = {
   question_index?: number | string
   questionIndex?: number | string
@@ -219,12 +245,12 @@ export async function exportQuizResultsPdf(params: {
 
   const setFillHex = (hex: string) => {
     const [r, g, b] = hexToRgb(hex)
-    if (typeof (doc as any).setFillColor === 'function') (doc as any).setFillColor(r, g, b)
+    doc.setFillColor(r, g, b)
   }
 
   const setDrawHex = (hex: string) => {
     const [r, g, b] = hexToRgb(hex)
-    if (typeof (doc as any).setDrawColor === 'function') (doc as any).setDrawColor(r, g, b)
+    doc.setDrawColor(r, g, b)
   }
 
   const drawRect = (
@@ -234,15 +260,11 @@ export async function exportQuizResultsPdf(params: {
     h: number,
     mode: 'F' | 'FD' | 'S' | undefined = undefined,
   ) => {
-    if (typeof (doc as any).rect === 'function') {
-      (doc as any).rect(x, yPos, w, h, mode)
-    }
+    doc.rect(x, yPos, w, h, mode)
   }
 
   const drawLine = (x1: number, y1: number, x2: number, y2: number) => {
-    if (typeof (doc as any).line === 'function') {
-      (doc as any).line(x1, y1, x2, y2)
-    }
+    doc.line(x1, y1, x2, y2)
   }
 
   const formatDurationForPdf = (value: unknown): string => {
@@ -387,7 +409,7 @@ export async function exportQuizResultsPdf(params: {
   drawRect(cardX + leftW, cardY, cardW - leftW, cardH, 'F')
 
   setDrawHex(RULE)
-  if (typeof (doc as any).setLineWidth === 'function') (doc as any).setLineWidth(0.5)
+  doc.setLineWidth(0.5)
   drawRect(cardX, cardY, cardW, cardH, 'S')
 
   for (let i = 1; i <= 2; i += 1) {
@@ -438,7 +460,7 @@ export async function exportQuizResultsPdf(params: {
   yQuiz += separatorTopGap
   ensurePageSpaceQuiz(8)
   setDrawHex(NAVY)
-  if (typeof (doc as any).setLineWidth === 'function') (doc as any).setLineWidth(1.6)
+  doc.setLineWidth(1.6)
   drawLine(margin, yQuiz, margin + quizContentWidth, yQuiz)
   yQuiz += separatorBottomGap
 
@@ -556,7 +578,7 @@ export async function exportQuizResultsPdf(params: {
   for (let i = 1; i <= totalPages; i += 1) {
     doc.setPage(i)
     doc.setDrawColor(226, 232, 240)
-    if (typeof (doc as any).setLineWidth === 'function') (doc as any).setLineWidth(0.5)
+    doc.setLineWidth(0.5)
     drawLine(margin, quizPageHeight - margin + 8, margin + quizContentWidth, quizPageHeight - margin + 8)
 
     doc.setFont('helvetica', 'normal')
@@ -809,12 +831,12 @@ export function QuizResultsPage() {
 
       const setFillHex = (hex: string) => {
         const [r, g, b] = hexToRgb(hex)
-        if (typeof (doc as any).setFillColor === 'function') (doc as any).setFillColor(r, g, b)
+        doc.setFillColor(r, g, b)
       }
 
       const setDrawHex = (hex: string) => {
         const [r, g, b] = hexToRgb(hex)
-        if (typeof (doc as any).setDrawColor === 'function') (doc as any).setDrawColor(r, g, b)
+        doc.setDrawColor(r, g, b)
       }
 
       const drawRect = (
@@ -824,15 +846,11 @@ export function QuizResultsPage() {
         h: number,
         mode: 'F' | 'FD' | 'S' | undefined = undefined,
       ) => {
-        if (typeof (doc as any).rect === 'function') {
-          (doc as any).rect(x, yPos, w, h, mode)
-        }
+        doc.rect(x, yPos, w, h, mode)
       }
 
       const drawLine = (x1: number, y1: number, x2: number, y2: number) => {
-        if (typeof (doc as any).line === 'function') {
-          (doc as any).line(x1, y1, x2, y2)
-        }
+        doc.line(x1, y1, x2, y2)
       }
 
       const formatDurationForPdf = (value: unknown): string => {
@@ -984,7 +1002,7 @@ export function QuizResultsPage() {
       drawRect(cardX + leftW, cardY, cardW - leftW, cardH, 'F')
 
       setDrawHex(RULE)
-      if (typeof (doc as any).setLineWidth === 'function') (doc as any).setLineWidth(0.5)
+      doc.setLineWidth(0.5)
       drawRect(cardX, cardY, cardW, cardH, 'S')
 
       for (let i = 1; i <= 2; i += 1) {
@@ -1037,7 +1055,7 @@ export function QuizResultsPage() {
       yQuiz += separatorTopGap
       ensurePageSpaceQuiz(8)
       setDrawHex(NAVY)
-      if (typeof (doc as any).setLineWidth === 'function') (doc as any).setLineWidth(1.6)
+      doc.setLineWidth(1.6)
       drawLine(margin, yQuiz, margin + quizContentWidth, yQuiz)
       yQuiz += separatorBottomGap
 
@@ -1161,7 +1179,7 @@ export function QuizResultsPage() {
       for (let i = 1; i <= totalPages; i += 1) {
         doc.setPage(i)
         doc.setDrawColor(226, 232, 240)
-        if (typeof (doc as any).setLineWidth === 'function') (doc as any).setLineWidth(0.5)
+        doc.setLineWidth(0.5)
         drawLine(margin, quizPageHeight - margin + 8, margin + quizContentWidth, quizPageHeight - margin + 8)
 
         doc.setFont('helvetica', 'normal')

@@ -1790,7 +1790,28 @@ export async function exportSummaryPdfFromData(params: {
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(8)
         setTextHex(SLATE)
-        doc.text('Lectura · Page 1', smartPageWidth / 2, smartPageHeight - 20, { align: 'center' })
+        const smartDocWithPages = doc as unknown as {
+          getNumberOfPages?: () => number
+          setPage?: (pageNumber: number) => void
+        }
+        const totalSmartPages = typeof smartDocWithPages.getNumberOfPages === 'function'
+          ? smartDocWithPages.getNumberOfPages()
+          : 1
+
+        for (let i = 1; i <= totalSmartPages; i += 1) {
+          if (typeof smartDocWithPages.setPage === 'function') {
+            smartDocWithPages.setPage(i)
+          }
+          doc.setDrawColor(226, 232, 240)
+          doc.setLineWidth(0.5)
+          const lineY = smartPageHeight - 20 - 12
+          doc.line(margin, lineY, margin + smartContentWidth, lineY)
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(8)
+          setTextHex(SLATE)
+          doc.text(`Lectura · Page ${i} of ${totalSmartPages}`, smartPageWidth / 2, smartPageHeight - 20, { align: 'center' })
+        }
 
         doc.save(`${fileTitle}.pdf`)
 return
@@ -2114,7 +2135,28 @@ return
         doc.setTextColor(120, 120, 120)
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
-        doc.text('Lectura · Page 1', pageWidth / 2, pageHeight - 20, { align: 'center' })
+        const cornellDocWithPages = doc as unknown as {
+          getNumberOfPages?: () => number
+          setPage?: (pageNumber: number) => void
+        }
+        const totalCornellPages = typeof cornellDocWithPages.getNumberOfPages === 'function'
+          ? cornellDocWithPages.getNumberOfPages()
+          : 1
+
+        for (let i = 1; i <= totalCornellPages; i += 1) {
+          if (typeof cornellDocWithPages.setPage === 'function') {
+            cornellDocWithPages.setPage(i)
+          }
+          doc.setDrawColor(226, 232, 240)
+          doc.setLineWidth(0.5)
+          const lineY = pageHeight - 20 - 12
+          doc.line(margin, lineY, margin + contentWidth, lineY)
+
+          doc.setTextColor(120, 120, 120)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(9)
+          doc.text(`Lectura · Page ${i} of ${totalCornellPages}`, pageWidth / 2, pageHeight - 20, { align: 'center' })
+        }
 
         doc.save(`${fileTitle}.pdf`)
 return
@@ -2536,7 +2578,12 @@ return
           if (typeof docWithPages.setPage === 'function') {
             docWithPages.setPage(pageNumber)
           }
-          doc.text(`Lectura · Page ${pageNumber}`, pageWidth / 2, pageHeight - 20, { align: 'center' })
+          doc.setDrawColor(226, 232, 240)
+          doc.setLineWidth(0.5)
+          const lineY = pageHeight - 20 - 12
+          doc.line(margin, lineY, margin + bulletContentWidth, lineY)
+
+          doc.text(`Lectura · Page ${pageNumber} of ${totalPages}`, pageWidth / 2, pageHeight - 20, { align: 'center' })
         }
 
         doc.save(`${fileTitle}.pdf`)
@@ -2751,7 +2798,28 @@ return
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(8)
         setTextHex(SLATE)
-        doc.text('Lectura · Page 1', paraPageWidth / 2, paraPageHeight - 20, { align: 'center' })
+        const paraDocWithPages = doc as unknown as {
+          getNumberOfPages?: () => number
+          setPage?: (pageNumber: number) => void
+        }
+        const totalParaPages = typeof paraDocWithPages.getNumberOfPages === 'function'
+          ? paraDocWithPages.getNumberOfPages()
+          : 1
+
+        for (let i = 1; i <= totalParaPages; i += 1) {
+          if (typeof paraDocWithPages.setPage === 'function') {
+            paraDocWithPages.setPage(i)
+          }
+          doc.setDrawColor(226, 232, 240)
+          doc.setLineWidth(0.5)
+          const lineY = paraPageHeight - 20 - 12
+          doc.line(margin, lineY, margin + paraContentWidth, lineY)
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(8)
+          setTextHex(SLATE)
+          doc.text(`Lectura · Page ${i} of ${totalParaPages}`, paraPageWidth / 2, paraPageHeight - 20, { align: 'center' })
+        }
 
         doc.save(`${fileTitle}.pdf`)
 return

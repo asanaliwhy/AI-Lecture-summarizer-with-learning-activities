@@ -312,7 +312,19 @@ export function FlashcardResultPage({
                 <div className="text-[11px] uppercase tracking-wide text-[#94a3b8] mt-1">Session Time</div>
               </div>
               <div className="px-6 py-5 text-center">
-                <div className="text-xl font-bold text-[#15803d]">Complete</div>
+                <div 
+                  className={cn(
+                    "text-xl font-bold transition-colors",
+                    percentage <= 40 ? "text-red-600" :
+                    percentage <= 70 ? "text-amber-600" :
+                    percentage <= 90 ? "text-blue-600" :
+                    "text-green-700"
+                  )}
+                >
+                  {percentage <= 40 ? 'Keep Practicing' :
+                   percentage <= 70 ? 'Good Progress' :
+                   percentage <= 90 ? 'Almost There' : 'Mastered'}
+                </div>
                 <div className="text-[11px] uppercase tracking-wide text-[#94a3b8] mt-1">Result</div>
               </div>
             </div>

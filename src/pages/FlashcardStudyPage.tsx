@@ -157,23 +157,18 @@ export function FlashcardStudyPage() {
         setIsFlipped(false)
         const shouldOpenResults = Boolean((location.state as { view?: string } | null)?.view === 'results')
         setShowResults(shouldOpenResults)
-        setElapsedSeconds(0)
-        setCardRatings({})
         if (shouldOpenResults && deckId) {
           const stored = readStoredResult(deckId)
           if (stored?.ratings) {
             setCardStatuses(stored.ratings)
           } else {
-            setCardStatuses(
-              Object.fromEntries(
-                normalizedCards
-                  .map((card) => [card.id || '', derivePersistedStatus(card)] as const)
-                  .filter(([id]) => Boolean(id)),
-              ),
-            )
+            setCardStatuses(buildStatusesFromCards(normalizedCards))
           }
-          setElapsedSeconds(Math.max(0, Number(stored?.elapsedSeconds || 0)))
+          if (stored?.elapsedSeconds) {
+            setElapsedSeconds(Number(stored.elapsedSeconds))
+          }
         } else {
+          setElapsedSeconds(0)
           setCardStatuses({})
         }
         completionSyncDoneRef.current = shouldOpenResults
@@ -231,40 +226,40 @@ export function FlashcardStudyPage() {
   const completeSession = (finalStatuses?: Record<string, CardStudyStatus>) => {
     setIsFlipped(false)
     const startedAt = sessionStartRef.current || Date.now()
-    setElapsedSeconds(Math.max(1, Math.round((Date.now() - startedAt) / 1000)))
+    const finalElapsed = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+    setElapsedSeconds(finalElapsed)
     completedFromStudyRef.current = true
     resultRefreshDoneRef.current = false
     
+    const actualStatuses = finalStatuses || cardStatuses
     if (finalStatuses) {
       setCardStatuses(finalStatuses)
+    }
+
+    if (deckId) {
+      const ratingsToPersist = cards.reduce<Record<string, 'mastered' | 'learning'>>((acc, card) => {
+        if (!card.id) return acc
+        const status = actualStatuses[card.id] || 'learning'
+        acc[card.id] = status === 'mastered' ? 'mastered' : 'learning'
+        return acc
+      }, {})
+
+      const payload: StoredFlashcardResult = {
+        ratings: ratingsToPersist,
+        elapsedSeconds: finalElapsed,
+        savedAt: Date.now(),
+      }
+      try {
+        localStorage.setItem(flashcardResultStorageKey(deckId), JSON.stringify(payload))
+      } catch (err) {
+        console.error('Failed to save flashcard results to localStorage', err)
+      }
     }
     
     setShowResults(true)
   }
 
-  useEffect(() => {
-    if (!showResults || !deckId || !completedFromStudyRef.current) return
-
-    const ratingsToPersist = cards.reduce<Record<string, 'mastered' | 'learning'>>((acc, card) => {
-      if (!card.id) return acc
-      const status = getCardStatus(card)
-      acc[card.id] = status === 'mastered' ? 'mastered' : 'learning'
-      return acc
-    }, {})
-
-    const payload: StoredFlashcardResult = {
-      ratings: ratingsToPersist,
-      elapsedSeconds,
-      savedAt: Date.now(),
-    }
-
-    try {
-      localStorage.setItem(flashcardResultStorageKey(deckId), JSON.stringify(payload))
-    } catch {
-      // keep silent - non-critical cache
-    }
-  }, [showResults, deckId, cards, cardStatuses, elapsedSeconds])
-
+  // Effect to sync ratings to backend and record session
   useEffect(() => {
     if (!showResults || completionSyncDoneRef.current || !deckId) return
     completionSyncDoneRef.current = true
