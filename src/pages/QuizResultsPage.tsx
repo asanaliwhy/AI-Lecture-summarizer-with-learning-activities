@@ -20,6 +20,473 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
+export async function exportQuizResultsPdf(params: {
+  attemptData: any
+  preferredFileTitle?: string
+}) {
+  const { attemptData, preferredFileTitle } = params
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+
+  const safeParseJSON = (value: unknown): unknown => {
+    if (typeof value !== 'string') return value
+    try {
+      return JSON.parse(value)
+    } catch {
+      return value
+    }
+  }
+
+  const toNumber = (value: unknown): number | null => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) {
+      return Number(value)
+    }
+    return null
+  }
+
+  const attemptMeta = attemptData?.attempt || attemptData || {}
+  const quizMeta = attemptData?.quiz || attemptData || {}
+  const reviewQuestionsRaw = attemptData?.questions || attemptData?.review || quizMeta?.questions || []
+  const reviewQuestionsParsed = safeParseJSON(reviewQuestionsRaw)
+  const reviewQuestions = Array.isArray(reviewQuestionsParsed) ? reviewQuestionsParsed : []
+
+  const rawAttemptAnswers = safeParseJSON(
+    attemptMeta?.answers ??
+    attemptMeta?.answers_json ??
+    attemptData?.answers ??
+    attemptData?.answers_json,
+  )
+
+  const answerMap = new Map<number, number>()
+  if (Array.isArray(rawAttemptAnswers)) {
+    rawAttemptAnswers.forEach((entry: any) => {
+      const qIdx = toNumber(entry?.question_index ?? entry?.questionIndex)
+      const aIdx = toNumber(entry?.answer_index ?? entry?.answerIndex ?? entry?.selected_index)
+      if (qIdx !== null && aIdx !== null) {
+        answerMap.set(qIdx, aIdx)
+      }
+    })
+  } else if (rawAttemptAnswers && typeof rawAttemptAnswers === 'object') {
+    Object.entries(rawAttemptAnswers).forEach(([questionIndex, answerIndex]) => {
+      const qIdx = toNumber(questionIndex)
+      const aIdx = toNumber(answerIndex)
+      if (qIdx !== null && aIdx !== null) {
+        answerMap.set(qIdx, aIdx)
+      }
+    })
+  }
+
+  const score = toNumber(attemptMeta?.score_percent ?? attemptMeta?.score ?? quizMeta?.last_score) ?? 0
+  const totalQuestions = toNumber(quizMeta?.question_count) ?? reviewQuestions.length ?? 0
+  const quizTitle = quizMeta?.title ?? attemptMeta?.quiz_title ?? 'Quiz'
+
+  const sanitizeFileName = (value: string) => {
+    return value
+      .replace(/[\\/:*?"<>|]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120) || 'quiz-results'
+  }
+
+  const margin = 42
+  const quizPageWidth = doc.internal.pageSize.getWidth()
+  const quizPageHeight = doc.internal.pageSize.getHeight()
+  const quizContentWidth = quizPageWidth - margin * 2
+  let yQuiz = margin
+
+  const ensurePageSpaceQuiz = (h: number) => {
+    if (yQuiz + h > quizPageHeight - margin) {
+      doc.addPage()
+      yQuiz = margin
+    }
+  }
+
+  const formatPdfDate = (value?: string): string => {
+    if (!value) return '-'
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return '-'
+    const dd = String(parsed.getDate()).padStart(2, '0')
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0')
+    const yyyy = String(parsed.getFullYear())
+    return `${dd}.${mm}.${yyyy}`
+  }
+
+  const stripInlineMarkdown = (value: string): string =>
+    String(value || '')
+      .replace(/<br\s*\/?>/gi, ' ')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/__(.*?)__/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+  const hexToRgb = (hex: string): [number, number, number] => {
+    const normalized = hex.replace('#', '').trim()
+    const full = normalized.length === 3 ? normalized.split('').map((c) => c + c).join('') : normalized
+    if (!/^[0-9a-fA-F]{6}$/.test(full)) return [0, 0, 0]
+    const int = Number.parseInt(full, 16)
+    return [(int >> 16) & 255, (int >> 8) & 255, int & 255]
+  }
+
+  const setTextHex = (hex: string) => {
+    const [r, g, b] = hexToRgb(hex)
+    doc.setTextColor(r, g, b)
+  }
+
+  const setFillHex = (hex: string) => {
+    const [r, g, b] = hexToRgb(hex)
+    if (typeof (doc as any).setFillColor === 'function') (doc as any).setFillColor(r, g, b)
+  }
+
+  const setDrawHex = (hex: string) => {
+    const [r, g, b] = hexToRgb(hex)
+    if (typeof (doc as any).setDrawColor === 'function') (doc as any).setDrawColor(r, g, b)
+  }
+
+  const drawRect = (
+    x: number,
+    yPos: number,
+    w: number,
+    h: number,
+    mode: 'F' | 'FD' | 'S' | undefined = undefined,
+  ) => {
+    if (typeof (doc as any).rect === 'function') {
+      (doc as any).rect(x, yPos, w, h, mode)
+    }
+  }
+
+  const drawLine = (x1: number, y1: number, x2: number, y2: number) => {
+    if (typeof (doc as any).line === 'function') {
+      (doc as any).line(x1, y1, x2, y2)
+    }
+  }
+
+  const formatDurationForPdf = (value: unknown): string => {
+    const num = toNumber(value)
+    if (num === null) {
+      return typeof value === 'string' && value.trim() ? value : '-'
+    }
+    const seconds = Math.max(0, Math.round(num))
+    if (seconds < 60) return `${seconds}s`
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m}m ${s}s`
+  }
+
+  const fileTitle = sanitizeFileName(preferredFileTitle || `${quizTitle} quiz results`)
+
+  const NAVY = '#1a1a2e'
+  const SLATE = '#475569'
+  const BODY_COLOR = '#334155'
+  const OFF_WHITE = '#f8fafc'
+  const RULE = '#e2e8f0'
+  const GRAY_LIGHT = '#f1f5f9'
+  const GRAY_TEXT = '#94a3b8'
+  const GREEN = '#15803d'
+  const GREEN_BG = '#f0fdf4'
+  const RED = '#b91c1c'
+  const RED_BG = '#fff1f2'
+
+  const pdfQuestions = reviewQuestions.map((questionItem: any, index: number) => {
+    const options = Array.isArray(questionItem?.options)
+      ? questionItem.options
+      : Array.isArray(questionItem?.answers)
+        ? questionItem.answers
+        : []
+
+    const selectedIdx = toNumber(
+      questionItem?.user_answer_index ??
+      questionItem?.answer_index ??
+      questionItem?.selected_index ??
+      questionItem?.user_answer ??
+      answerMap.get(index),
+    )
+
+    const correctIdx = toNumber(questionItem?.correct_index ?? questionItem?.correctIndex)
+
+    const selectedLabel = selectedIdx !== null && options[selectedIdx] !== undefined
+      ? options[selectedIdx]
+      : null
+
+    const correctLabel = correctIdx !== null && options[correctIdx] !== undefined
+      ? options[correctIdx]
+      : null
+
+    const userAnswer = stripInlineMarkdown(
+      selectedLabel ||
+      (typeof questionItem?.userAnswer === 'string' ? questionItem.userAnswer : '') ||
+      (typeof questionItem?.user_answer === 'string' ? questionItem.user_answer : '') ||
+      'No answer',
+    )
+
+    const correctAnswer = stripInlineMarkdown(
+      correctLabel ||
+      (typeof questionItem?.correctAnswer === 'string' ? questionItem.correctAnswer : '') ||
+      (typeof questionItem?.correct_answer === 'string' ? questionItem.correct_answer : '') ||
+      'N/A',
+    )
+
+    return {
+      questionNumber: toNumber(questionItem?.questionNumber) ?? index + 1,
+      text: stripInlineMarkdown(questionItem?.question || questionItem?.text || `Question ${index + 1}`),
+      userAnswer,
+      correctAnswer,
+      explanation: stripInlineMarkdown(questionItem?.explanation || ''),
+      passed: userAnswer === correctAnswer,
+    }
+  })
+
+  const total = totalQuestions > 0 ? totalQuestions : pdfQuestions.length
+  const correct = pdfQuestions.filter((q) => q.passed).length
+  const percentage = total > 0 ? Math.round((correct / total) * 100) : 0
+  const passedQuiz = percentage >= 60
+
+  const rawDuration =
+    quizMeta?.timeTaken ??
+    quizMeta?.duration ??
+    quizMeta?.time_taken_seconds ??
+    quizMeta?.time_taken ??
+    attemptMeta?.time_taken_seconds ??
+    attemptMeta?.time_taken ??
+    attemptMeta?.duration
+
+  const timeText = formatDurationForPdf(rawDuration)
+  const generatedDate = formatPdfDate(quizMeta?.created_at || new Date().toISOString())
+
+  const badgeHeight = 16
+  const badgeToTitleGap = 28
+  ensurePageSpaceQuiz(badgeHeight)
+  setFillHex(NAVY)
+  drawRect(margin, yQuiz, quizContentWidth, badgeHeight, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  setTextHex('#ffffff')
+  doc.text('QUIZ RESULTS', margin + 8, yQuiz + 11)
+  yQuiz += badgeHeight + badgeToTitleGap
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(22)
+  setTextHex(NAVY)
+  const titleLines = doc.splitTextToSize(`Quiz: ${quizTitle}`, quizContentWidth) as string[]
+  for (const line of titleLines) {
+    ensurePageSpaceQuiz(28)
+    doc.text(line, margin, yQuiz)
+    yQuiz += 28
+  }
+  yQuiz += -7
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  setTextHex(GRAY_TEXT)
+  ensurePageSpaceQuiz(16)
+  doc.text(`Generated: ${generatedDate}`, margin, yQuiz)
+  yQuiz += 12
+
+  ensurePageSpaceQuiz(20)
+  setFillHex(NAVY)
+  drawRect(margin, yQuiz, quizContentWidth, 1.5, 'F')
+  yQuiz += 20
+
+  const cardX = margin
+  const cardY = yQuiz
+  const cardW = quizContentWidth
+  const leftW = cardW * 0.3
+  const statW = (cardW - leftW) / 3
+  const cardH = 92
+
+  ensurePageSpaceQuiz(cardH + 5 + 20)
+
+  setFillHex(NAVY)
+  drawRect(cardX, cardY, leftW, cardH, 'F')
+
+  setFillHex(OFF_WHITE)
+  drawRect(cardX + leftW, cardY, cardW - leftW, cardH, 'F')
+
+  setDrawHex(RULE)
+  if (typeof (doc as any).setLineWidth === 'function') (doc as any).setLineWidth(0.5)
+  drawRect(cardX, cardY, cardW, cardH, 'S')
+
+  for (let i = 1; i <= 2; i += 1) {
+    const x = cardX + leftW + statW * i
+    drawLine(x, cardY, x, cardY + cardH)
+  }
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(36)
+  setTextHex('#ffffff')
+  doc.text(`${percentage}%`, cardX + leftW / 2, cardY + cardH / 2 + 12, { align: 'center' })
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  setTextHex(GRAY_TEXT)
+
+  const statValues = [timeText, `${correct}/${total}`, passedQuiz ? 'Pass' : 'Fail']
+  const statLabels = ['TIME', 'SCORE', 'RESULT']
+  const statColors = [NAVY, NAVY, passedQuiz ? GREEN : RED]
+
+  for (let i = 0; i < 3; i += 1) {
+    const cellX = cardX + leftW + statW * i
+    const centerX = cellX + statW / 2
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(15)
+    setTextHex(statColors[i])
+    doc.text(statValues[i], centerX, cardY + 45, { align: 'center' })
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    setTextHex(GRAY_TEXT)
+    doc.text(statLabels[i], centerX, cardY + 62, { align: 'center' })
+  }
+
+  yQuiz += cardH
+
+  const progressHeight = 5
+  const progressRatio = total > 0 ? correct / total : 0
+  setFillHex(RULE)
+  drawRect(margin, yQuiz, quizContentWidth, progressHeight, 'F')
+  setFillHex(NAVY)
+  drawRect(margin, yQuiz, quizContentWidth * progressRatio, progressHeight, 'F')
+  yQuiz += progressHeight
+
+  const separatorTopGap = 35
+  const separatorBottomGap = 30
+  yQuiz += separatorTopGap
+  ensurePageSpaceQuiz(8)
+  setDrawHex(NAVY)
+  if (typeof (doc as any).setLineWidth === 'function') (doc as any).setLineWidth(1.6)
+  drawLine(margin, yQuiz, margin + quizContentWidth, yQuiz)
+  yQuiz += separatorBottomGap
+
+  ensurePageSpaceQuiz(25)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  setTextHex(NAVY)
+  doc.text('DETAILED REVIEW', margin, yQuiz)
+  yQuiz += 15
+
+  pdfQuestions.forEach((question, index) => {
+    const questionTextMaxWidth = Math.max(quizContentWidth - 40, 80)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    const qTextWrapped = doc.splitTextToSize(question.text, questionTextMaxWidth) as string[]
+    const qTextHeight = qTextWrapped.length * 15 + 10
+    const ansRowHeight = 40
+    const explanationValue = question.explanation || 'No explanation provided.'
+    const explanationTextMaxWidth = Math.max(quizContentWidth - 30, 80)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    const explWrapped = doc.splitTextToSize(explanationValue, explanationTextMaxWidth) as string[]
+    const explHeight = explWrapped.length * 14 + 24
+    const cardHeight = 22 + 6 + qTextHeight + ansRowHeight + 4 + explHeight + 16
+    ensurePageSpaceQuiz(cardHeight)
+
+    const cardStartY = yQuiz
+    const textCardY = cardStartY + 22 + 6
+
+    setFillHex(NAVY)
+    drawRect(margin, cardStartY, 22, 22, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    setTextHex('#ffffff')
+    doc.text(String(question.questionNumber || index + 1), margin + 11, cardStartY + 15, { align: 'center' })
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    setTextHex(NAVY)
+    doc.text(`Question ${question.questionNumber || index + 1}`, margin + 32, cardStartY + 15)
+
+    setFillHex(NAVY)
+    drawRect(margin, textCardY, 4, qTextHeight, 'F')
+    setFillHex(OFF_WHITE)
+    setDrawHex(RULE)
+    drawRect(margin + 4, textCardY, quizContentWidth - 4, qTextHeight, 'FD')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    setTextHex(NAVY)
+    let qLineY = textCardY + 15
+    qTextWrapped.forEach((line) => {
+      doc.text(line, margin + 16, qLineY)
+      qLineY += 15
+    })
+
+    let cursorY = textCardY + qTextHeight + 6
+
+    const passed = question.userAnswer === question.correctAnswer
+    const rowBg = passed ? GREEN_BG : RED_BG
+    const rowCellWidth = quizContentWidth / 3
+
+    setFillHex(rowBg)
+    drawRect(margin, cursorY, quizContentWidth, ansRowHeight, 'F')
+    setDrawHex(RULE)
+    drawRect(margin, cursorY, quizContentWidth, ansRowHeight, 'S')
+
+    drawLine(margin + rowCellWidth, cursorY, margin + rowCellWidth, cursorY + ansRowHeight)
+    drawLine(margin + rowCellWidth * 2, cursorY, margin + rowCellWidth * 2, cursorY + ansRowHeight)
+
+    const answerCells = [
+      { label: 'YOUR ANSWER', value: question.userAnswer, valueColor: BODY_COLOR },
+      { label: 'CORRECT ANSWER', value: question.correctAnswer, valueColor: BODY_COLOR },
+      { label: 'RESULT', value: passed ? 'Correct' : 'Incorrect', valueColor: passed ? GREEN : RED },
+    ]
+
+    answerCells.forEach((cell, i) => {
+      const cellX = margin + rowCellWidth * i + 10
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7)
+      setTextHex(GRAY_TEXT)
+      doc.text(cell.label, cellX, cursorY + 12)
+
+      doc.setFont('helvetica', i === 2 ? 'bold' : 'normal')
+      doc.setFontSize(10)
+      setTextHex(cell.valueColor)
+      const valueLine = (doc.splitTextToSize(cell.value, rowCellWidth - 20) as string[])[0] || ''
+      doc.text(valueLine, cellX, cursorY + 27)
+    })
+
+    cursorY += ansRowHeight + 4
+
+    setFillHex(GRAY_LIGHT)
+    setDrawHex(RULE)
+    drawRect(margin, cursorY, quizContentWidth, explHeight, 'FD')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    setTextHex(GRAY_TEXT)
+    doc.text('EXPLANATION', margin + 12, cursorY + 10)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    setTextHex(SLATE)
+    let explY = cursorY + 30
+    explWrapped.forEach((line) => {
+      doc.text(line, margin + 12, explY)
+      explY += 14
+    })
+
+    yQuiz += cardHeight
+  })
+
+  const totalPages = doc.getNumberOfPages()
+  for (let i = 1; i <= totalPages; i += 1) {
+    doc.setPage(i)
+    doc.setDrawColor(226, 232, 240)
+    if (typeof (doc as any).setLineWidth === 'function') (doc as any).setLineWidth(0.5)
+    drawLine(margin, quizPageHeight - margin + 8, margin + quizContentWidth, quizPageHeight - margin + 8)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(148, 163, 184)
+    doc.text(`Lectura · Page ${i} of ${totalPages}`, quizPageWidth / 2, quizPageHeight - margin + 18, {
+      align: 'center',
+    })
+  }
+
+  doc.save(`${fileTitle}.pdf`)
+}
+
 export function QuizResultsPage() {
   const navigate = useNavigate()
   const toast = useToast()
@@ -690,14 +1157,20 @@ export function QuizResultsPage() {
         yQuiz += cardHeight
       })
 
-      // 9) Footer
-      ensurePageSpaceQuiz(24)
-      setDrawHex(RULE)
-      drawLine(margin, yQuiz, margin + quizContentWidth, yQuiz)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8)
-      setTextHex(GRAY_TEXT)
-      doc.text('Lectura · Quiz Results', quizPageWidth / 2, yQuiz + 14, { align: 'center' })
+      const totalPages = doc.getNumberOfPages()
+      for (let i = 1; i <= totalPages; i += 1) {
+        doc.setPage(i)
+        doc.setDrawColor(226, 232, 240)
+        if (typeof (doc as any).setLineWidth === 'function') (doc as any).setLineWidth(0.5)
+        drawLine(margin, quizPageHeight - margin + 8, margin + quizContentWidth, quizPageHeight - margin + 8)
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(148, 163, 184)
+        doc.text(`Lectura · Page ${i} of ${totalPages}`, quizPageWidth / 2, quizPageHeight - margin + 18, {
+          align: 'center',
+        })
+      }
 
       doc.save(`${fileTitle}.pdf`)
       toast.success('PDF downloaded')

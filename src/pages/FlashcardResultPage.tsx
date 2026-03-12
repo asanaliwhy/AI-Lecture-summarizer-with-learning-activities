@@ -21,6 +21,221 @@ type FlashcardResultPageProps = {
   onStudyAgain: () => void
 }
 
+export async function exportFlashcardResultsPdf(params: {
+  title: string
+  cards: Array<{ id: string; front: string; back: string }>
+  ratings: Record<string, 'mastered' | 'learning'>
+  elapsedSeconds: number
+  fileName?: string
+}) {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const margin = 40
+
+  const { title, cards, ratings } = params
+
+  const totalCards = cards.length
+  const masteredCount = Object.values(ratings).filter((v) => v === 'mastered').length
+  const learningCount = Object.values(ratings).filter((v) => v === 'learning').length
+
+  const flashPageWidth = doc.internal.pageSize.getWidth()
+  const flashPageHeight = doc.internal.pageSize.getHeight()
+  const flashContentWidth = flashPageWidth - margin * 2
+  let yFlash = margin
+
+  const ensurePageSpaceFlash = (h: number) => {
+    if (yFlash + h > flashPageHeight - margin) {
+      doc.addPage()
+      yFlash = margin
+    }
+  }
+
+  const NAVY = '#1a1a2e'
+  const SLATE = '#475569'
+  const BODY_COLOR = '#334155'
+  const OFF_WHITE = '#f8fafc'
+  const RULE = '#e2e8f0'
+  const GRAY_LIGHT = '#f1f5f9'
+  const GRAY_TEXT = '#94a3b8'
+
+  const badgeHeight = 16
+  const badgeToTitleGap = 28
+  doc.setFillColor(NAVY)
+  doc.rect(margin, yFlash, flashContentWidth, badgeHeight, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor('#ffffff')
+  doc.text('FLASHCARDS', margin + 8, yFlash + 11)
+  yFlash += badgeHeight + badgeToTitleGap
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(22)
+  doc.setTextColor(NAVY)
+  const deckTitle = title || 'Flashcards'
+  const titleLines = doc.splitTextToSize(deckTitle, flashContentWidth) as string[]
+  for (const line of titleLines) {
+    ensurePageSpaceFlash(28)
+    doc.text(line, margin, yFlash)
+    yFlash += 28
+  }
+  yFlash += -7
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  doc.setTextColor(GRAY_TEXT)
+  ensurePageSpaceFlash(16)
+
+  const d = new Date()
+  const dateStr = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
+  doc.text(`Generated: ${dateStr}`, margin, yFlash)
+  yFlash += 12
+
+  doc.setFillColor(NAVY)
+  doc.rect(margin, yFlash, flashContentWidth, 1, 'F')
+  yFlash += 20
+
+  const statsRowHeight = 44
+  ensurePageSpaceFlash(statsRowHeight + 20)
+  const colW = flashContentWidth / 3
+
+  doc.setFillColor(OFF_WHITE)
+  doc.rect(margin, yFlash, flashContentWidth, statsRowHeight, 'F')
+  doc.setDrawColor(RULE)
+  doc.setLineWidth(0.5)
+  doc.rect(margin, yFlash, flashContentWidth, statsRowHeight, 'S')
+
+  doc.line(margin + colW, yFlash, margin + colW, yFlash + statsRowHeight)
+  doc.line(margin + colW * 2, yFlash, margin + colW * 2, yFlash + statsRowHeight)
+
+  const drawStatCol = (index: number, value: string, label: string) => {
+    const cx = margin + colW * index + (colW / 2)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(15)
+    doc.setTextColor(NAVY)
+    doc.text(value, cx, yFlash + 18, { align: 'center' })
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(GRAY_TEXT)
+    doc.text(label, cx, yFlash + 32, { align: 'center' })
+  }
+
+  drawStatCol(0, String(totalCards), 'Total Cards')
+  drawStatCol(1, String(learningCount), 'To Review')
+  drawStatCol(2, String(masteredCount), 'Mastered')
+
+  yFlash += statsRowHeight + 20
+
+  ensurePageSpaceFlash(25)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(SLATE)
+  yFlash += 20
+  doc.text('ALL CARDS', margin, yFlash)
+  yFlash += 25
+
+  const frontColWidth = flashContentWidth * 0.42
+  const backColWidth = flashContentWidth * 0.58
+  const frontTextMaxWidth = Math.max(frontColWidth - 32, 80)
+  const backTextMaxWidth = Math.max(backColWidth - 32, 80)
+
+  const normalizeInlineText = (value: string) => String(value || '').replace(/\s+/g, ' ').trim()
+  const fitLineToWidth = (line: string, maxWidth: number) => {
+    const fitted = doc.splitTextToSize(line, maxWidth) as string[]
+    if (fitted.length <= 1) return fitted[0] || ''
+    const first = (fitted[0] || '').trim()
+    return first ? `${first}…` : ''
+  }
+
+  cards.forEach((card, index) => {
+    const frontText = normalizeInlineText(card.front || '')
+    const backText = normalizeInlineText(card.back || '')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    const frontWrappedRaw = doc.splitTextToSize(frontText, frontTextMaxWidth) as string[]
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    const backWrappedRaw = doc.splitTextToSize(backText, backTextMaxWidth) as string[]
+    const frontWrapped = frontWrappedRaw.map((line: string) => fitLineToWidth(String(line), frontTextMaxWidth))
+    const backWrapped = backWrappedRaw.map((line: string) => fitLineToWidth(String(line), backTextMaxWidth))
+
+    const frontHeight = frontWrapped.length * 15 + 36
+    const backHeight = backWrapped.length * 15 + 36
+    const cardHeight = Math.max(frontHeight, backHeight)
+
+    ensurePageSpaceFlash(cardHeight + 22 + 5 + 10)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(SLATE)
+    yFlash += 20
+    doc.text(`Card ${index + 1}`, margin, yFlash)
+    yFlash += 12
+
+    doc.setFillColor(NAVY)
+    doc.rect(margin, yFlash, frontColWidth, cardHeight, 'F')
+
+    doc.setFillColor(GRAY_LIGHT)
+    doc.rect(margin + frontColWidth, yFlash, backColWidth, 24, 'F')
+
+    doc.setFillColor(OFF_WHITE)
+    doc.rect(margin + frontColWidth, yFlash + 24, backColWidth, cardHeight - 24, 'F')
+
+    doc.setDrawColor(RULE)
+    doc.setLineWidth(0.5)
+    doc.rect(margin, yFlash, flashContentWidth, cardHeight, 'S')
+    doc.line(margin + frontColWidth, yFlash, margin + frontColWidth, yFlash + cardHeight)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor('#94a3b8')
+    doc.text('FRONT', margin + 12, yFlash + 14)
+
+    doc.setFontSize(10)
+    doc.setTextColor('#ffffff')
+    let frontTextY = yFlash + 14 + 15
+    frontWrapped.forEach((line: string) => {
+      doc.text(line, margin + 12, frontTextY)
+      frontTextY += 15
+    })
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(GRAY_TEXT)
+    doc.text('BACK', margin + frontColWidth + 12, yFlash + 14)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.setTextColor(BODY_COLOR)
+    let backTextY = yFlash + 24 + 5
+    backWrapped.forEach((line: string) => {
+      doc.text(line, margin + frontColWidth + 12, backTextY, { align: 'left' })
+      backTextY += 15
+    })
+
+    yFlash += cardHeight + 10
+  })
+
+  const totalPages = doc.getNumberOfPages()
+  for (let i = 1; i <= totalPages; i += 1) {
+    doc.setPage(i)
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.5)
+    doc.line(margin, flashPageHeight - margin + 8, margin + flashContentWidth, flashPageHeight - margin + 8)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(148, 163, 184)
+    doc.text(`Lectura · Page ${i} of ${totalPages}`, flashPageWidth / 2, flashPageHeight - margin + 18, {
+      align: 'center',
+    })
+  }
+
+  doc.save(`${params.fileName || deckTitle}.pdf`)
+}
+
 export function FlashcardResultPage({
   flashcardSetId,
   title,
@@ -50,221 +265,12 @@ export function FlashcardResultPage({
     setIsExporting(true)
 
     try {
-      const { jsPDF } = await import('jspdf')
-      const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-      const margin = 42
-
-      const flashPageWidth = doc.internal.pageSize.getWidth()
-      const flashPageHeight = doc.internal.pageSize.getHeight()
-      const flashContentWidth = flashPageWidth - margin * 2
-      let yFlash = margin
-
-      const ensurePageSpaceFlash = (h: number) => {
-        if (yFlash + h > flashPageHeight - margin) {
-          doc.addPage()
-          yFlash = margin
-        }
-      }
-
-      const NAVY = '#1a1a2e'
-      const NAVY_MUTED = '#e8e8f0'
-      const SLATE = '#475569'
-      const BODY_COLOR = '#334155'
-      const OFF_WHITE = '#f8fafc'
-      const RULE = '#e2e8f0'
-      const GRAY_LIGHT = '#f1f5f9'
-      const GRAY_TEXT = '#94a3b8'
-
-      // 1. Badge (same settings as QuizResultsPage export)
-      const badgeHeight = 16
-      const badgeToTitleGap = 28
-      doc.setFillColor(NAVY)
-      doc.rect(margin, yFlash, flashContentWidth, badgeHeight, 'F')
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor('#ffffff')
-      doc.text('FLASHCARDS', margin + 8, yFlash + 11)
-      yFlash += badgeHeight + badgeToTitleGap
-
-      // 2. Title (same settings as QuizResultsPage export)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(22)
-      doc.setTextColor(NAVY)
-      const deckTitle = title || 'Flashcards'
-      const titleLines = doc.splitTextToSize(deckTitle, flashContentWidth) as string[]
-      for (const line of titleLines) {
-        ensurePageSpaceFlash(28)
-        doc.text(line, margin, yFlash)
-        yFlash += 28
-      }
-      yFlash += -7
-
-      // 3. Meta (same settings as QuizResultsPage export)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(10)
-      doc.setTextColor(GRAY_TEXT)
-      ensurePageSpaceFlash(16)
-      
-      const d = new Date()
-      const dateStr = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
-      doc.text(`Generated: ${dateStr}`, margin, yFlash)
-      yFlash += 12
-
-      // 4. Navy divider
-      doc.setFillColor(NAVY)
-      doc.rect(margin, yFlash, flashContentWidth, 1, 'F')
-      yFlash += 20
-
-      // 5. Stats row
-      const statsRowHeight = 44
-      ensurePageSpaceFlash(statsRowHeight + 20)
-      const colW = flashContentWidth / 3
-
-      doc.setFillColor(OFF_WHITE)
-      doc.rect(margin, yFlash, flashContentWidth, statsRowHeight, 'F')
-      doc.setDrawColor(RULE)
-      doc.setLineWidth(0.5)
-      doc.rect(margin, yFlash, flashContentWidth, statsRowHeight, 'S')
-
-      doc.line(margin + colW, yFlash, margin + colW, yFlash + statsRowHeight)
-      doc.line(margin + colW * 2, yFlash, margin + colW * 2, yFlash + statsRowHeight)
-
-      const drawStatCol = (index: number, value: string, label: string) => {
-        const cx = margin + colW * index + (colW / 2)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(15)
-        doc.setTextColor(NAVY)
-        doc.text(value, cx, yFlash + 18, { align: 'center' })
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8)
-        doc.setTextColor(GRAY_TEXT)
-        doc.text(label, cx, yFlash + 32, { align: 'center' })
-      }
-
-      drawStatCol(0, String(cards.length), 'Total Cards')
-      drawStatCol(1, String(learningCount), 'To Review')
-      drawStatCol(2, String(masteredCount), 'Mastered')
-
-      yFlash += statsRowHeight + 20
-
-      // 6. Section label
-      ensurePageSpaceFlash(25)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(11)
-      doc.setTextColor(SLATE)
-      yFlash += 20
-      doc.text('ALL CARDS', margin, yFlash)
-      yFlash += 25
-
-      // 7. Per-card rows
-      const frontColWidth = flashContentWidth * 0.42
-      const backColWidth = flashContentWidth * 0.58
-      // Use stricter inner widths to prevent glyph spillover near the divider
-      const frontTextMaxWidth = Math.max(frontColWidth - 32, 80)
-      const backTextMaxWidth = Math.max(backColWidth - 32, 80)
-
-      const normalizeInlineText = (value: string) => String(value || '').replace(/\s+/g, ' ').trim()
-      const fitLineToWidth = (line: string, maxWidth: number) => {
-        const fitted = doc.splitTextToSize(line, maxWidth) as string[]
-        if (fitted.length <= 1) return fitted[0] || ''
-        const first = (fitted[0] || '').trim()
-        return first ? `${first}…` : ''
-      }
-
-      cards.forEach((card, index) => {
-        const frontText = normalizeInlineText(card.front || '')
-        const backText = normalizeInlineText(card.back || '')
-
-        // Match wrap metrics with the exact font settings used for drawing
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        const frontWrappedRaw = doc.splitTextToSize(frontText, frontTextMaxWidth) as string[]
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(10)
-        const backWrappedRaw = doc.splitTextToSize(backText, backTextMaxWidth) as string[]
-        const frontWrapped = frontWrappedRaw.map((line: string) => fitLineToWidth(String(line), frontTextMaxWidth))
-        const backWrapped = backWrappedRaw.map((line: string) => fitLineToWidth(String(line), backTextMaxWidth))
-
-        const frontHeight = frontWrapped.length * 15 + 36
-        const backHeight = backWrapped.length * 15 + 36
-        const cardHeight = Math.max(frontHeight, backHeight)
-
-        ensurePageSpaceFlash(cardHeight + 22 + 5 + 10)
-
-        // 7a. Card number label
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        doc.setTextColor(SLATE)
-        yFlash += 20
-        doc.text(`Card ${index + 1}`, margin, yFlash)
-        yFlash += 12
-
-        // 7b. Two-column card
-        // Front cell Background
-        doc.setFillColor(NAVY)
-        doc.rect(margin, yFlash, frontColWidth, cardHeight, 'F')
-
-        // Back cell "label row" background
-        doc.setFillColor(GRAY_LIGHT)
-        doc.rect(margin + frontColWidth, yFlash, backColWidth, 24, 'F')
-
-        // Back cell answer area background
-        doc.setFillColor(OFF_WHITE)
-        doc.rect(margin + frontColWidth, yFlash + 24, backColWidth, cardHeight - 24, 'F')
-
-        // Outer border
-        doc.setDrawColor(RULE)
-        doc.setLineWidth(0.5)
-        doc.rect(margin, yFlash, flashContentWidth, cardHeight, 'S')
-        // Divider line
-        doc.line(margin + frontColWidth, yFlash, margin + frontColWidth, yFlash + cardHeight)
-
-        // Draw Front Content
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(7)
-        doc.setTextColor('#94a3b8')
-        doc.text('FRONT', margin + 12, yFlash + 14)
-
-        doc.setFontSize(10)
-        doc.setTextColor('#ffffff')
-        let frontTextY = yFlash + 14 + 15
-        frontWrapped.forEach((line: string) => {
-          doc.text(line, margin + 12, frontTextY)
-          frontTextY += 15
-        })
-
-        // Draw Back Content
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(7)
-        doc.setTextColor(GRAY_TEXT)
-        doc.text('BACK', margin + frontColWidth + 12, yFlash + 14)
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(10)
-        doc.setTextColor(BODY_COLOR)
-        let backTextY = yFlash + 24 + 5
-        backWrapped.forEach((line: string) => {
-          doc.text(line, margin + frontColWidth + 12, backTextY, { align: 'left' })
-          backTextY += 15
-        })
-
-        yFlash += cardHeight + 10
+      await exportFlashcardResultsPdf({
+        title,
+        cards,
+        ratings,
+        elapsedSeconds,
       })
-
-      // 8. Footer
-      ensurePageSpaceFlash(20)
-      doc.setDrawColor(RULE)
-      doc.setLineWidth(0.5)
-      doc.line(margin, yFlash, margin + flashContentWidth, yFlash)
-      yFlash += 12
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8)
-      doc.setTextColor(GRAY_TEXT)
-      doc.text('Lectura · Flashcards', flashPageWidth / 2, yFlash, { align: 'center' })
-
-      doc.save(`${deckTitle}.pdf`)
       toast.success('PDF exported')
     } catch (err) {
       console.error(err)

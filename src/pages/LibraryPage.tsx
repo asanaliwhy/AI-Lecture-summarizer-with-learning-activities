@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api, ApiError, type LibraryItemResponse, type LibraryItemType } from '../lib/api'
+import { exportQuizResultsPdf } from './QuizResultsPage'
+import { exportFlashcardResultsPdf } from './FlashcardResultPage'
+import { exportSummaryPdfFromData } from './SummaryPage'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -666,247 +669,6 @@ export function LibraryPage() {
         })
       }
 
-      const drawStyledQuizPdf = (
-        doc: any,
-        state: { y: number; pageHeight: number; margin: number; width: number },
-        payload: {
-          title: string
-          generatedAt: string
-          questions: Array<{ question: string; options: string[]; correctAnswer: string }>
-        },
-      ) => {
-        const ensurePage = (needed: number) => {
-          if (state.y + needed > state.pageHeight - state.margin) {
-            doc.addPage()
-            state.y = state.margin
-          }
-        }
-
-        const setFill = (r: number, g: number, b: number) => {
-          if (typeof doc.setFillColor === 'function') doc.setFillColor(r, g, b)
-        }
-
-        const setDraw = (r: number, g: number, b: number) => {
-          if (typeof doc.setDrawColor === 'function') doc.setDrawColor(r, g, b)
-        }
-
-        const drawRect = (x: number, y: number, w: number, h: number, mode: 'F' | 'FD' | undefined = undefined) => {
-          if (typeof doc.rect === 'function') {
-            doc.rect(x, y, w, h, mode)
-          }
-        }
-
-        ensurePage(22)
-        setFill(209, 250, 229)
-        drawRect(state.margin, state.y, state.width, 16, 'F')
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        doc.text('QUIZ', state.margin + 8, state.y + 11)
-        state.y += 30
-
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(24)
-        const titleLines = doc.splitTextToSize(payload.title, state.width) as string[]
-        for (const line of titleLines) {
-          ensurePage(24)
-          doc.text(line, state.margin, state.y)
-          state.y += 24
-        }
-        state.y += 2
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(11)
-        ensurePage(14)
-        doc.text(`Questions: ${payload.questions.length} · Generated: ${payload.generatedAt}`, state.margin, state.y)
-        state.y += 12
-
-        ensurePage(2)
-        setFill(16, 185, 129)
-        drawRect(state.margin, state.y, state.width, 1.4, 'F')
-        state.y += 14
-
-        if (payload.questions.length === 0) {
-          writeWrapped(doc, 'No questions available.', state, { size: 11 })
-          return
-        }
-
-        payload.questions.forEach((question, index) => {
-          const cardX = state.margin
-          const cardW = state.width
-          const bodyW = cardW - 20
-          const qLabel = `Question ${index + 1}`
-          const questionLines = doc.splitTextToSize(stripInlineMarkdown(question.question), bodyW) as string[]
-          const optionGroups = question.options.map((option, optionIdx) => {
-            const prefix = `${String.fromCharCode(65 + optionIdx)}. `
-            const wrapped = doc.splitTextToSize(stripInlineMarkdown(option), bodyW - 12) as string[]
-            if (wrapped.length === 0) return [`${prefix}—`]
-            return [`${prefix}${wrapped[0]}`, ...wrapped.slice(1).map((line) => `   ${line}`)]
-          })
-          const correctLines = doc.splitTextToSize(`Correct answer: ${stripInlineMarkdown(question.correctAnswer || 'N/A')}`, bodyW) as string[]
-
-          const cardH = Math.max(
-            80,
-            14 +
-            14 +
-            questionLines.length * 14 +
-            optionGroups.reduce((sum, group) => sum + group.length * 13 + 2, 0) +
-            correctLines.length * 13 +
-            16,
-          )
-
-          ensurePage(cardH + 8)
-          setFill(236, 253, 245)
-          setDraw(167, 243, 208)
-          drawRect(cardX, state.y, cardW, cardH, 'FD')
-
-          let cursorY = state.y + 16
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(11)
-          doc.text(qLabel, cardX + 10, cursorY)
-          cursorY += 16
-
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(12)
-          questionLines.forEach((line) => {
-            doc.text(line, cardX + 10, cursorY)
-            cursorY += 14
-          })
-          cursorY += 2
-
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(10.5)
-          optionGroups.forEach((group) => {
-            group.forEach((line) => {
-              doc.text(line, cardX + 10, cursorY)
-              cursorY += 13
-            })
-            cursorY += 2
-          })
-
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(10.5)
-          correctLines.forEach((line) => {
-            doc.text(line, cardX + 10, cursorY)
-            cursorY += 13
-          })
-
-          state.y += cardH + 8
-        })
-      }
-
-      const drawStyledFlashcardsPdf = (
-        doc: any,
-        state: { y: number; pageHeight: number; margin: number; width: number },
-        payload: {
-          title: string
-          generatedAt: string
-          cards: Array<{ front: string; back: string }>
-        },
-      ) => {
-        const ensurePage = (needed: number) => {
-          if (state.y + needed > state.pageHeight - state.margin) {
-            doc.addPage()
-            state.y = state.margin
-          }
-        }
-
-        const setFill = (r: number, g: number, b: number) => {
-          if (typeof doc.setFillColor === 'function') doc.setFillColor(r, g, b)
-        }
-
-        const setDraw = (r: number, g: number, b: number) => {
-          if (typeof doc.setDrawColor === 'function') doc.setDrawColor(r, g, b)
-        }
-
-        const drawRect = (x: number, y: number, w: number, h: number, mode: 'F' | 'FD' | undefined = undefined) => {
-          if (typeof doc.rect === 'function') {
-            doc.rect(x, y, w, h, mode)
-          }
-        }
-
-        ensurePage(22)
-        setFill(254, 243, 199)
-        drawRect(state.margin, state.y, state.width, 16, 'F')
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        doc.text('FLASHCARDS', state.margin + 8, state.y + 11)
-        state.y += 30
-
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(24)
-        const titleLines = doc.splitTextToSize(payload.title, state.width) as string[]
-        for (const line of titleLines) {
-          ensurePage(24)
-          doc.text(line, state.margin, state.y)
-          state.y += 24
-        }
-        state.y += 2
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(11)
-        ensurePage(14)
-        doc.text(`Cards: ${payload.cards.length} · Generated: ${payload.generatedAt}`, state.margin, state.y)
-        state.y += 12
-
-        ensurePage(2)
-        setFill(245, 158, 11)
-        drawRect(state.margin, state.y, state.width, 1.4, 'F')
-        state.y += 14
-
-        if (payload.cards.length === 0) {
-          writeWrapped(doc, 'No flashcards available.', state, { size: 11 })
-          return
-        }
-
-        payload.cards.forEach((card, index) => {
-          const cardX = state.margin
-          const cardW = state.width
-          const bodyW = cardW - 24
-          const frontLines = doc.splitTextToSize(stripInlineMarkdown(card.front || `Card ${index + 1}`), bodyW) as string[]
-          const backLines = doc.splitTextToSize(stripInlineMarkdown(card.back || 'N/A'), bodyW) as string[]
-
-          const blockH = Math.max(88, 18 + frontLines.length * 14 + 10 + 14 + backLines.length * 13 + 12)
-          ensurePage(blockH + 8)
-
-          setFill(255, 251, 235)
-          setDraw(252, 211, 77)
-          drawRect(cardX, state.y, cardW, blockH, 'FD')
-          setFill(245, 158, 11)
-          drawRect(cardX + cardW - 3, state.y, 3, blockH, 'F')
-
-          let cursorY = state.y + 16
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(11)
-          doc.text(`Card ${index + 1}`, cardX + 12, cursorY)
-          cursorY += 16
-
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(12)
-          doc.text('Front', cardX + 12, cursorY)
-          cursorY += 14
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(11)
-          frontLines.forEach((line) => {
-            doc.text(line, cardX + 12, cursorY)
-            cursorY += 14
-          })
-
-          cursorY += 2
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(12)
-          doc.text('Back', cardX + 12, cursorY)
-          cursorY += 14
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(11)
-          backLines.forEach((line) => {
-            doc.text(line, cardX + 12, cursorY)
-            cursorY += 13
-          })
-
-          state.y += blockH + 8
-        })
-      }
-
       let successCount = 0
       let failureCount = 0
 
@@ -917,126 +679,58 @@ export function LibraryPage() {
         try {
           if (item.type === 'summary') {
             const data = await api.summaries.get(id)
-            const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-            const pageHeight = doc.internal.pageSize.getHeight()
-            const margin = 42
-            const width = doc.internal.pageSize.getWidth() - margin * 2
-            const state = { y: margin, pageHeight, margin, width }
-
             const title = sanitizeFileName(item.title || data?.title || 'summary', 'summary')
-            const createdAt = item.created_at || data?.created_at
-            const summaryText =
-              data?.content_raw ||
-              data?.content ||
-              data?.body ||
-              (data?.format === 'cornell'
-                ? `CUES\n${data?.cornell_cues || ''}\n\nNOTES\n${data?.cornell_notes || ''}\n\nSUMMARY\n${data?.cornell_summary || ''}`
-                : '') ||
-              'No content available.'
-
-            if (String(data?.format || '').toLowerCase() === 'smart') {
-              const sourceRaw = String((data as { source?: string; source_type?: string })?.source || (data as { source?: string; source_type?: string })?.source_type || '').toLowerCase()
-              const sourceLabel = sourceRaw.includes('youtube') || sourceRaw.includes('youtu') ? 'YouTube' : 'Document'
-              const tags = Array.isArray((data as { tags?: string[] })?.tags)
-                ? ((data as { tags?: string[] }).tags || [])
-                : (Array.isArray(item.tags) ? item.tags : [])
-
-              drawSmartSummaryPdf(doc as any, state, {
-                title,
-                sourceLabel,
-                generatedAt: formatPdfDate(createdAt),
-                tags,
-                markdown: summaryText,
-              })
-            } else {
-              writeWrapped(doc, title, state, { size: 17, bold: true, gap: 3 })
-              writeWrapped(doc, `Type: Summary`, state, { size: 10, gap: 2 })
-              writeWrapped(doc, `Generated: ${createdAt ? new Date(createdAt).toLocaleString() : '-'}`, state, { size: 10, gap: 10 })
-              writeWrapped(doc, summaryText, state, { size: 11, gap: 6 })
-            }
-
-            doc.save(`${title}-${id.slice(0, 8)}.pdf`)
+            await exportSummaryPdfFromData({
+              summary: data as any,
+              preferredFileTitle: title,
+            })
           } else if (item.type === 'quiz') {
             const data = await api.quizzes.get(id)
-            const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-            const pageHeight = doc.internal.pageSize.getHeight()
-            const margin = 42
-            const width = doc.internal.pageSize.getWidth() - margin * 2
-            const state = { y: margin, pageHeight, margin, width }
-
             const title = sanitizeFileName(item.title || data?.title || 'quiz', 'quiz')
-            const createdAt = item.created_at || data?.created_at
+            const latestAttemptId = (data as { last_attempt_id?: string | null })?.last_attempt_id
+            let attemptPayload: any = data
 
-            let questions: Array<Record<string, unknown>> = []
-            if (Array.isArray(data?.questions)) {
-              questions = data.questions as Array<Record<string, unknown>>
-            } else if (Array.isArray(data?.questions_json)) {
-              questions = data.questions_json as Array<Record<string, unknown>>
-            } else if (typeof data?.questions_json === 'string') {
+            if (latestAttemptId) {
               try {
-                const parsed = JSON.parse(data.questions_json)
-                if (Array.isArray(parsed)) questions = parsed as Array<Record<string, unknown>>
+                attemptPayload = await api.quizzes.getAttempt(latestAttemptId)
               } catch {
-                questions = []
+                attemptPayload = data
               }
             }
 
-            const exportQuestions = questions.map((q, index: number) => {
-              const qText = String((q?.question as string) || (q?.text as string) || `Question ${index + 1}`)
-              const options = Array.isArray(q?.options)
-                ? (q.options as unknown[]).map((opt) => String(opt))
-                : Array.isArray(q?.answers)
-                  ? (q.answers as unknown[]).map((opt) => String(opt))
-                  : []
-              const correctIdx = Number.isInteger(q?.correct_index)
-                ? Number(q.correct_index)
-                : Number.isInteger(q?.correctIndex)
-                  ? Number(q.correctIndex)
-                  : null
-              const hasValidCorrectIdx = correctIdx !== null && correctIdx >= 0 && correctIdx < options.length
-              const correctAnswer =
-                hasValidCorrectIdx
-                  ? options[correctIdx]
-                  : String((q?.correct_answer as string) || (q?.correctAnswer as string) || 'N/A')
+            await exportQuizResultsPdf({
+              attemptData: attemptPayload,
+              preferredFileTitle: `${title} quiz results`,
+            })
+          } else if (item.type === 'flashcard') {
+            const data = await api.flashcards.getDeck(id)
+            const title = sanitizeFileName(item.title || data?.deck?.title || 'flashcards', 'flashcards')
+            const cards = Array.isArray(data?.cards) ? (data.cards as Array<Record<string, unknown>>) : []
 
+            const ratings = cards.reduce<Record<string, 'mastered' | 'learning'>>((acc, card, index) => {
+              const rawId = card?.id
+              const key = typeof rawId === 'string' && rawId.trim() ? rawId : `card-${index + 1}`
+              const repetitions = Number(card?.repetitions ?? 0)
+              acc[key] = Number.isFinite(repetitions) && repetitions > 0 ? 'mastered' : 'learning'
+              return acc
+            }, {})
+
+            const exportCards = cards.map((card: Record<string, unknown>, index: number) => {
+              const rawId = card?.id
               return {
-                question: qText,
-                options,
-                correctAnswer,
+                id: typeof rawId === 'string' && rawId.trim() ? rawId : `card-${index + 1}`,
+                front: String((card?.front as string) || (card?.question as string) || (card?.term as string) || `Card ${index + 1}`),
+                back: String((card?.back as string) || (card?.answer as string) || (card?.definition as string) || ''),
               }
             })
 
-            drawStyledQuizPdf(doc as any, state, {
+            await exportFlashcardResultsPdf({
               title,
-              generatedAt: formatPdfDate(createdAt),
-              questions: exportQuestions,
-            })
-
-            doc.save(`${title}-${id.slice(0, 8)}.pdf`)
-          } else if (item.type === 'flashcard') {
-            const data = await api.flashcards.getDeck(id)
-            const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-            const pageHeight = doc.internal.pageSize.getHeight()
-            const margin = 42
-            const width = doc.internal.pageSize.getWidth() - margin * 2
-            const state = { y: margin, pageHeight, margin, width }
-
-            const title = sanitizeFileName(item.title || data?.deck?.title || 'flashcards', 'flashcards')
-            const createdAt = item.created_at || data?.deck?.created_at
-            const cards = Array.isArray(data?.cards) ? (data.cards as Array<Record<string, unknown>>) : []
-
-            const exportCards = cards.map((card: Record<string, unknown>, index: number) => ({
-              front: String((card?.front as string) || (card?.question as string) || (card?.term as string) || `Card ${index + 1}`),
-              back: String((card?.back as string) || (card?.answer as string) || (card?.definition as string) || ''),
-            }))
-
-            drawStyledFlashcardsPdf(doc as any, state, {
-              title,
-              generatedAt: formatPdfDate(createdAt),
               cards: exportCards,
+              ratings,
+              elapsedSeconds: 0,
+              fileName: `${title}-${id.slice(0, 8)}`,
             })
-
-            doc.save(`${title}-${id.slice(0, 8)}.pdf`)
           }
           successCount += 1
           await wait(120)
