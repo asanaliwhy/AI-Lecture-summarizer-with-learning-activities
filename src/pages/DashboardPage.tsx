@@ -347,14 +347,14 @@ export function DashboardPage() {
     const type: RecentContentType =
       rawType === 'quiz'
         ? 'Quiz'
-        : rawType === 'flashcard' || rawType === 'flashcards'
+        : rawType === 'flashcard' || rawType === 'flashcards' || rawType === 'flashcard_deck'
           ? 'Flashcards'
           : 'Summary'
 
     const link =
       rawType === 'quiz'
         ? `/quiz/take/${id}`
-        : rawType === 'flashcard' || rawType === 'flashcards'
+        : rawType === 'flashcard' || rawType === 'flashcards' || rawType === 'flashcard_deck'
           ? `/flashcards/study/${id}`
           : `/summary/${id}`
 

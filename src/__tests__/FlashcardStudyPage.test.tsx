@@ -6,21 +6,35 @@ const actEnvironment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONM
 
 const mocked = vi.hoisted(() => ({
   navigate: vi.fn(),
+  locationState: null as { view?: string } | null,
   flashcardsApi: {
     getDeck: vi.fn(),
     rateCard: vi.fn(),
+  },
+  studySessionsApi: {
+    start: vi.fn(),
+    stop: vi.fn(),
+  },
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
   },
 }))
 
 vi.mock('../lib/api', () => ({
   api: {
     flashcards: mocked.flashcardsApi,
+    studySessions: mocked.studySessionsApi,
   },
   ApiError: class ApiError extends Error { },
 }))
 
 vi.mock('../lib/useStudySession', () => ({
   useStudySession: () => undefined,
+}))
+
+vi.mock('../components/ui/Toast', () => ({
+  useToast: () => mocked.toast,
 }))
 
 vi.mock('../components/ui/Button', () => ({
@@ -36,6 +50,7 @@ vi.mock('../components/ui/Progress', () => ({
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mocked.navigate,
   useParams: () => ({ deckId: 'deck-1' }),
+  useLocation: () => ({ state: mocked.locationState }),
 }))
 
 import { FlashcardStudyPage } from '../pages/FlashcardStudyPage'
@@ -71,7 +86,11 @@ describe('FlashcardStudyPage option handling', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocked.locationState = null
     mocked.flashcardsApi.rateCard.mockResolvedValue({})
+    mocked.studySessionsApi.start.mockResolvedValue({ session: { id: 'session-1' } })
+    mocked.studySessionsApi.stop.mockResolvedValue({})
+    localStorage.clear()
 
     container = document.createElement('div')
     document.body.appendChild(container)
@@ -141,7 +160,9 @@ describe('FlashcardStudyPage option handling', () => {
     clickButton('Easy')
     await flush()
 
+    expect(container.textContent).toContain('FLASHCARD RESULTS')
     expect(mocked.flashcardsApi.rateCard).toHaveBeenCalledWith('card-1', 3)
+    expect(mocked.studySessionsApi.start).toHaveBeenCalled()
   })
 
   it('renders mnemonic text when available on card', async () => {
@@ -246,6 +267,92 @@ describe('FlashcardStudyPage option handling', () => {
     expect(container.textContent).toContain('Deck Not Found')
     expect(container.textContent).toContain('Deck service unavailable')
     expect(container.textContent).toContain('Go to Dashboard')
+  })
+
+  it('shows persisted mastered progress in results mode when opened from View Deck', async () => {
+    mocked.locationState = { view: 'results' }
+    mocked.flashcardsApi.getDeck.mockResolvedValue({
+      deck: {
+        id: 'deck-1',
+        title: 'Deck 1',
+        config: { enable_spaced_repetition: true },
+      },
+      cards: [
+        {
+          id: 'card-1',
+          front: 'Question 1',
+          back: 'Answer 1',
+          repetitions: 3,
+          ease_factor: 2.6,
+        },
+        {
+          id: 'card-2',
+          front: 'Question 2',
+          back: 'Answer 2',
+          repetitions: 1,
+          ease_factor: 2.0,
+        },
+      ],
+    })
+
+    await act(async () => {
+      root.render(<FlashcardStudyPage />)
+    })
+    await flush()
+
+    expect(container.textContent).toContain('FLASHCARD RESULTS')
+    expect(container.textContent).toContain('50%')
+    expect(container.textContent).toContain('1 of 2 mastered')
+  })
+
+  it('reuses latest persisted backend progress when reopening View Deck results', async () => {
+    mocked.flashcardsApi.getDeck.mockResolvedValue({
+      deck: {
+        id: 'deck-1',
+        title: 'Deck 1',
+        config: { enable_spaced_repetition: true },
+      },
+      cards: [
+        { id: 'card-1', front: 'Q1', back: 'A1' },
+        { id: 'card-2', front: 'Q2', back: 'A2' },
+      ],
+    })
+
+    await act(async () => {
+      root.render(<FlashcardStudyPage />)
+    })
+    await flush()
+
+    clickButton('Flip Card')
+    await flush()
+    clickButton('Easy')
+    await flush()
+
+    clickButton('Flip Card')
+    await flush()
+    clickButton('Easy')
+    await flush()
+
+    mocked.locationState = { view: 'results' }
+    mocked.flashcardsApi.getDeck.mockResolvedValue({
+      deck: {
+        id: 'deck-1',
+        title: 'Deck 1',
+        config: { enable_spaced_repetition: true },
+      },
+      cards: [
+        { id: 'card-1', front: 'Q1', back: 'A1', repetitions: 3, ease_factor: 2.7 },
+        { id: 'card-2', front: 'Q2', back: 'A2', repetitions: 3, ease_factor: 2.7 },
+      ],
+    })
+
+    await act(async () => {
+      root.render(<FlashcardStudyPage />)
+    })
+    await flush()
+
+    expect(container.textContent).toContain('100%')
+    expect(container.textContent).toContain('2 of 2 mastered')
   })
 })
 

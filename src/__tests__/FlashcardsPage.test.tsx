@@ -167,5 +167,16 @@ describe('FlashcardsPage production behaviors', () => {
         expect(mocked.flashcardsApi.listDecks).toHaveBeenCalledTimes(2)
         expect(container.textContent).toContain('Chemistry Set')
     })
+
+    it('navigates to study page in results view mode when View Deck is clicked', async () => {
+        await act(async () => {
+            root.render(<FlashcardsPage />)
+        })
+        await flush()
+
+        clickButton('View Deck')
+
+        expect(mocked.navigate).toHaveBeenCalledWith('/flashcards/study/deck-1', { state: { view: 'results' } })
+    })
 })
 

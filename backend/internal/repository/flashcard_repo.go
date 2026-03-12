@@ -228,9 +228,9 @@ func getDeckStatsWithQueryRow(
 	err := queryRow(ctx, `
 		SELECT
 			COUNT(*) AS total,
-			COUNT(*) FILTER (WHERE repetitions >= 3 AND ease_factor >= 2.5) AS mastered,
-			COUNT(*) FILTER (WHERE repetitions > 0 AND (repetitions < 3 OR ease_factor < 2.5)) AS learning,
-			COUNT(*) FILTER (WHERE repetitions = 0) AS new,
+			COUNT(*) FILTER (WHERE repetitions > 0) AS mastered,
+			COUNT(*) FILTER (WHERE repetitions = 0 AND last_reviewed_at IS NOT NULL) AS learning,
+			COUNT(*) FILTER (WHERE repetitions = 0 AND last_reviewed_at IS NULL) AS new,
 			COUNT(*) FILTER (WHERE next_review_at <= CURRENT_DATE) AS due_today
 		FROM flashcard_cards
 		WHERE deck_id = $1

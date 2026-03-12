@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import React, { useState, useEffect, useRef } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
-import { useStudySession } from '../lib/useStudySession'
 import { Button } from '../components/ui/Button'
 import { Progress } from '../components/ui/Progress'
 import { Badge } from '../components/ui/Badge'
@@ -10,10 +9,10 @@ import {
   RotateCw,
   Shuffle,
   Loader2,
-  Download,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useToast } from '../components/ui/Toast'
+import { FlashcardResultPage } from './FlashcardResultPage'
 
 type DeckWithConfig = {
   id?: string
@@ -32,12 +31,24 @@ type FlashcardItem = {
   back_label?: string
   mnemonic?: string
   example?: string
+  repetitions?: number
+  ease_factor?: number
 }
 
 type DeckResponse = {
   deck?: DeckWithConfig
   cards?: unknown[]
 }
+
+type CardStudyStatus = 'unrated' | 'learning' | 'mastered'
+
+type StoredFlashcardResult = {
+  ratings: Record<string, 'mastered' | 'learning'>
+  elapsedSeconds: number
+  savedAt: number
+}
+
+const flashcardResultStorageKey = (deckId: string) => `flashcard_results_${deckId}`
 
 function isFlashcardItem(value: unknown): value is FlashcardItem {
   return Boolean(value) && typeof value === 'object'
@@ -51,6 +62,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 export function FlashcardStudyPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { deckId } = useParams()
   const [deck, setDeck] = useState<DeckWithConfig | null>(null)
   const [cards, setCards] = useState<FlashcardItem[]>([])
@@ -58,9 +70,71 @@ export function FlashcardStudyPage() {
   const [isFlipped, setIsFlipped] = useState(false)
   const [enableSpacedRepetition, setEnableSpacedRepetition] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
-  const [isExporting, setIsExporting] = useState(false)
   const [error, setError] = useState<string>('')
+  const [showResults, setShowResults] = useState(Boolean((location.state as { view?: string } | null)?.view === 'results'))
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [cardRatings, setCardRatings] = useState<Record<string, number>>({})
+  const [cardStatuses, setCardStatuses] = useState<Record<string, CardStudyStatus>>({})
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  const sessionStartRef = useRef<number>(Date.now())
+  const completionSyncDoneRef = useRef(false)
+  const completedFromStudyRef = useRef(false)
+  const resultRefreshDoneRef = useRef(false)
   const toast = useToast()
+
+  const derivePersistedStatus = (card: FlashcardItem): CardStudyStatus => {
+    const repetitions = Number(card.repetitions ?? 0)
+    const easeFactor = Number(card.ease_factor ?? 0)
+
+    if (Number.isFinite(repetitions) && repetitions > 0) {
+      return 'mastered'
+    }
+
+    return 'learning'
+  }
+
+  const buildStatusesFromCards = (deckCards: FlashcardItem[]): Record<string, CardStudyStatus> => {
+    return Object.fromEntries(
+      deckCards
+        .map((card) => [card.id || '', derivePersistedStatus(card)] as const)
+        .filter(([id]) => Boolean(id)),
+    )
+  }
+
+  const readStoredResult = (id: string): StoredFlashcardResult | null => {
+    try {
+      const raw = localStorage.getItem(flashcardResultStorageKey(id))
+      if (!raw) return null
+      const parsed = JSON.parse(raw) as Partial<StoredFlashcardResult>
+      if (!parsed || typeof parsed !== 'object' || !parsed.ratings || typeof parsed.ratings !== 'object') {
+        return null
+      }
+      return {
+        ratings: parsed.ratings as Record<string, 'mastered' | 'learning'>,
+        elapsedSeconds: Number(parsed.elapsedSeconds || 0),
+        savedAt: Number(parsed.savedAt || Date.now()),
+      }
+    } catch {
+      return null
+    }
+  }
+
+  const refreshLatestDeckProgress = async () => {
+    if (!deckId) return
+    try {
+      const latest = await api.flashcards.getDeck(deckId) as DeckResponse
+      const latestCards = (Array.isArray(latest.cards) ? latest.cards : []).filter(isFlashcardItem)
+      if (latestCards.length > 0) {
+        if (!completedFromStudyRef.current) {
+          setCards(latestCards)
+          setCardStatuses(buildStatusesFromCards(latestCards))
+        }
+      }
+    } catch (err) {
+      console.error('Failed to refresh latest flashcard progress', err)
+    }
+  }
 
   useEffect(() => {
     if (!deckId) return
@@ -81,6 +155,31 @@ export function FlashcardStudyPage() {
         setCards(normalizedCards)
         setCurrentCardIndex(0)
         setIsFlipped(false)
+        const shouldOpenResults = Boolean((location.state as { view?: string } | null)?.view === 'results')
+        setShowResults(shouldOpenResults)
+        setElapsedSeconds(0)
+        setCardRatings({})
+        if (shouldOpenResults && deckId) {
+          const stored = readStoredResult(deckId)
+          if (stored?.ratings) {
+            setCardStatuses(stored.ratings)
+          } else {
+            setCardStatuses(
+              Object.fromEntries(
+                normalizedCards
+                  .map((card) => [card.id || '', derivePersistedStatus(card)] as const)
+                  .filter(([id]) => Boolean(id)),
+              ),
+            )
+          }
+          setElapsedSeconds(Math.max(0, Number(stored?.elapsedSeconds || 0)))
+        } else {
+          setCardStatuses({})
+        }
+        completionSyncDoneRef.current = shouldOpenResults
+        completedFromStudyRef.current = false
+        resultRefreshDoneRef.current = false
+        sessionStartRef.current = Date.now()
 
         let parsedConfig: Record<string, unknown> = {}
         const rawConfig = deckData?.config
@@ -115,37 +214,125 @@ export function FlashcardStudyPage() {
     return () => {
       isMounted = false
     }
-  }, [deckId])
-
-  useStudySession({
-    activityType: 'flashcard',
-    resourceId: deckId,
-    enabled: !!deckId && !isLoading && !!deck,
-    clientMeta: { page: 'flashcard_study' },
-  })
+  }, [deckId, location.state, refreshTrigger])
 
   const totalCards = cards.length || 1
-  const progress = ((currentCardIndex + 1) / totalCards) * 100
+  const progress = cards.length > 0 ? ((currentCardIndex + 1) / cards.length) * 100 : 0
   const currentCard = cards[currentCardIndex]
+
+  const getCardStatus = (card: FlashcardItem): CardStudyStatus => {
+    if (!card.id) return 'unrated'
+    return cardStatuses[card.id] || 'unrated'
+  }
+
+  const masteredCount = cards.reduce((acc, card) => acc + (getCardStatus(card) === 'mastered' ? 1 : 0), 0)
+  const learningCount = cards.reduce((acc, card) => acc + (getCardStatus(card) === 'learning' ? 1 : 0), 0)
+
+  const completeSession = (finalStatuses?: Record<string, CardStudyStatus>) => {
+    setIsFlipped(false)
+    const startedAt = sessionStartRef.current || Date.now()
+    setElapsedSeconds(Math.max(1, Math.round((Date.now() - startedAt) / 1000)))
+    completedFromStudyRef.current = true
+    resultRefreshDoneRef.current = false
+    
+    if (finalStatuses) {
+      setCardStatuses(finalStatuses)
+    }
+    
+    setShowResults(true)
+  }
+
+  useEffect(() => {
+    if (!showResults || !deckId || !completedFromStudyRef.current) return
+
+    const ratingsToPersist = cards.reduce<Record<string, 'mastered' | 'learning'>>((acc, card) => {
+      if (!card.id) return acc
+      const status = getCardStatus(card)
+      acc[card.id] = status === 'mastered' ? 'mastered' : 'learning'
+      return acc
+    }, {})
+
+    const payload: StoredFlashcardResult = {
+      ratings: ratingsToPersist,
+      elapsedSeconds,
+      savedAt: Date.now(),
+    }
+
+    try {
+      localStorage.setItem(flashcardResultStorageKey(deckId), JSON.stringify(payload))
+    } catch {
+      // keep silent - non-critical cache
+    }
+  }, [showResults, deckId, cards, cardStatuses, elapsedSeconds])
+
+  useEffect(() => {
+    if (!showResults || completionSyncDoneRef.current || !deckId) return
+    completionSyncDoneRef.current = true
+
+    const syncRatingsPromise = Promise.allSettled(
+      Object.entries(cardRatings).map(([cardId, rating]) => api.flashcards.rateCard(cardId, rating)),
+    ).then((results) => {
+      const failures = results.filter(r => r.status === 'rejected')
+      if (failures.length > 0) {
+        console.error(`Failed to sync ${failures.length} flashcard ratings`, failures)
+      }
+    })
+    const recordStudySessionPromise = api.studySessions
+      .start('flashcard', deckId, {
+        page: 'flashcard_study_results',
+        elapsed_seconds: elapsedSeconds,
+        total_cards: cards.length,
+        mastered_cards: masteredCount,
+        learning_cards: learningCount,
+      })
+      .then((res) => {
+        const sessionId = res?.session?.id
+        if (!sessionId) return
+        return api.studySessions.stop(sessionId)
+      })
+      .catch((err) => {
+        console.error('Failed to record flashcard study session', err)
+      })
+
+    void Promise.all([syncRatingsPromise, recordStudySessionPromise])
+      .then(() => refreshLatestDeckProgress())
+      .finally(() => {
+        resultRefreshDoneRef.current = true
+      })
+  }, [showResults, deckId, cardRatings, elapsedSeconds, cards.length, masteredCount, learningCount])
+
+  useEffect(() => {
+    if (!showResults || !deckId) return
+    if (completedFromStudyRef.current) return
+    if (resultRefreshDoneRef.current) return
+
+    resultRefreshDoneRef.current = true
+    void refreshLatestDeckProgress()
+  }, [showResults, deckId])
 
   const handleFlip = () => {
     setIsFlipped(!isFlipped)
   }
 
   const handleRate = async (rating: number) => {
-    // Rate the card (0=again, 1=hard, 2=good, 3=easy)
+    let nextStatuses = cardStatuses
     if (currentCard?.id) {
-      api.flashcards.rateCard(currentCard.id, rating).catch(() => { })
+      setCardRatings((prev) => ({ ...prev, [currentCard.id!]: rating }))
+      nextStatuses = {
+        ...cardStatuses,
+        [currentCard.id!]: rating >= 2 ? 'mastered' : 'learning',
+      }
+      setCardStatuses(nextStatuses)
     }
-    handleNext()
+    handleNext(nextStatuses)
   }
 
-  const handleNext = () => {
+  const handleNext = (finalStatuses?: Record<string, CardStudyStatus>) => {
     if (currentCardIndex < totalCards - 1) {
       setIsFlipped(false)
       setTimeout(() => setCurrentCardIndex(prev => prev + 1), 300)
     } else {
-      navigate('/dashboard')
+      completeSession(finalStatuses)
     }
   }
 
@@ -156,235 +343,29 @@ export function FlashcardStudyPage() {
     setIsFlipped(false)
   }
 
-  const formatPdfDate = (isoString?: string) => {
+  const handleStudyAgain = () => {
+    if (deckId) {
+      localStorage.removeItem(flashcardResultStorageKey(deckId))
+    }
+    
+    setCardRatings({})
+    setCardStatuses({})
+    setCurrentCardIndex(0)
+    setIsFlipped(false)
+    setElapsedSeconds(0)
+    setShowResults(false)
+    completionSyncDoneRef.current = false
+    completedFromStudyRef.current = false
+    resultRefreshDoneRef.current = false
+    
+    setIsLoading(true)
+    setRefreshTrigger(prev => prev + 1)
+  }
+
+    const formatPdfDate = (isoString?: string) => {
     if (!isoString) return '-'
     const d = new Date(isoString)
     return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
-  }
-
-  const handleExportPdf = async () => {
-    if (!deck || cards.length === 0) return
-    setIsExporting(true)
-    try {
-      const { jsPDF } = await import('jspdf')
-      const doc = new jsPDF({ unit: 'pt', format: 'a4' })
-      const margin = 42
-
-      const flashPageWidth = doc.internal.pageSize.getWidth()
-      const flashPageHeight = doc.internal.pageSize.getHeight()
-      const flashContentWidth = flashPageWidth - margin * 2
-      let yFlash = margin
-
-      const ensurePageSpaceFlash = (h: number) => {
-        if (yFlash + h > flashPageHeight - margin) {
-          doc.addPage()
-          yFlash = margin
-        }
-      }
-
-      const NAVY        = '#1a1a2e'
-      const NAVY_MUTED  = '#e8e8f0'
-      const SLATE       = '#475569'
-      const BODY_COLOR  = '#334155'
-      const OFF_WHITE   = '#f8fafc'
-      const RULE        = '#e2e8f0'
-      const GRAY_LIGHT  = '#f1f5f9'
-      const GRAY_TEXT   = '#94a3b8'
-
-      // 1. Badge (same settings as QuizResultsPage export)
-      const badgeHeight = 16
-      const badgeToTitleGap = 28
-      doc.setFillColor(NAVY)
-      doc.rect(margin, yFlash, flashContentWidth, badgeHeight, 'F')
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor('#ffffff')
-      doc.text('FLASHCARDS', margin + 8, yFlash + 11)
-      yFlash += badgeHeight + badgeToTitleGap
-
-      // 2. Title (same settings as QuizResultsPage export)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(22)
-      doc.setTextColor(NAVY)
-      const deckTitle = deck.title || 'Flashcards'
-      const titleLines = doc.splitTextToSize(deckTitle, flashContentWidth) as string[]
-      for (const line of titleLines) {
-        ensurePageSpaceFlash(28)
-        doc.text(line, margin, yFlash)
-        yFlash += 28
-      }
-      yFlash += -7
-
-      // 3. Meta (same settings as QuizResultsPage export)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(10)
-      doc.setTextColor(GRAY_TEXT)
-      ensurePageSpaceFlash(16)
-      doc.text(`Generated: ${formatPdfDate(deck.created_at)}`, margin, yFlash)
-      yFlash += 12
-
-      // 4. Navy divider
-      doc.setFillColor(NAVY)
-      doc.rect(margin, yFlash, flashContentWidth, 1, 'F')
-      yFlash += 20
-
-      // 5. Stats row
-      const statsRowHeight = 44
-      ensurePageSpaceFlash(statsRowHeight + 20)
-      const colW = flashContentWidth / 3
-
-      doc.setFillColor(OFF_WHITE)
-      doc.rect(margin, yFlash, flashContentWidth, statsRowHeight, 'F')
-      doc.setDrawColor(RULE)
-      doc.setLineWidth(0.5)
-      doc.rect(margin, yFlash, flashContentWidth, statsRowHeight, 'S')
-
-      doc.line(margin + colW, yFlash, margin + colW, yFlash + statsRowHeight)
-      doc.line(margin + colW * 2, yFlash, margin + colW * 2, yFlash + statsRowHeight)
-
-      const drawStatCol = (index: number, value: string, label: string) => {
-        const cx = margin + colW * index + (colW / 2)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(15)
-        doc.setTextColor(NAVY)
-        doc.text(value, cx, yFlash + 18, { align: 'center' })
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8)
-        doc.setTextColor(GRAY_TEXT)
-        doc.text(label, cx, yFlash + 32, { align: 'center' })
-      }
-
-      drawStatCol(0, String(cards.length), 'Total Cards')
-      drawStatCol(1, String(cards.length), 'To Review')
-      drawStatCol(2, '0', 'Mastered')
-
-      yFlash += statsRowHeight + 20
-
-      // 6. Section label
-      ensurePageSpaceFlash(25)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(11)
-      doc.setTextColor(SLATE)
-      yFlash += 20
-      doc.text('ALL CARDS', margin, yFlash)
-      yFlash += 25
-
-      // 7. Per-card rows
-      const frontColWidth = flashContentWidth * 0.42
-      const backColWidth = flashContentWidth * 0.58
-      // Use stricter inner widths to prevent glyph spillover near the divider
-      const frontTextMaxWidth = Math.max(frontColWidth - 32, 80)
-      const backTextMaxWidth = Math.max(backColWidth - 32, 80)
-
-      const normalizeInlineText = (value: string) => String(value || '').replace(/\s+/g, ' ').trim()
-      const fitLineToWidth = (line: string, maxWidth: number) => {
-        const fitted = doc.splitTextToSize(line, maxWidth) as string[]
-        if (fitted.length <= 1) return fitted[0] || ''
-        const first = (fitted[0] || '').trim()
-        return first ? `${first}…` : ''
-      }
-
-      cards.forEach((card, index) => {
-        const frontText = normalizeInlineText(card.front || card.term || '')
-        const backText = normalizeInlineText(card.back || card.definition || '')
-
-        // Match wrap metrics with the exact font settings used for drawing
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        const frontWrappedRaw = doc.splitTextToSize(frontText, frontTextMaxWidth) as string[]
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(10)
-        const backWrappedRaw = doc.splitTextToSize(backText, backTextMaxWidth) as string[]
-        const frontWrapped = frontWrappedRaw.map((line) => fitLineToWidth(String(line), frontTextMaxWidth))
-        const backWrapped = backWrappedRaw.map((line) => fitLineToWidth(String(line), backTextMaxWidth))
-
-        const frontHeight = frontWrapped.length * 15 + 36
-        const backHeight = backWrapped.length * 15 + 36
-        const cardHeight = Math.max(frontHeight, backHeight)
-
-        ensurePageSpaceFlash(cardHeight + 22 + 5 + 10)
-
-        // 7a. Card number label
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        doc.setTextColor(SLATE)
-        yFlash += 20
-        doc.text(`Card ${index + 1}`, margin, yFlash)
-        yFlash += 12
-
-        // 7b. Two-column card
-        // Front cell Background
-        doc.setFillColor(NAVY)
-        doc.rect(margin, yFlash, frontColWidth, cardHeight, 'F')
-        
-        // Back cell "label row" background
-        doc.setFillColor(GRAY_LIGHT)
-        doc.rect(margin + frontColWidth, yFlash, backColWidth, 24, 'F')
-
-        // Back cell answer area background
-        doc.setFillColor(OFF_WHITE)
-        doc.rect(margin + frontColWidth, yFlash + 24, backColWidth, cardHeight - 24, 'F')
-
-        // Outer border
-        doc.setDrawColor(RULE)
-        doc.setLineWidth(0.5)
-        doc.rect(margin, yFlash, flashContentWidth, cardHeight, 'S')
-        // Divider line
-        doc.line(margin + frontColWidth, yFlash, margin + frontColWidth, yFlash + cardHeight)
-
-        // Draw Front Content
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(7)
-        doc.setTextColor('#94a3b8')
-        doc.text('FRONT', margin + 12, yFlash + 14)
-
-        doc.setFontSize(10)
-        doc.setTextColor('#ffffff')
-        let frontTextY = yFlash + 14 + 15
-        frontWrapped.forEach((line: string) => {
-          doc.text(line, margin + 12, frontTextY)
-          frontTextY += 15
-        })
-
-        // Draw Back Content
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(7)
-        doc.setTextColor(GRAY_TEXT)
-        doc.text('BACK', margin + frontColWidth + 12, yFlash + 14)
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(10)
-        doc.setTextColor(BODY_COLOR)
-        let backTextY = yFlash + 24 + 5
-        backWrapped.forEach((line: string) => {
-          doc.text(line, margin + frontColWidth + 12, backTextY, { align: 'left' })
-          backTextY += 15
-        })
-
-        yFlash += cardHeight + 10
-      })
-
-      // 8. Footer
-      ensurePageSpaceFlash(20)
-      doc.setDrawColor(RULE)
-      doc.setLineWidth(0.5)
-      doc.line(margin, yFlash, margin + flashContentWidth, yFlash)
-      yFlash += 12
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8)
-      doc.setTextColor(GRAY_TEXT)
-      doc.text('Lectura · Flashcards', flashPageWidth / 2, yFlash, { align: 'center' })
-
-      doc.save(`${deckTitle}.pdf`)
-      toast.success('PDF exported')
-    } catch (err) {
-      console.error(err)
-      toast.error('Failed to export PDF')
-    } finally {
-      setIsExporting(false)
-    }
   }
 
   if (isLoading) {
@@ -403,6 +384,25 @@ export function FlashcardStudyPage() {
         {error && <p className="text-sm text-destructive mb-6">{error}</p>}
         <Button onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
       </div>
+    )
+  }
+
+  if (showResults) {
+    const resultCards = cards.map((card, index) => ({
+      id: card.id || `card-${index}`,
+      front: card.front || card.term || '',
+      back: card.back || card.definition || '',
+    }))
+
+    return (
+      <FlashcardResultPage
+        flashcardSetId={deckId || ''}
+        title={deck?.title || 'Untitled Deck'}
+        cards={resultCards}
+        ratings={cardStatuses as Record<string, 'mastered' | 'learning'>}
+        elapsedSeconds={elapsedSeconds}
+        onStudyAgain={handleStudyAgain}
+      />
     )
   }
 
@@ -427,9 +427,6 @@ export function FlashcardStudyPage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="ghost" size="icon" onClick={handleExportPdf} disabled={isExporting} title="Export to PDF">
-            {isExporting ? <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" /> : <Download className="h-4 w-4 text-muted-foreground" />}
-          </Button>
           <Button variant="ghost" size="icon" onClick={shuffleCards} title="Shuffle Cards">
             <Shuffle className="h-4 w-4 text-muted-foreground" />
           </Button>
@@ -508,7 +505,7 @@ export function FlashcardStudyPage() {
               Flip Card
             </Button>
           ) : !enableSpacedRepetition ? (
-            <Button size="lg" className="px-12 h-14 text-lg shadow-lg" onClick={handleNext}>
+            <Button size="lg" className="px-12 h-14 text-lg shadow-lg" onClick={() => handleNext()}>
               Next Card
             </Button>
           ) : (

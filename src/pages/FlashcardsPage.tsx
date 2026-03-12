@@ -398,7 +398,7 @@ export function FlashcardsPage() {
                                             className="flex-1 h-9 text-xs font-medium"
                                             onClick={(e) => {
                                                 e.stopPropagation()
-                                                navigate(`/flashcards/study/${deck.id}`)
+                                                navigate(`/flashcards/study/${deck.id}`, { state: { view: 'results' } })
                                             }}
                                         >
                                             <Eye className="mr-2 h-3 w-3" /> View Deck
