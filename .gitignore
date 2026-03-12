@@ -4,3 +4,15 @@ backend/.env
 backend/uploads
 .DS_Store
 *.log
+
+# Environment files — never commit these
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+backend/.env
+backend/.env.local
+backend/.env.development
+backend/.env.production
+backend/.env.staging
