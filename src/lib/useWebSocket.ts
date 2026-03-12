@@ -73,7 +73,6 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         try {
             const response = await api.ws.getTicket()
             ticket = response.ticket
-            console.debug('[WebSocket] fetched fresh ticket')
         } catch (err) {
             console.error('[WebSocket] failed to fetch ticket:', err)
             isConnectingRef.current = false
