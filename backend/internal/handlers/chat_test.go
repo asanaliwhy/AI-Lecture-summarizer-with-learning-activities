@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -14,6 +15,48 @@ import (
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
 )
+
+type stubChatHistoryRepo struct {
+	items        []models.ChatHistoryMessage
+	getErr        error
+	createErr     error
+	deleteErr     error
+	createdRole   string
+	createdBody   string
+	createdUserID uuid.UUID
+}
+
+func (s *stubChatHistoryRepo) GetBySummaryAndUser(ctx context.Context, summaryID, userID uuid.UUID) ([]models.ChatHistoryMessage, error) {
+	if s.getErr != nil {
+		return nil, s.getErr
+	}
+	return append([]models.ChatHistoryMessage(nil), s.items...), nil
+}
+
+func (s *stubChatHistoryRepo) Create(ctx context.Context, summaryID, userID uuid.UUID, role, content string) (*models.ChatHistoryMessage, error) {
+	if s.createErr != nil {
+		return nil, s.createErr
+	}
+	s.createdRole = role
+	s.createdBody = content
+	s.createdUserID = userID
+	msg := &models.ChatHistoryMessage{
+		ID:        uuid.New(),
+		SummaryID: summaryID,
+		UserID:    userID,
+		Role:      role,
+		Content:   content,
+		CreatedAt: time.Now().UTC(),
+	}
+	return msg, nil
+}
+
+func (s *stubChatHistoryRepo) DeleteBySummaryAndUser(ctx context.Context, summaryID, userID uuid.UUID) error {
+	if s.deleteErr != nil {
+		return s.deleteErr
+	}
+	return nil
+}
 
 type stubSummaryRepoForChat struct {
 	summary *models.Summary
@@ -70,6 +113,18 @@ func makeChatReq(t *testing.T, userID, summaryID uuid.UUID, body string) *http.R
 	rctx.URLParams.Add("id", summaryID.String())
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/summaries/"+summaryID.String()+"/chat", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
+	return req
+}
+
+func makeChatReqWithMethod(t *testing.T, method string, userID, summaryID uuid.UUID, body string) *http.Request {
+	t.Helper()
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", summaryID.String())
+
+	req := httptest.NewRequest(method, "/api/v1/summaries/"+summaryID.String()+"/chat-history", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	req = req.WithContext(context.WithValue(req.Context(), middleware.UserIDKey, userID))
@@ -171,5 +226,100 @@ func TestAskQuestion_BodyTooLarge_Returns400(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+}
+
+func TestGetChatHistory_ReturnsOrderedMessages(t *testing.T) {
+	userID := uuid.New()
+	summaryID := uuid.New()
+	raw := "summary"
+	now := time.Now().UTC()
+
+	h := &ChatHandler{
+		summaryRepo: &stubSummaryRepoForChat{summary: &models.Summary{ID: summaryID, UserID: userID, ContentRaw: &raw}},
+		chatRepo: &stubChatHistoryRepo{items: []models.ChatHistoryMessage{
+			{ID: uuid.New(), SummaryID: summaryID, UserID: userID, Role: "user", Content: "hello", CreatedAt: now},
+			{ID: uuid.New(), SummaryID: summaryID, UserID: userID, Role: "assistant", Content: "hi", CreatedAt: now.Add(time.Second)},
+		}},
+	}
+
+	req := makeChatReqWithMethod(t, http.MethodGet, userID, summaryID, "")
+	rr := httptest.NewRecorder()
+	h.GetChatHistory(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
+	}
+
+	var out []models.ChatHistoryMessage
+	if err := json.NewDecoder(rr.Body).Decode(&out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(out))
+	}
+	if out[0].Role != "user" || out[1].Role != "assistant" {
+		t.Fatalf("unexpected roles order: %+v", out)
+	}
+}
+
+func TestCreateChatHistory_ValidPayload_Returns201(t *testing.T) {
+	userID := uuid.New()
+	summaryID := uuid.New()
+	raw := "summary"
+	historyRepo := &stubChatHistoryRepo{}
+
+	h := &ChatHandler{
+		summaryRepo: &stubSummaryRepoForChat{summary: &models.Summary{ID: summaryID, UserID: userID, ContentRaw: &raw}},
+		chatRepo:    historyRepo,
+	}
+
+	req := makeChatReqWithMethod(t, http.MethodPost, userID, summaryID, `{"role":"user","content":"question"}`)
+	rr := httptest.NewRecorder()
+	h.CreateChatHistory(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected %d, got %d", http.StatusCreated, rr.Code)
+	}
+	if historyRepo.createdRole != "user" || historyRepo.createdBody != "question" {
+		t.Fatalf("unexpected persisted values role=%q body=%q", historyRepo.createdRole, historyRepo.createdBody)
+	}
+}
+
+func TestCreateChatHistory_InvalidRole_Returns400(t *testing.T) {
+	userID := uuid.New()
+	summaryID := uuid.New()
+	raw := "summary"
+
+	h := &ChatHandler{
+		summaryRepo: &stubSummaryRepoForChat{summary: &models.Summary{ID: summaryID, UserID: userID, ContentRaw: &raw}},
+		chatRepo:    &stubChatHistoryRepo{},
+	}
+
+	req := makeChatReqWithMethod(t, http.MethodPost, userID, summaryID, `{"role":"system","content":"x"}`)
+	rr := httptest.NewRecorder()
+	h.CreateChatHistory(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+}
+
+func TestClearChatHistory_Returns200(t *testing.T) {
+	userID := uuid.New()
+	summaryID := uuid.New()
+	raw := "summary"
+
+	h := &ChatHandler{
+		summaryRepo: &stubSummaryRepoForChat{summary: &models.Summary{ID: summaryID, UserID: userID, ContentRaw: &raw}},
+		chatRepo:    &stubChatHistoryRepo{},
+	}
+
+	req := makeChatReqWithMethod(t, http.MethodDelete, userID, summaryID, "")
+	rr := httptest.NewRecorder()
+	h.ClearChatHistory(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected %d, got %d", http.StatusOK, rr.Code)
 	}
 }

@@ -279,6 +279,13 @@ export interface SummaryDetailResponse extends SummaryListItemResponse {
     quality_fallback_reason?: string
 }
 
+export interface ChatHistoryMessageResponse {
+    id: string
+    role: 'user' | 'assistant'
+    content: string
+    created_at: string
+}
+
 export interface GenerateSummaryPayload {
     content_id: string
     format: string
@@ -506,6 +513,20 @@ export const api = {
             apiFetch<{ reply: string }>(`/summaries/${id}/chat`, {
                 method: 'POST',
                 body: JSON.stringify({ message, history }),
+            }),
+
+        getChatHistory: (id: string) =>
+            apiFetch<ChatHistoryMessageResponse[]>(`/summaries/${id}/chat-history`),
+
+        createChatHistory: (id: string, data: { role: 'user' | 'assistant'; content: string }) =>
+            apiFetch<ChatHistoryMessageResponse>(`/summaries/${id}/chat-history`, {
+                method: 'POST',
+                body: JSON.stringify(data),
+            }),
+
+        clearChatHistory: (id: string) =>
+            apiFetch<{ message: string }>(`/summaries/${id}/chat-history`, {
+                method: 'DELETE',
             }),
 
         // PDF export is canonical client-side in SummaryPage.tsx via jsPDF.

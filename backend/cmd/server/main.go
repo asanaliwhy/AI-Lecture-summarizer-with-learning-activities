@@ -58,6 +58,7 @@ func main() {
 	flashcardRepo := repository.NewFlashcardRepo(pool)
 	jobRepo := repository.NewJobRepo(pool)
 	studySessionRepo := repository.NewStudySessionRepo(pool)
+	chatMessageRepo := repository.NewChatMessageRepo(pool)
 
 	// ──── Step 4: Initialize Gemini Client ────
 	geminiService, err := services.NewGeminiService(
@@ -102,7 +103,7 @@ func main() {
 	libraryHandler := handlers.NewLibraryHandler(pool)
 	userHandler := handlers.NewUserHandler(userRepo)
 	jobHandler := handlers.NewJobHandler(jobRepo, summaryRepo, quizRepo, flashcardRepo)
-	chatHandler := handlers.NewChatHandler(summaryRepo, geminiService)
+	chatHandler := handlers.NewChatHandler(summaryRepo, chatMessageRepo, geminiService)
 
 	// ──── Step 6: Start Job Worker Pool ────
 	workerPool := worker.NewPool(

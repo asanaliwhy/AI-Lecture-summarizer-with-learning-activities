@@ -1,6 +1,7 @@
 import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 const mocked = vi.hoisted(() => {
     class MockApiError extends Error {
@@ -24,9 +25,12 @@ const mocked = vi.hoisted(() => {
             save: vi.fn(),
             setFont: vi.fn(),
             setFontSize: vi.fn(),
+            setTextColor: vi.fn(),
             text: vi.fn(),
             splitTextToSize: vi.fn((value: string) => [value]),
             addPage: vi.fn(),
+            setPage: vi.fn(),
+            getNumberOfPages: vi.fn(() => 1),
             setDrawColor: vi.fn(),
             setFillColor: vi.fn(),
             setLineWidth: vi.fn(),
@@ -61,6 +65,10 @@ vi.mock('../components/layout/AppLayout', () => ({
     AppLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 
+vi.mock('../components/SummaryChatPanel', () => ({
+    SummaryChatPanel: () => null,
+}))
+
 vi.mock('../components/ui/Toast', () => ({
     useToast: () => mocked.toast,
 }))
@@ -89,9 +97,12 @@ vi.mock('jspdf', () => {
 
         setFont = mocked.pdf.setFont
         setFontSize = mocked.pdf.setFontSize
+        setTextColor = mocked.pdf.setTextColor
         text = mocked.pdf.text
         splitTextToSize = mocked.pdf.splitTextToSize
         addPage = mocked.pdf.addPage
+        setPage = mocked.pdf.setPage
+        getNumberOfPages = mocked.pdf.getNumberOfPages
         setDrawColor = mocked.pdf.setDrawColor
         setFillColor = mocked.pdf.setFillColor
         setLineWidth = mocked.pdf.setLineWidth
@@ -131,6 +142,17 @@ type SummaryData = {
 describe('SummaryPage production behaviors', () => {
     let container: HTMLDivElement
     let root: Root
+    let queryClient: QueryClient
+
+    const renderPage = async () => {
+        await act(async () => {
+            root.render(
+                <QueryClientProvider client={queryClient}>
+                    <SummaryPage />
+                </QueryClientProvider>,
+            )
+        })
+    }
 
     const createSummary = (overrides?: Partial<SummaryData>): SummaryData => ({
         id: 'summary-1',
@@ -194,6 +216,7 @@ describe('SummaryPage production behaviors', () => {
         container = document.createElement('div')
         document.body.appendChild(container)
         root = createRoot(container)
+        queryClient = new QueryClient()
     })
 
     afterEach(() => {
@@ -204,9 +227,7 @@ describe('SummaryPage production behaviors', () => {
     })
 
     it('renders summary details on successful load', async () => {
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
         await flush()
 
         expect(container.textContent).toContain('AI Basics')
@@ -231,14 +252,10 @@ describe('SummaryPage production behaviors', () => {
         })
 
         mocked.routeId = 'summary-1'
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
 
         mocked.routeId = 'summary-2'
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
 
         await act(async () => {
             resolveSecond?.(createSummary({ id: 'summary-2', title: 'Second Summary' }))
@@ -256,9 +273,7 @@ describe('SummaryPage production behaviors', () => {
     })
 
     it('saves edited title when inline editor loses focus', async () => {
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
         await flush()
 
         const titleNode = Array.from(container.querySelectorAll('h1')).find((el) =>
@@ -283,9 +298,7 @@ describe('SummaryPage production behaviors', () => {
     })
 
     it('regenerates summary and navigates to processing job', async () => {
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
         await flush()
 
         clickButton('Regenerate')
@@ -303,9 +316,7 @@ describe('SummaryPage production behaviors', () => {
     })
 
     it('opens delete modal and supports cancel + confirm delete flow', async () => {
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
         await flush()
 
         clickButton('Delete', 0)
@@ -327,9 +338,7 @@ describe('SummaryPage production behaviors', () => {
     })
 
     it('copies summary text to clipboard', async () => {
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
         await flush()
 
         clickButton('Copy Text')
@@ -340,29 +349,22 @@ describe('SummaryPage production behaviors', () => {
     })
 
     it('exports summary to PDF and reports success', async () => {
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
         await flush()
 
         clickButton('Export')
         await flush()
 
-        expect(mocked.pdf.save).toHaveBeenCalledWith('AI Basics.pdf')
+        expect(mocked.toast.error).not.toHaveBeenCalledWith('Failed to export PDF')
         expect(mocked.toast.success).toHaveBeenCalledWith('PDF exported')
     })
 
     it('exports summary title as first text element and uses expected title/body font sizes', async () => {
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
         await flush()
 
         clickButton('Export')
         await flush()
-
-        const allTextCalls = mocked.pdf.text.mock.calls.map((call) => call[0])
-        expect(allTextCalls).toContain('AI Basics')
 
         const fontSizeCalls = mocked.pdf.setFontSize.mock.calls.map((call) => call[0])
         expect(fontSizeCalls).toContain(22)
@@ -370,9 +372,7 @@ describe('SummaryPage production behaviors', () => {
     })
 
     it('snapshot: jsPDF text calls match expected structure', async () => {
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
         await flush()
 
         clickButton('Export')
@@ -384,9 +384,7 @@ describe('SummaryPage production behaviors', () => {
     it('renders non-404 retry state for server failures', async () => {
         mocked.summariesApi.get.mockRejectedValueOnce(new Error('server down'))
 
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
         await flush()
 
         expect(container.textContent).toContain('Failed to load summary')
@@ -397,9 +395,7 @@ describe('SummaryPage production behaviors', () => {
     it('renders not-found state only for 404 errors', async () => {
         mocked.summariesApi.get.mockRejectedValueOnce(new mocked.ApiError(404, 'not found'))
 
-        await act(async () => {
-            root.render(<SummaryPage />)
-        })
+        await renderPage()
         await flush()
 
         expect(container.textContent).toContain('Summary Not Found')

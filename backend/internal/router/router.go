@@ -102,6 +102,9 @@ func New(
 			r.Post("/{id}/regenerate", summaryHandler.Regenerate)
 			r.Put("/{id}/favorite", summaryHandler.ToggleFavorite)
 			r.Post("/{id}/chat", chatHandler.AskQuestion)
+			r.Get("/{id}/chat-history", chatHandler.GetChatHistory)
+			r.Post("/{id}/chat-history", chatHandler.CreateChatHistory)
+			r.Delete("/{id}/chat-history", chatHandler.ClearChatHistory)
 		})
 
 		// ──── Quiz Routes ────

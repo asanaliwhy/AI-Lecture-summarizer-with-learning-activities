@@ -27,16 +27,150 @@ type chatService interface {
 	ChatWithSummary(ctx context.Context, summaryContent, userMessage string, history []models.ChatMessage) (string, error)
 }
 
+type chatHistoryRepository interface {
+	GetBySummaryAndUser(ctx context.Context, summaryID, userID uuid.UUID) ([]models.ChatHistoryMessage, error)
+	Create(ctx context.Context, summaryID, userID uuid.UUID, role, content string) (*models.ChatHistoryMessage, error)
+	DeleteBySummaryAndUser(ctx context.Context, summaryID, userID uuid.UUID) error
+}
+
 type ChatHandler struct {
 	summaryRepo   summaryRepository
+	chatRepo      chatHistoryRepository
 	geminiService chatService
 }
 
-func NewChatHandler(summaryRepo summaryRepository, geminiService *services.GeminiService) *ChatHandler {
+func NewChatHandler(summaryRepo summaryRepository, chatRepo chatHistoryRepository, geminiService *services.GeminiService) *ChatHandler {
 	return &ChatHandler{
 		summaryRepo:   summaryRepo,
+		chatRepo:      chatRepo,
 		geminiService: geminiService,
 	}
+}
+
+func (h *ChatHandler) getOwnedSummary(r *http.Request, summaryID uuid.UUID) (*models.Summary, bool) {
+	summary, err := h.summaryRepo.GetByID(r.Context(), summaryID)
+	if err != nil {
+		return nil, false
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	if summary.UserID != userID {
+		return nil, false
+	}
+
+	return summary, true
+}
+
+func (h *ChatHandler) GetChatHistory(w http.ResponseWriter, r *http.Request) {
+	summaryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid summary ID", r))
+		return
+	}
+
+	if _, ok := h.getOwnedSummary(r, summaryID); !ok {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Summary not found", r))
+		return
+	}
+
+	if h.chatRepo == nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Chat history storage unavailable", r))
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	messages, err := h.chatRepo.GetBySummaryAndUser(r.Context(), summaryID, userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to fetch chat history", r))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, messages)
+}
+
+func (h *ChatHandler) CreateChatHistory(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxChatBodyBytes)
+
+	summaryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid summary ID", r))
+		return
+	}
+
+	if _, ok := h.getOwnedSummary(r, summaryID); !ok {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Summary not found", r))
+		return
+	}
+
+	if h.chatRepo == nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Chat history storage unavailable", r))
+		return
+	}
+
+	var req models.CreateChatHistoryMessageRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Request body too large", r))
+			return
+		}
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
+
+	role := strings.TrimSpace(req.Role)
+	if role != "user" && role != "assistant" {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Role must be 'user' or 'assistant'", r))
+		return
+	}
+
+	content := strings.TrimSpace(req.Content)
+	if content == "" {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Content cannot be empty", r))
+		return
+	}
+
+	if len([]rune(content)) > maxChatMessageLength {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", fmt.Sprintf("Content exceeds maximum length of %d characters", maxChatMessageLength), r))
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	msg, err := h.chatRepo.Create(r.Context(), summaryID, userID, role, content)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to save chat message", r))
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, msg)
+}
+
+func (h *ChatHandler) ClearChatHistory(w http.ResponseWriter, r *http.Request) {
+	summaryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid summary ID", r))
+		return
+	}
+
+	if _, ok := h.getOwnedSummary(r, summaryID); !ok {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Summary not found", r))
+		return
+	}
+
+	if h.chatRepo == nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Chat history storage unavailable", r))
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	if err := h.chatRepo.DeleteBySummaryAndUser(r.Context(), summaryID, userID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to clear chat history", r))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Chat history cleared"})
 }
 
 func trimChatHistory(history []models.ChatMessage) []models.ChatMessage {
@@ -114,15 +248,9 @@ func (h *ChatHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 	history := trimChatHistory(req.History)
 
 	// Load summary and verify ownership
-	summary, err := h.summaryRepo.GetByID(r.Context(), summaryID)
-	if err != nil {
+	summary, ok := h.getOwnedSummary(r, summaryID)
+	if !ok {
 		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Summary not found", r))
-		return
-	}
-
-	userID := middleware.GetUserID(r.Context())
-	if summary.UserID != userID {
-		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
 		return
 	}
 

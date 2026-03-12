@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { MessageCircle, X, Send, Loader2, Bot, User, Trash2 } from 'lucide-react'
 import DOMPurify from 'dompurify'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 
 interface ChatMessage {
@@ -21,6 +22,7 @@ export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelPr
     const [isLoading, setIsLoading] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
+    const queryClient = useQueryClient()
 
     const scrollToBottom = useCallback(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -36,6 +38,33 @@ export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelPr
         }
     }, [isOpen])
 
+    const { data: history = [], isLoading: isHistoryLoading } = useQuery({
+        queryKey: ['chat-history', summaryId],
+        queryFn: () => api.summaries.getChatHistory(summaryId),
+        enabled: Boolean(summaryId),
+    })
+
+    useEffect(() => {
+        if (!isOpen || isHistoryLoading) return
+        if (!history) return
+
+        // Hydrate from persisted history only when local chat is empty.
+        // This avoids wiping in-memory messages when the panel is closed and reopened
+        // before a background refetch updates the query cache.
+        setMessages((prev) => {
+            if (prev.length > 0) return prev
+            return history.map((m) => ({
+                role: m.role === 'assistant' ? 'assistant' : 'user',
+                content: m.content,
+            }))
+        })
+    }, [history, isOpen, isHistoryLoading])
+
+    useEffect(() => {
+        if (!isOpen || isHistoryLoading) return
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+    }, [isOpen, isHistoryLoading, messages.length])
+
     const handleSend = async () => {
         const trimmed = input.trim()
         if (!trimmed || isLoading) return
@@ -43,17 +72,38 @@ export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelPr
         const userMessage: ChatMessage = { role: 'user', content: trimmed }
         const updatedMessages = [...messages, userMessage]
         setMessages(updatedMessages)
+        queryClient.setQueryData(['chat-history', summaryId], updatedMessages)
         setInput('')
         setIsLoading(true)
 
+        void api.summaries
+            .createChatHistory(summaryId, { role: 'user', content: trimmed })
+            .catch((err) => console.error('Failed to persist user chat message', err))
+
         try {
             const { reply } = await api.summaries.chat(summaryId, trimmed, messages)
-            setMessages((prev) => [...prev, { role: 'assistant', content: reply }])
+            setMessages((prev) => {
+                const assistantMessage: ChatMessage = { role: 'assistant', content: reply }
+                const next: ChatMessage[] = [...prev, assistantMessage]
+                queryClient.setQueryData(['chat-history', summaryId], next)
+                return next
+            })
+            void api.summaries
+                .createChatHistory(summaryId, { role: 'assistant', content: reply })
+                .catch((err) => console.error('Failed to persist assistant chat message', err))
         } catch {
-            setMessages((prev) => [
-                ...prev,
-                { role: 'assistant', content: 'Sorry, I couldn\'t process your question. Please try again.' },
-            ])
+            setMessages((prev) => {
+                const fallbackMessage: ChatMessage = {
+                    role: 'assistant',
+                    content: 'Sorry, I couldn\'t process your question. Please try again.',
+                }
+                const next: ChatMessage[] = [
+                    ...prev,
+                    fallbackMessage,
+                ]
+                queryClient.setQueryData(['chat-history', summaryId], next)
+                return next
+            })
         } finally {
             setIsLoading(false)
         }
@@ -68,6 +118,10 @@ export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelPr
 
     const handleClear = () => {
         setMessages([])
+        void api.summaries
+            .clearChatHistory(summaryId)
+            .then(() => queryClient.invalidateQueries({ queryKey: ['chat-history', summaryId] }))
+            .catch((err) => console.error('Failed to clear persisted chat history', err))
     }
 
     const formatMessage = useCallback((text: string) => {
@@ -141,7 +195,13 @@ export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelPr
 
                         {/* Messages */}
                         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-                            {messages.length === 0 && (
+                            {isHistoryLoading && (
+                                <div className="flex h-full items-center justify-center">
+                                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                </div>
+                            )}
+
+                            {!isHistoryLoading && messages.length === 0 && (
                                 <div className="flex flex-col items-center justify-center h-full text-center px-6">
                                     <div className="flex items-center justify-center h-14 w-14 rounded-2xl bg-primary/10 mb-4">
                                         <Bot className="h-7 w-7 text-primary" />
@@ -200,7 +260,7 @@ export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelPr
                                 </div>
                             ))}
 
-                            {isLoading && (
+                            {!isHistoryLoading && isLoading && (
                                 <div className="flex gap-2 justify-start">
                                     <div className="flex-shrink-0 mt-0.5">
                                         <div className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/10">
@@ -235,7 +295,7 @@ export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelPr
                                 />
                                 <button
                                     onClick={handleSend}
-                                    disabled={!input.trim() || isLoading}
+                                    disabled={!input.trim() || isLoading || isHistoryLoading}
                                     className="flex items-center justify-center h-9 w-9 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                                 >
                                     {isLoading ? (
