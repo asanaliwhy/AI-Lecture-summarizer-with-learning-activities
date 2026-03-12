@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"os"
 	"net/url"
 	"net/http"
 	"strings"
@@ -27,18 +28,43 @@ func RequestID(next http.Handler) http.Handler {
 
 // CORS handles cross-origin requests
 func CORS(frontendURL string) func(http.Handler) http.Handler {
+	defaultAllowedOrigins := []string{
+		"http://localhost:5173",
+		"http://localhost:3000",
+		"https://easygoing-vitality-production-f7c4.up.railway.app",
+	}
+
 	allowedOrigins := make([]string, 0)
 	seen := make(map[string]struct{})
-	for _, origin := range strings.Split(frontendURL, ",") {
+	preferredNoOrigin := ""
+	addOrigin := func(origin string) {
 		normalized := normalizeOrigin(origin)
-		if normalized == "" {
-			continue
+		if normalized == "" || normalized == "*" {
+			return
 		}
 		if _, exists := seen[normalized]; exists {
-			continue
+			return
 		}
 		seen[normalized] = struct{}{}
 		allowedOrigins = append(allowedOrigins, normalized)
+	}
+
+	for _, origin := range defaultAllowedOrigins {
+		addOrigin(origin)
+	}
+
+	for _, origin := range strings.Split(frontendURL, ",") {
+		normalized := normalizeOrigin(origin)
+		if preferredNoOrigin == "" && normalized != "" && normalized != "*" {
+			preferredNoOrigin = normalized
+		}
+		addOrigin(origin)
+	}
+
+	if extra := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS")); extra != "" {
+		for _, origin := range strings.Split(extra, ",") {
+			addOrigin(origin)
+		}
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -48,15 +74,19 @@ func CORS(frontendURL string) func(http.Handler) http.Handler {
 
 			if requestOrigin != "" {
 				for _, origin := range allowedOrigins {
-					if origin == "*" || origin == requestOrigin {
+					if origin == requestOrigin {
 						allowOrigin = requestOrigin
 						break
 					}
 				}
 			}
 
-			if allowOrigin == "" && requestOrigin == "" && len(allowedOrigins) > 0 && allowedOrigins[0] != "*" {
-				allowOrigin = allowedOrigins[0]
+			if allowOrigin == "" && requestOrigin == "" {
+				if preferredNoOrigin != "" {
+					allowOrigin = preferredNoOrigin
+				} else if len(allowedOrigins) > 0 {
+					allowOrigin = allowedOrigins[0]
+				}
 			}
 
 			if allowOrigin != "" {
