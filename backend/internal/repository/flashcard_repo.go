@@ -122,7 +122,7 @@ func (r *FlashcardRepo) CreateCards(ctx context.Context, deckID uuid.UUID, cards
 func (r *FlashcardRepo) GetCardsByDeck(ctx context.Context, deckID uuid.UUID) ([]models.FlashcardCard, error) {
 	query := `SELECT id, deck_id, front, back, mnemonic, example, topic, difficulty,
 		interval_days, ease_factor, repetitions, next_review_at, last_reviewed_at
-		FROM flashcard_cards WHERE deck_id = $1 ORDER BY next_review_at ASC`
+		FROM flashcard_cards WHERE deck_id = $1 ORDER BY next_review_at ASC, RANDOM()`
 
 	rows, err := r.pool.Query(ctx, query, deckID)
 	if err != nil {

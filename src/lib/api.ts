@@ -87,6 +87,11 @@ async function apiFetch<T>(
 
     // Try refresh on 401
     if (res.status === 401) {
+        if (path.includes('/user/password') || path.includes('/auth/login')) {
+            const err = await res.json().catch(() => ({}))
+            throw new ApiError(res.status, err?.error?.message || 'Unauthorized', err?.error?.fields)
+        }
+
         const refreshed = await tryRefreshOnce()
         if (refreshed) {
             const refreshedToken = getAccessToken()

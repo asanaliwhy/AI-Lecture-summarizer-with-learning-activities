@@ -318,16 +318,25 @@ export function SettingsPage() {
       toast.success('Password changed successfully!')
       setTimeout(() => setPasswordSuccess(false), 3000)
     } catch (err: unknown) {
-      let message = err instanceof Error ? err.message : 'Failed to change password'
-      if (err instanceof ApiError && err.fields) {
-        message =
-          err.fields.new_password ||
-          err.fields.current_password ||
-          err.message ||
-          message
+      if (err instanceof ApiError) {
+        if (err.status === 401) {
+          setPasswordError('Current password is incorrect')
+          return
+        }
+        if (err.status === 400) {
+          let message = err.message || 'Invalid input'
+          if (err.fields) {
+            message =
+              err.fields.new_password ||
+              err.fields.current_password ||
+              err.message ||
+              message
+          }
+          setPasswordError(message)
+          return
+        }
       }
-      setPasswordError(message)
-      toast.error(message)
+      toast.error('Failed to change password. Please try again.')
     } finally {
       setIsChangingPassword(false)
     }
@@ -791,6 +800,9 @@ export function SettingsPage() {
                       if (passwordError) setPasswordError('')
                     }}
                   />
+                  {passwordError && (
+                    <p className="text-sm text-destructive">{passwordError}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="new-password">New Password</Label>
@@ -809,9 +821,7 @@ export function SettingsPage() {
                     Use at least 8 characters and include at least 1 number.
                   </p>
                 </div>
-                {passwordError && (
-                  <p className="text-sm text-destructive">{passwordError}</p>
-                )}
+
                 {passwordSuccess && (
                   <p className="text-sm text-green-600">Password changed successfully!</p>
                 )}

@@ -348,6 +348,10 @@ export function FlashcardStudyPage() {
       localStorage.removeItem(flashcardResultStorageKey(deckId))
     }
     
+    if (location.state) {
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+
     setCardRatings({})
     setCardStatuses({})
     setCurrentCardIndex(0)
