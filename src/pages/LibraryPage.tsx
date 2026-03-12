@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { api, ApiError, type LibraryItemResponse, type LibraryItemType } from '../lib/api'
+import {
+  api,
+  ApiError,
+  type LibraryItemResponse,
+  type LibraryItemType,
+  type SummaryDetailResponse,
+  type QuizAttemptDetailsResponse,
+  type QuizDetailResponse,
+} from '../lib/api'
 import { exportQuizResultsPdf } from './QuizResultsPage'
 import { exportFlashcardResultsPdf } from './FlashcardResultPage'
 import { exportSummaryPdfFromData } from './SummaryPage'
@@ -28,6 +36,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useToast } from '../components/ui/Toast'
+import type { jsPDF } from 'jspdf'
 
 type LibraryTab = 'all' | 'favorites'
 type ViewMode = 'grid' | 'list'
@@ -38,6 +47,8 @@ type NormalizedLibraryItemType = 'summary' | 'quiz' | 'flashcard'
 interface LibraryItem extends Omit<LibraryItemResponse, 'type'> {
   type: NormalizedLibraryItemType
 }
+
+type QuizExportPayload = QuizAttemptDetailsResponse | QuizDetailResponse
 
 const normalizeItemType = (type: LibraryItemType): NormalizedLibraryItemType => {
   const value = String(type || '').toLowerCase()
@@ -358,7 +369,7 @@ export function LibraryPage() {
       }
 
       const drawSmartSummaryPdf = (
-        doc: any,
+        doc: jsPDF,
         state: { y: number; pageHeight: number; margin: number; width: number },
         payload: {
           title: string
@@ -681,14 +692,14 @@ export function LibraryPage() {
             const data = await api.summaries.get(id)
             const title = sanitizeFileName(item.title || data?.title || 'summary', 'summary')
             await exportSummaryPdfFromData({
-              summary: data as any,
+              summary: data as SummaryDetailResponse,
               preferredFileTitle: title,
             })
           } else if (item.type === 'quiz') {
             const data = await api.quizzes.get(id)
             const title = sanitizeFileName(item.title || data?.title || 'quiz', 'quiz')
             const latestAttemptId = (data as { last_attempt_id?: string | null })?.last_attempt_id
-            let attemptPayload: any = data
+            let attemptPayload: QuizExportPayload = data
 
             if (latestAttemptId) {
               try {

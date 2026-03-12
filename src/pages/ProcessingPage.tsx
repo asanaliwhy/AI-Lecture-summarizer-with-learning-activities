@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { api, ApiError } from '../lib/api'
+import { api, ApiError, type JobResponse } from '../lib/api'
 import { useWebSocket } from '../lib/useWebSocket'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
@@ -24,7 +24,53 @@ export function ProcessingPage() {
   const FINALIZING_STALE_MS = 60000
   const [currentStep, setCurrentStep] = useState(0)
   const [stepName, setStepName] = useState('Analyzing content...')
-  const [job, setJob] = useState<any>(null)
+  type ProcessingWSStatusPayload = {
+    job_id?: string
+    step?: number
+    step_name?: string
+  }
+
+  type ProcessingWSCompletedPayload = {
+    job_id?: string
+    result_type?: 'summary' | 'quiz' | 'flashcard' | string
+    result_id?: string
+  }
+
+  type ProcessingWSErrorPayload = {
+    job_id?: string
+    error_message?: string
+  }
+
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null
+
+  const toStatusPayload = (payload: unknown): ProcessingWSStatusPayload => {
+    if (!isRecord(payload)) return {}
+    return {
+      job_id: typeof payload.job_id === 'string' ? payload.job_id : undefined,
+      step: typeof payload.step === 'number' ? payload.step : undefined,
+      step_name: typeof payload.step_name === 'string' ? payload.step_name : undefined,
+    }
+  }
+
+  const toCompletedPayload = (payload: unknown): ProcessingWSCompletedPayload => {
+    if (!isRecord(payload)) return {}
+    return {
+      job_id: typeof payload.job_id === 'string' ? payload.job_id : undefined,
+      result_type: typeof payload.result_type === 'string' ? payload.result_type : undefined,
+      result_id: typeof payload.result_id === 'string' ? payload.result_id : undefined,
+    }
+  }
+
+  const toErrorPayload = (payload: unknown): ProcessingWSErrorPayload => {
+    if (!isRecord(payload)) return {}
+    return {
+      job_id: typeof payload.job_id === 'string' ? payload.job_id : undefined,
+      error_message: typeof payload.error_message === 'string' ? payload.error_message : undefined,
+    }
+  }
+
+  const [job, setJob] = useState<JobResponse | null>(null)
   const [error, setError] = useState('')
   const [isComplete, setIsComplete] = useState(false)
   const [pollWarning, setPollWarning] = useState('')
@@ -113,11 +159,12 @@ export function ProcessingPage() {
 
   // WebSocket for live updates
   useWebSocket({
-    onStatusUpdate: (payload) => {
-      if (payload.job_id === jobId || !jobId) {
-        const stepFromBackend = Number(payload.step || 1)
+    onStatusUpdate: (payload: unknown) => {
+      const statusPayload = toStatusPayload(payload)
+      if (statusPayload.job_id === jobId || !jobId) {
+        const stepFromBackend = Number(statusPayload.step || 1)
         setCurrentStep(Math.max(0, stepFromBackend - 1))
-        setStepName(payload.step_name || '')
+        setStepName(statusPayload.step_name || '')
 
         if (stepFromBackend >= 4) {
           if (finalizingSinceRef.current === null) {
@@ -128,25 +175,27 @@ export function ProcessingPage() {
         }
       }
     },
-    onCompleted: (payload) => {
-      if (payload.job_id === jobId || !jobId) {
+    onCompleted: (payload: unknown) => {
+      const completedPayload = toCompletedPayload(payload)
+      if (completedPayload.job_id === jobId || !jobId) {
         finalizingSinceRef.current = null
         setIsComplete(true)
-        if (payload.result_type === 'summary') {
-          navigate(`/summary/${payload.result_id}`, { replace: true })
-        } else if (payload.result_type === 'quiz') {
-          navigate(`/quiz/take/${payload.result_id}`, { replace: true })
-        } else if (payload.result_type === 'flashcard') {
-          navigate(`/flashcards/study/${payload.result_id}`, { replace: true })
+        if (completedPayload.result_type === 'summary' && completedPayload.result_id) {
+          navigate(`/summary/${completedPayload.result_id}`, { replace: true })
+        } else if (completedPayload.result_type === 'quiz' && completedPayload.result_id) {
+          navigate(`/quiz/take/${completedPayload.result_id}`, { replace: true })
+        } else if (completedPayload.result_type === 'flashcard' && completedPayload.result_id) {
+          navigate(`/flashcards/study/${completedPayload.result_id}`, { replace: true })
         } else {
           navigate('/dashboard', { replace: true })
         }
       }
     },
-    onError: (payload) => {
-      if (payload.job_id === jobId || !jobId) {
+    onError: (payload: unknown) => {
+      const errorPayload = toErrorPayload(payload)
+      if (errorPayload.job_id === jobId || !jobId) {
         finalizingSinceRef.current = null
-        setError(payload.error_message || 'Processing failed')
+        setError(errorPayload.error_message || 'Processing failed')
       }
     },
   })

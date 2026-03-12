@@ -406,6 +406,118 @@ export interface GenerateFlashcardsPayload {
     include_examples: boolean
 }
 
+export interface YouTubeValidationMetadata extends Record<string, unknown> {
+    video_id?: string
+    title?: string
+    channel_name?: string
+    thumbnail_url?: string
+    duration_seconds?: number
+    word_count?: number
+}
+
+export interface ValidateYouTubeResponse {
+    valid: boolean
+    metadata: YouTubeValidationMetadata
+    content_id: string
+    video_id?: string
+}
+
+export interface ContentResponse {
+    id: string
+    user_id?: string
+    type?: string
+    status?: string
+    source_url?: string | null
+    file_path?: string | null
+    title?: string
+    duration_seconds?: number | null
+    transcript?: string | null
+    metadata?: Record<string, unknown> | null
+    created_at?: string
+}
+
+export interface QuizDetailResponse extends QuizListItemResponse {
+    questions?: QuizQuestionResponse[] | string
+}
+
+export interface QuizAttemptDataResponse {
+    id?: string
+    quiz_id?: string
+    user_id?: string
+    answers?: unknown
+    answers_json?: unknown
+    score_percent?: number
+    correct_count?: number
+    started_at?: string
+    completed_at?: string | null
+    time_taken_seconds?: number | null
+}
+
+export interface QuizAttemptEnvelopeResponse {
+    attempt?: QuizAttemptDataResponse
+    attempt_id?: string
+    started_at?: string
+    score_percent?: number
+    correct_count?: number
+    total?: number
+}
+
+export interface QuizAttemptDetailsResponse extends QuizAttemptDataResponse {
+    quiz?: QuizDetailResponse
+    questions?: QuizQuestionResponse[] | unknown[] | string
+    review?: unknown[]
+    title?: string
+    question_count?: number
+    last_attempt_id?: string | null
+}
+
+export interface QuizSaveProgressPayload {
+    question_index: number
+    answer_index: number
+}
+
+export interface FlashcardDeckStatsResponse {
+    total_cards?: number
+    mastered?: number
+    learning?: number
+    new?: number
+    due_today?: number
+    mastery_rate?: number
+}
+
+export interface UserSettingsResponse {
+    user_id?: string
+    default_summary_length?: string
+    default_format?: string
+    default_difficulty?: string
+    language?: string
+    notifications?: Record<string, unknown>
+    notifications_json?: Record<string, unknown>
+    updated_at?: string
+}
+
+export type UpdateUserSettingsPayload = Partial<Pick<
+    UserSettingsResponse,
+    'default_summary_length' | 'default_format' | 'default_difficulty' | 'language'
+>> & {
+    notifications?: Record<string, unknown>
+    notifications_json?: Record<string, unknown>
+}
+
+export interface JobResponse {
+    id: string
+    user_id?: string
+    type?: string
+    reference_id?: string
+    config?: Record<string, unknown> | string
+    status?: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | string
+    retry_count?: number
+    max_retries?: number
+    error_message?: string | null
+    created_at?: string
+    completed_at?: string | null
+}
+
 // ─── API Methods ───
 export const api = {
     // Auth
@@ -457,7 +569,7 @@ export const api = {
     // Content
     content: {
         validateYouTube: (url: string) =>
-            apiFetch<{ valid: boolean; metadata: any; content_id: string }>('/content/validate-youtube', {
+            apiFetch<ValidateYouTubeResponse>('/content/validate-youtube', {
                 method: 'POST',
                 body: JSON.stringify({ url }),
             }),
@@ -471,7 +583,7 @@ export const api = {
             })
         },
 
-        get: (id: string) => apiFetch<any>(`/content/${id}`),
+        get: (id: string) => apiFetch<ContentResponse>(`/content/${id}`),
 
         supportedFormats: () => apiFetch<{ formats: string[] }>('/content/supported-formats'),
     },
@@ -546,27 +658,27 @@ export const api = {
         toggleFavorite: (id: string) =>
             apiFetch<{ message: string }>(`/quizzes/${id}/favorite`, { method: 'PUT' }),
 
-        get: (id: string) => apiFetch<any>(`/quizzes/${id}`),
+        get: (id: string) => apiFetch<QuizDetailResponse>(`/quizzes/${id}`),
 
         delete: (id: string) =>
             apiFetch<{ message: string }>(`/quizzes/${id}`, { method: 'DELETE' }),
 
         startAttempt: (quizId: string) =>
-            apiFetch<{ attempt?: any; attempt_id?: string; started_at?: string }>(`/quizzes/${quizId}/start`, { method: 'POST' }),
+            apiFetch<QuizAttemptEnvelopeResponse>(`/quizzes/${quizId}/start`, { method: 'POST' }),
 
-        saveProgress: (attemptId: string, data: any) =>
-            apiFetch(`/quiz-attempts/${attemptId}/save-progress`, {
+        saveProgress: (attemptId: string, data: QuizSaveProgressPayload) =>
+            apiFetch<{ message?: string }>(`/quiz-attempts/${attemptId}/save-progress`, {
                 method: 'POST',
                 body: JSON.stringify(data),
             }),
 
         submitAttempt: (attemptId: string) =>
-            apiFetch<{ attempt?: any; attempt_id?: string; score_percent?: number; correct_count?: number; total?: number }>(`/quiz-attempts/${attemptId}/submit`, {
+            apiFetch<QuizAttemptEnvelopeResponse>(`/quiz-attempts/${attemptId}/submit`, {
                 method: 'POST',
             }),
 
         getAttempt: (attemptId: string) =>
-            apiFetch<any>(`/quiz-attempts/${attemptId}`),
+            apiFetch<QuizAttemptDetailsResponse>(`/quiz-attempts/${attemptId}`),
     },
 
     // Flashcards
@@ -581,7 +693,7 @@ export const api = {
 
         getDeck: (id: string) => apiFetch<{ deck?: FlashcardDeckListItemResponse; cards?: unknown[] }>(`/flashcards/decks/${id}`),
 
-        getDeckStats: (id: string) => apiFetch<any>(`/flashcards/decks/${id}/stats`),
+        getDeckStats: (id: string) => apiFetch<FlashcardDeckStatsResponse>(`/flashcards/decks/${id}/stats`),
 
         toggleFavorite: (id: string) =>
             apiFetch<{ message: string }>(`/flashcards/decks/${id}/favorite`, { method: 'PUT' }),
@@ -611,7 +723,7 @@ export const api = {
 
     // Study Sessions
     studySessions: {
-        start: (activityType: 'summary' | 'quiz' | 'flashcard', resourceId: string, clientMeta?: Record<string, any>) =>
+        start: (activityType: 'summary' | 'quiz' | 'flashcard', resourceId: string, clientMeta?: Record<string, unknown>) =>
             apiFetch<{ session: { id: string } }>('/study-sessions/start', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -646,9 +758,9 @@ export const api = {
         changePassword: (data: { current_password: string; new_password: string }) =>
             apiFetch('/user/password', { method: 'PUT', body: JSON.stringify(data) }),
         deleteMe: () => apiFetch('/user/me', { method: 'DELETE' }),
-        getSettings: () => apiFetch<any>('/user/settings'),
-        updateSettings: (data: any) =>
-            apiFetch('/user/settings', { method: 'PUT', body: JSON.stringify(data) }),
+        getSettings: () => apiFetch<UserSettingsResponse>('/user/settings'),
+        updateSettings: (data: UpdateUserSettingsPayload) =>
+            apiFetch<UserSettingsResponse>('/user/settings', { method: 'PUT', body: JSON.stringify(data) }),
         getNotifications: () => apiFetch<NotificationPreferencesResponse>('/user/notifications'),
         updateNotification: (data: UpdateNotificationPreferencePayload) =>
             apiFetch<{ key: string; enabled: boolean }>('/user/notifications', {
@@ -659,7 +771,7 @@ export const api = {
 
     // Jobs
     jobs: {
-        get: (id: string) => apiFetch<any>(`/jobs/${id}`),
+        get: (id: string) => apiFetch<JobResponse>(`/jobs/${id}`),
         cancel: (id: string) => apiFetch(`/jobs/${id}`, { method: 'DELETE' }),
     },
 }

@@ -3,13 +3,21 @@ import { API_BASE, api, refreshAccessToken, tryRefreshOnce } from './api'
 
 interface WSMessage {
     type: string
-    payload: any
+    payload: unknown
+}
+
+interface JWTAccessTokenPayload {
+    exp?: number
+}
+
+const isJWTAccessTokenPayload = (value: unknown): value is JWTAccessTokenPayload => {
+    return typeof value === 'object' && value !== null
 }
 
 interface UseWebSocketOptions {
-    onStatusUpdate?: (payload: any) => void
-    onCompleted?: (payload: any) => void
-    onError?: (payload: any) => void
+    onStatusUpdate?: (payload: unknown) => void
+    onCompleted?: (payload: unknown) => void
+    onError?: (payload: unknown) => void
     onMessage?: (msg: WSMessage) => void
 }
 
@@ -136,9 +144,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
             try {
                 const payloadBase64 = token.split('.')[1]
                 if (payloadBase64) {
-                    const payload = JSON.parse(atob(payloadBase64))
+                    const payloadRaw: unknown = JSON.parse(atob(payloadBase64))
                     const nowSec = Math.floor(Date.now() / 1000)
-                    const expSec = Number(payload?.exp || 0)
+                    const expSec = Number(isJWTAccessTokenPayload(payloadRaw) ? payloadRaw.exp || 0 : 0)
                     if (expSec > 0 && expSec <= nowSec + 30) {
                         await tryRefreshOnce()
                     }

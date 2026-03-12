@@ -26,14 +26,23 @@ export async function withRetry<T>(
     maxRetries = 3,
     delayMs = 1000,
 ): Promise<T> {
-    let lastError: any
+    let lastError: unknown
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
             return await fn()
-        } catch (err: any) {
+        } catch (err: unknown) {
             lastError = err
             // Don't retry on client errors (4xx)
-            if (err?.status && err.status >= 400 && err.status < 500) throw err
+            if (
+                typeof err === 'object' &&
+                err !== null &&
+                'status' in err &&
+                typeof (err as { status?: unknown }).status === 'number' &&
+                (err as { status: number }).status >= 400 &&
+                (err as { status: number }).status < 500
+            ) {
+                throw err
+            }
             if (attempt < maxRetries) {
                 await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)))
             }

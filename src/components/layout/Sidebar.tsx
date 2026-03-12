@@ -13,6 +13,7 @@ import {
   Zap,
   X,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/Button'
 import { Progress } from '../ui/Progress'
@@ -25,7 +26,7 @@ interface SidebarProps {
 }
 
 interface NavItem {
-  icon: any
+  icon: LucideIcon
   label: string
   href: string
   notification?: boolean
