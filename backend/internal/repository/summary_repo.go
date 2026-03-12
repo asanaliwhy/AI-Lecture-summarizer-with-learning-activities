@@ -3,8 +3,6 @@ package repository
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -61,49 +59,69 @@ func (r *SummaryRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Summar
 }
 
 func (r *SummaryRepo) ListByUser(ctx context.Context, userID uuid.UUID, search, sortBy string, limit, offset int) ([]*models.Summary, int, error) {
-	var args []interface{}
-	argIdx := 1
-
-	where := fmt.Sprintf("WHERE s.user_id = $%d AND s.is_archived = FALSE", argIdx)
-	args = append(args, userID)
-	argIdx++
-
-	if search != "" {
-		where += fmt.Sprintf(" AND (s.title ILIKE $%d OR s.description ILIKE $%d)", argIdx, argIdx)
-		args = append(args, "%"+search+"%")
-		argIdx++
-	}
+	searchLike := "%" + search + "%"
 
 	// Count total
 	var total int
-	countQuery := "SELECT COUNT(*) FROM summaries s " + where
-	err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total)
+	countQuery := `SELECT COUNT(*)
+		FROM summaries s
+		WHERE s.user_id = $1
+		  AND s.is_archived = FALSE
+		  AND ($2 = '' OR s.title ILIKE $3 OR s.description ILIKE $3)`
+	err := r.pool.QueryRow(ctx, countQuery, userID, search, searchLike).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// Order
-	orderBy := "s.created_at DESC"
+	var query string
 	switch sortBy {
 	case "title":
-		orderBy = "s.title ASC"
+		query = `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
+			s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
+			s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
+			FROM summaries s
+			LEFT JOIN content c ON c.id = s.content_id
+			WHERE s.user_id = $1
+			  AND s.is_archived = FALSE
+			  AND ($2 = '' OR s.title ILIKE $3 OR s.description ILIKE $3)
+			ORDER BY s.title ASC
+			LIMIT $4 OFFSET $5`
 	case "oldest":
-		orderBy = "s.created_at ASC"
+		query = `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
+			s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
+			s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
+			FROM summaries s
+			LEFT JOIN content c ON c.id = s.content_id
+			WHERE s.user_id = $1
+			  AND s.is_archived = FALSE
+			  AND ($2 = '' OR s.title ILIKE $3 OR s.description ILIKE $3)
+			ORDER BY s.created_at ASC
+			LIMIT $4 OFFSET $5`
 	case "recent":
-		orderBy = "s.last_accessed_at DESC NULLS LAST"
+		query = `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
+			s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
+			s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
+			FROM summaries s
+			LEFT JOIN content c ON c.id = s.content_id
+			WHERE s.user_id = $1
+			  AND s.is_archived = FALSE
+			  AND ($2 = '' OR s.title ILIKE $3 OR s.description ILIKE $3)
+			ORDER BY s.last_accessed_at DESC NULLS LAST
+			LIMIT $4 OFFSET $5`
+	default:
+		query = `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
+			s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
+			s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
+			FROM summaries s
+			LEFT JOIN content c ON c.id = s.content_id
+			WHERE s.user_id = $1
+			  AND s.is_archived = FALSE
+			  AND ($2 = '' OR s.title ILIKE $3 OR s.description ILIKE $3)
+			ORDER BY s.created_at DESC
+			LIMIT $4 OFFSET $5`
 	}
 
-	query := fmt.Sprintf(`SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
-		s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
-		s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
-		FROM summaries s
-		LEFT JOIN content c ON c.id = s.content_id
-		%s ORDER BY %s LIMIT $%d OFFSET $%d`,
-		where, orderBy, argIdx, argIdx+1)
-
-	args = append(args, limit, offset)
-
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, userID, search, searchLike, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -173,15 +191,12 @@ func (r *SummaryRepo) ToggleFavorite(ctx context.Context, id uuid.UUID, userID u
 }
 
 func (r *SummaryRepo) BulkDelete(ctx context.Context, ids []uuid.UUID, userID uuid.UUID) error {
-	placeholders := make([]string, len(ids))
-	args := []interface{}{userID}
-	for i, id := range ids {
-		placeholders[i] = fmt.Sprintf("$%d", i+2)
-		args = append(args, id)
+	if len(ids) == 0 {
+		return nil
 	}
 
-	query := fmt.Sprintf("DELETE FROM summaries WHERE user_id = $1 AND id IN (%s)", strings.Join(placeholders, ","))
-	_, err := r.pool.Exec(ctx, query, args...)
+	query := `DELETE FROM summaries WHERE user_id = $1 AND id = ANY($2::uuid[])`
+	_, err := r.pool.Exec(ctx, query, userID, ids)
 	return err
 }
 
