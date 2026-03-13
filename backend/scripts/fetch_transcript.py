@@ -38,7 +38,25 @@ def main():
         print("youtube-transcript-api not installed", file=sys.stderr)
         sys.exit(1)
 
+    # Optional proxy support for cloud environments (Railway, etc.)
+    # Set in environment:
+    #   YT_PROXY_URL=http://user:pass@host:port
+    # or rely on HTTPS_PROXY/HTTP_PROXY.
+    proxy_url = (
+        os.getenv("YT_PROXY_URL")
+        or os.getenv("HTTPS_PROXY")
+        or os.getenv("https_proxy")
+        or os.getenv("HTTP_PROXY")
+        or os.getenv("http_proxy")
+    )
+
     try:
+        if proxy_url:
+            # Keep compatibility across youtube-transcript-api versions by
+            # using standard requests proxy environment variables.
+            os.environ.setdefault("HTTPS_PROXY", proxy_url)
+            os.environ.setdefault("HTTP_PROXY", proxy_url)
+
         ytt = YouTubeTranscriptApi()
 
         # Try English first
