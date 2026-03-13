@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"html"
@@ -322,50 +323,21 @@ func (s *YouTubeService) DownloadAudio(videoURL string) ([]byte, string, error) 
 	ch := make(chan result, 1)
 
 	go func() {
-		video, err := s.ytClient.GetVideo(videoURL)
-		if err != nil {
-			ch <- result{err: fmt.Errorf("failed to fetch YouTube video metadata: %w", err)}
+		audioBytes, mimeType, err := s.downloadAudioViaGoClient(videoURL)
+		if err == nil {
+			ch <- result{audioBytes: audioBytes, mimeType: mimeType, err: nil}
 			return
 		}
 
-		formats := video.Formats.WithAudioChannels()
-		if len(formats) == 0 {
-			ch <- result{err: fmt.Errorf("no audio formats available")}
+		log.Printf("Go audio download failed for %s: %v — trying yt-dlp fallback", videoURL, err)
+
+		audioBytes, mimeType, ytdlpErr := s.downloadAudioViaYtDlp(videoURL)
+		if ytdlpErr == nil {
+			ch <- result{audioBytes: audioBytes, mimeType: mimeType, err: nil}
 			return
 		}
 
-		best := formats[0]
-		for _, f := range formats {
-			if f.Bitrate > best.Bitrate {
-				best = f
-			}
-		}
-
-		stream, _, err := s.ytClient.GetStream(video, &best)
-		if err != nil {
-			ch <- result{err: fmt.Errorf("failed to open audio stream: %w", err)}
-			return
-		}
-		defer stream.Close()
-
-		const maxAudioBytes = 100 * 1024 * 1024 // 100MB safety cap
-		limited := io.LimitReader(stream, maxAudioBytes+1)
-		audioBytes, err := io.ReadAll(limited)
-		if err != nil {
-			ch <- result{err: fmt.Errorf("failed to read audio stream: %w", err)}
-			return
-		}
-		if len(audioBytes) > maxAudioBytes {
-			ch <- result{err: fmt.Errorf("audio stream exceeds %d MB limit", maxAudioBytes/(1024*1024))}
-			return
-		}
-
-		mimeType := strings.TrimSpace(strings.Split(best.MimeType, ";")[0])
-		if mimeType == "" {
-			mimeType = "audio/mp4"
-		}
-
-		ch <- result{audioBytes: audioBytes, mimeType: mimeType, err: nil}
+		ch <- result{err: fmt.Errorf("audio download failed via go client: %v; yt-dlp fallback failed: %w", err, ytdlpErr)}
 	}()
 
 	select {
@@ -374,6 +346,149 @@ func (s *YouTubeService) DownloadAudio(videoURL string) ([]byte, string, error) 
 	case <-time.After(90 * time.Second): // 90-second max for downloading audio
 		return nil, "", fmt.Errorf("audio download timed out after 90s")
 	}
+}
+
+func (s *YouTubeService) downloadAudioViaGoClient(videoURL string) ([]byte, string, error) {
+	video, err := s.ytClient.GetVideo(videoURL)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to fetch YouTube video metadata: %w", err)
+	}
+
+	formats := video.Formats.WithAudioChannels()
+	if len(formats) == 0 {
+		return nil, "", fmt.Errorf("no audio formats available")
+	}
+
+	best := formats[0]
+	for _, f := range formats {
+		if f.Bitrate > best.Bitrate {
+			best = f
+		}
+	}
+
+	stream, _, err := s.ytClient.GetStream(video, &best)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to open audio stream: %w", err)
+	}
+	defer stream.Close()
+
+	const maxAudioBytes = 100 * 1024 * 1024 // 100MB safety cap
+	limited := io.LimitReader(stream, maxAudioBytes+1)
+	audioBytes, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read audio stream: %w", err)
+	}
+	if len(audioBytes) > maxAudioBytes {
+		return nil, "", fmt.Errorf("audio stream exceeds %d MB limit", maxAudioBytes/(1024*1024))
+	}
+
+	mimeType := strings.TrimSpace(strings.Split(best.MimeType, ";")[0])
+	if mimeType == "" {
+		mimeType = "audio/mp4"
+	}
+
+	return audioBytes, mimeType, nil
+}
+
+func (s *YouTubeService) downloadAudioViaYtDlp(videoURL string) ([]byte, string, error) {
+	pythonBin, err := findPythonBin()
+	if err != nil {
+		return nil, "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, pythonBin, "-m", "yt_dlp", "--dump-single-json", "-f", "bestaudio/best", "--no-playlist", videoURL)
+	cmd.WaitDelay = 2 * time.Second
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, "", fmt.Errorf("yt-dlp metadata fetch timed out")
+		}
+		return nil, "", fmt.Errorf("yt-dlp metadata error: %s (exit: %v)", strings.TrimSpace(stderr.String()), err)
+	}
+
+	type ytdlpEntry struct {
+		URL string `json:"url"`
+		Ext string `json:"ext"`
+	}
+
+	type ytdlpInfo struct {
+		URL                string       `json:"url"`
+		Ext                string       `json:"ext"`
+		RequestedDownloads []ytdlpEntry `json:"requested_downloads"`
+		RequestedFormats   []ytdlpEntry `json:"requested_formats"`
+	}
+
+	var info ytdlpInfo
+	if err := json.Unmarshal(stdout.Bytes(), &info); err != nil {
+		return nil, "", fmt.Errorf("failed to parse yt-dlp metadata JSON: %w", err)
+	}
+
+	audioURL := ""
+	ext := ""
+
+	if len(info.RequestedDownloads) > 0 {
+		audioURL = info.RequestedDownloads[0].URL
+		ext = info.RequestedDownloads[0].Ext
+	} else if len(info.RequestedFormats) > 0 {
+		audioURL = info.RequestedFormats[0].URL
+		ext = info.RequestedFormats[0].Ext
+	} else {
+		audioURL = info.URL
+		ext = info.Ext
+	}
+
+	if strings.TrimSpace(audioURL) == "" {
+		return nil, "", fmt.Errorf("yt-dlp did not return a downloadable audio URL")
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, audioURL, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to build audio request from yt-dlp URL: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to download yt-dlp audio URL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		return nil, "", fmt.Errorf("yt-dlp audio URL returned status %d", resp.StatusCode)
+	}
+
+	const maxAudioBytes = 100 * 1024 * 1024 // 100MB safety cap
+	limited := io.LimitReader(resp.Body, maxAudioBytes+1)
+	audioBytes, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read yt-dlp audio response: %w", err)
+	}
+	if len(audioBytes) > maxAudioBytes {
+		return nil, "", fmt.Errorf("yt-dlp audio stream exceeds %d MB limit", maxAudioBytes/(1024*1024))
+	}
+
+	mimeType := "audio/mp4"
+	switch strings.ToLower(strings.TrimSpace(ext)) {
+	case "webm":
+		mimeType = "audio/webm"
+	case "mp3":
+		mimeType = "audio/mpeg"
+	case "opus":
+		mimeType = "audio/ogg"
+	case "aac":
+		mimeType = "audio/aac"
+	case "m4a", "mp4":
+		mimeType = "audio/mp4"
+	}
+
+	return audioBytes, mimeType, nil
 }
 
 // EstimateDuration parses duration from YouTube page HTML
