@@ -4861,8 +4861,8 @@ export function SummaryPage() {
             ? 'Smart Summary'
             : 'Summary'
   const leftColumnClass = isWideSummaryLayout
-    ? 'lg:col-span-2 space-y-6 lg:-ml-8 xl:-ml-12'
-    : 'lg:col-span-3 space-y-6 lg:-ml-8 xl:-ml-12'
+    ? 'lg:col-span-2 space-y-6'
+    : 'lg:col-span-3 space-y-6'
   const centerColumnClass = isWideSummaryLayout ? 'lg:col-span-8' : 'lg:col-span-7'
   const rightColumnClass = 'lg:col-span-2 space-y-6'
 
