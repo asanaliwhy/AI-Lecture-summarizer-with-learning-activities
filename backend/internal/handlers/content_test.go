@@ -14,7 +14,6 @@ import (
 
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
-	"lectura-backend/internal/services"
 )
 
 type stubContentRepoForContentHandler struct {
@@ -55,18 +54,6 @@ func (s *stubJobRepoForContentHandler) UpdateStatus(ctx context.Context, id uuid
 }
 
 func TestValidateYouTube_QueueFailure_MarksJobFailed(t *testing.T) {
-	originalYouTubeClient := services.YouTubeHTTPClient
-	t.Cleanup(func() { services.YouTubeHTTPClient = originalYouTubeClient })
-
-	services.YouTubeHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		body := `{"title":"Video","author_name":"Channel","thumbnail_url":"https://img.youtube.com/test.jpg"}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Header:     make(http.Header),
-			Body:       ioNopCloser(strings.NewReader(body)),
-		}, nil
-	})}
-
 	contentRepo := &stubContentRepoForContentHandler{}
 	jobRepo := &stubJobRepoForContentHandler{}
 	redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:0"})
@@ -99,18 +86,7 @@ func TestValidateYouTube_QueueFailure_MarksJobFailed(t *testing.T) {
 	}
 }
 
-func TestValidateYouTube_UpstreamTimeout_Returns502(t *testing.T) {
-	originalYouTubeClient := services.YouTubeHTTPClient
-	t.Cleanup(func() { services.YouTubeHTTPClient = originalYouTubeClient })
-
-	services.YouTubeHTTPClient = &http.Client{
-		Timeout: 25 * time.Millisecond,
-		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			<-req.Context().Done()
-			return nil, req.Context().Err()
-		}),
-	}
-
+func TestValidateYouTube_ReturnsQuicklyWithoutUpstreamDependency(t *testing.T) {
 	contentRepo := &stubContentRepoForContentHandler{}
 	jobRepo := &stubJobRepoForContentHandler{}
 	h := &ContentHandler{contentRepo: contentRepo, jobRepo: jobRepo, redis: nil}
@@ -123,11 +99,11 @@ func TestValidateYouTube_UpstreamTimeout_Returns502(t *testing.T) {
 	started := time.Now()
 	h.ValidateYouTube(res, req)
 	if time.Since(started) > time.Second {
-		t.Fatalf("expected ValidateYouTube to return quickly on upstream timeout")
+		t.Fatalf("expected ValidateYouTube to return quickly without upstream requests")
 	}
 
-	if res.Code != http.StatusBadGateway {
-		t.Fatalf("expected status %d, got %d", http.StatusBadGateway, res.Code)
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, res.Code)
 	}
 
 	var payload map[string]any
@@ -135,8 +111,17 @@ func TestValidateYouTube_UpstreamTimeout_Returns502(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 	errObj := payload["error"].(map[string]any)
-	if errObj["code"] != "UPSTREAM_ERROR" {
+	if errObj["code"] != "QUEUE_ERROR" {
 		t.Fatalf("expected UPSTREAM_ERROR, got %v", errObj["code"])
+	}
+
+	if len(contentRepo.created) != 1 {
+		t.Fatalf("expected content to be created before queue failure, got %d", len(contentRepo.created))
+	}
+
+	metadata := contentRepo.created[0].MetadataJSON
+	if !strings.Contains(string(metadata), "img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg") {
+		t.Fatalf("expected static thumbnail metadata, got %s", string(metadata))
 	}
 }
 
@@ -178,12 +163,3 @@ func TestUpload_QueueFailure_MarksJobFailed(t *testing.T) {
 	}
 }
 
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
-
-type readCloser struct{ *strings.Reader }
-
-func (r readCloser) Close() error { return nil }
-
-func ioNopCloser(r *strings.Reader) readCloser { return readCloser{Reader: r} }

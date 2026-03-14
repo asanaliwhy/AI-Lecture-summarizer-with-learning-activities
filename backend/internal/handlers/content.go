@@ -82,70 +82,18 @@ func (h *ContentHandler) ValidateYouTube(w http.ResponseWriter, r *http.Request)
 		Title:     "YouTube Video: " + videoID,
 	}
 
-	// Fetch metadata from oEmbed
-	oembedURL := "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=" + videoID + "&format=json"
-	request, reqErr := http.NewRequestWithContext(r.Context(), http.MethodGet, oembedURL, nil)
-	if reqErr != nil {
-		writeJSON(w, http.StatusBadGateway, errorResp("UPSTREAM_ERROR", "Failed to reach YouTube", r))
-		return
-	}
-
-	resp, err := services.YouTubeHTTPClient.Do(request)
-	var oembed struct {
-		Title        string `json:"title"`
-		AuthorName   string `json:"author_name"`
-		ThumbnailURL string `json:"thumbnail_url"`
-	}
-
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, errorResp("UPSTREAM_ERROR", "Failed to reach YouTube", r))
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		writeJSON(w, http.StatusUnprocessableEntity, errorResp("INVALID_URL", "YouTube URL could not be validated", r))
-		return
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&oembed); err != nil {
-		writeJSON(w, http.StatusBadGateway, errorResp("UPSTREAM_ERROR", "Failed to parse YouTube metadata", r))
-		return
-	}
-
-	// Fallback if oEmbed fails or for fields not in oEmbed
-	if oembed.Title == "" {
-		oembed.Title = "YouTube Video"
-	}
-	if oembed.AuthorName == "" {
-		oembed.AuthorName = "YouTube Channel"
-	}
-	// Default high-res thumbnail if not provided
-	if oembed.ThumbnailURL == "" {
-		oembed.ThumbnailURL = "https://img.youtube.com/vi/" + videoID + "/maxresdefault.jpg"
-	}
-
-	// Fetch duration from YouTube page (oEmbed does not provide it)
-	duration := 0
-	if h.youtube != nil {
-		if _, _, _, _, durationSec, err := h.youtube.GetVideoMetadata(videoID); err == nil && durationSec > 0 {
-			duration = durationSec
-		}
-	}
+	thumbnailURL := "https://img.youtube.com/vi/" + videoID + "/maxresdefault.jpg"
 
 	metadata := models.YouTubeMetadata{
 		VideoID:      videoID,
-		Title:        oembed.Title,
-		ChannelName:  oembed.AuthorName,
-		ThumbnailURL: oembed.ThumbnailURL,
-		Duration:     duration,
+		Title:        content.Title,
+		ChannelName:  "YouTube Channel",
+		ThumbnailURL: thumbnailURL,
+		Duration:     0,
 	}
 	metaBytes, _ := json.Marshal(metadata)
 	content.MetadataJSON = metaBytes
-	content.Title = oembed.Title
-	if duration > 0 {
-		content.DurationSeconds = &duration
-	}
+	content.Title = metadata.Title
 
 	if err := h.contentRepo.Create(r.Context(), content); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to create content record", r))
