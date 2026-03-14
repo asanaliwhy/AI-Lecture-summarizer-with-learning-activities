@@ -3770,17 +3770,17 @@ export function SummaryPage() {
           ySmart += factRowHeight + 5
         })
 
-        // 10) Footer
-        ensurePageSpaceSmart(2)
-        setDrawHex(RULE)
-        doc.setLineWidth(0.5)
-        doc.line(margin, ySmart, margin + smartContentWidth, ySmart)
-        ySmart += 10
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8)
-        setTextHex(SLATE)
-        doc.text('Lectura · Page 1', smartPageWidth / 2, smartPageHeight - 20, { align: 'center' })
+        const smartTotalPages = doc.getNumberOfPages()
+        for (let i = 1; i <= smartTotalPages; i++) {
+          doc.setPage(i)
+          doc.setDrawColor(226, 232, 240)
+          doc.setLineWidth(0.5)
+          doc.line(margin, smartPageHeight - margin + 8, margin + smartContentWidth, smartPageHeight - margin + 8)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(8)
+          doc.setTextColor(148, 163, 184)
+          doc.text(`Lectura · Page ${i} of ${smartTotalPages}`, smartPageWidth / 2, smartPageHeight - margin + 18, { align: 'center' })
+        }
 
         doc.save(`${fileTitle}.pdf`)
         toast.success('PDF exported')
@@ -4101,11 +4101,17 @@ export function SummaryPage() {
         }
         y += summaryBodyHeight
 
-        // Cornell PDF SETTINGS: Footer typography + color
-        doc.setTextColor(120, 120, 120)
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        doc.text('Lectura · Page 1', pageWidth / 2, pageHeight - 20, { align: 'center' })
+        const cornellTotalPages = doc.getNumberOfPages()
+        for (let i = 1; i <= cornellTotalPages; i++) {
+          doc.setPage(i)
+          doc.setDrawColor(226, 232, 240)
+          doc.setLineWidth(0.5)
+          doc.line(margin, pageHeight - margin + 8, margin + contentWidth, pageHeight - margin + 8)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(8)
+          doc.setTextColor(148, 163, 184)
+          doc.text(`Lectura · Page ${i} of ${cornellTotalPages}`, pageWidth / 2, pageHeight - margin + 18, { align: 'center' })
+        }
 
         doc.save(`${fileTitle}.pdf`)
         toast.success('PDF exported')
@@ -4734,17 +4740,17 @@ export function SummaryPage() {
           })
         }
 
-        // 7) Thin rule + footer
-        ensurePageSpacePara(2)
-        setDrawHex(RULE)
-        doc.setLineWidth(0.5)
-        doc.line(margin, yPara, margin + paraContentWidth, yPara)
-        yPara += 10
-
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8)
-        setTextHex(SLATE)
-        doc.text('Lectura · Page 1', paraPageWidth / 2, paraPageHeight - 20, { align: 'center' })
+        const paraTotalPages = doc.getNumberOfPages()
+        for (let i = 1; i <= paraTotalPages; i++) {
+          doc.setPage(i)
+          doc.setDrawColor(226, 232, 240)
+          doc.setLineWidth(0.5)
+          doc.line(margin, paraPageHeight - margin + 8, margin + paraContentWidth, paraPageHeight - margin + 8)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(8)
+          doc.setTextColor(148, 163, 184)
+          doc.text(`Lectura · Page ${i} of ${paraTotalPages}`, paraPageWidth / 2, paraPageHeight - margin + 18, { align: 'center' })
+        }
 
         doc.save(`${fileTitle}.pdf`)
         toast.success('PDF exported')
