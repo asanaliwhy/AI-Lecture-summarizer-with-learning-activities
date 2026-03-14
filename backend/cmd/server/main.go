@@ -79,7 +79,7 @@ func main() {
 	// ──── Initialize Services ────
 	jwtAuth := middleware.NewJWTAuth(cfg.JWTSecret)
 	emailService := services.NewEmailService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom, cfg.FrontendURL)
-	youtubeService := services.NewYouTubeService()
+	youtubeService := services.NewYouTubeService(cfg.SupadataAPIKey)
 	fileExtractService := services.NewFileExtractService()
 	authService := services.NewAuthService(
 		userRepo,

@@ -1,14 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"os"
 
 	"lectura-backend/internal/services"
 )
 
 func main() {
-	yt := services.NewYouTubeService()
+	yt := services.NewYouTubeService(os.Getenv("SUPADATA_API_KEY"))
 
 	testIDs := []string{
 		"7D-gxaie6UI", // Crash Course
@@ -17,7 +19,7 @@ func main() {
 
 	for _, id := range testIDs {
 		fmt.Printf("\n=== Testing video: %s ===\n", id)
-		transcript, err := yt.GetTranscript(id)
+		transcript, err := yt.GetTranscript(context.Background(), id)
 		if err != nil {
 			fmt.Printf("ERROR: %v\n", err)
 		} else {

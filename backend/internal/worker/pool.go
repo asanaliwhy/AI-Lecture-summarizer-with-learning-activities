@@ -223,7 +223,7 @@ func (p *Pool) processSummary(ctx context.Context, job *models.Job) error {
 			},
 		})
 
-		transcript, transcriptErr := p.youtube.GetTranscript(videoID)
+		transcript, transcriptErr := p.youtube.GetTranscript(ctx, videoID)
 		if transcriptErr != nil {
 			// STT fallback for summary race path (when content-processing hasn't populated transcript)
 			audioBytes, mimeType, audioErr := p.youtube.DownloadAudio(*content.SourceURL)
@@ -404,7 +404,7 @@ func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
 			},
 		})
 
-		transcript, err := p.youtube.GetTranscript(videoID)
+		transcript, err := p.youtube.GetTranscript(ctx, videoID)
 		if err != nil {
 			log.Printf("Transcript extraction failed for %s: %v", videoID, err)
 

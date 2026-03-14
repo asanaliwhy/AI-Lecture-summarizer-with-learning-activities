@@ -26,6 +26,7 @@ type Config struct {
 
 	// Gemini AI
 	GeminiAPIKey         string
+	SupadataAPIKey       string
 	GeminiRequestsPerMin int
 	GeminiTokensPerMin   int
 	GeminiConcurrentReqs int
@@ -65,6 +66,7 @@ func Load() *Config {
 		RedisURL:             mustGetEnv("REDIS_URL"),
 		JWTSecret:            mustGetEnv("JWT_SECRET"),
 		GeminiAPIKey:         mustGetEnv("GEMINI_API_KEY"),
+		SupadataAPIKey:       os.Getenv("SUPADATA_API_KEY"),
 		GeminiRequestsPerMin: getEnvAsIntOrDefault("GEMINI_REQUESTS_PER_MINUTE", 60),
 		GeminiTokensPerMin:   getEnvAsIntOrDefault("GEMINI_TOKENS_PER_MINUTE", 1000000),
 		GeminiConcurrentReqs: getEnvAsIntOrDefault("GEMINI_CONCURRENT_REQUESTS", 5),
