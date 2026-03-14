@@ -44,8 +44,8 @@ export function Header({ onMenuToggle }: HeaderProps) {
   }
 
   return (
-    <header className="fixed left-0 md:left-60 top-0 z-30 flex h-16 w-full md:w-[calc(100%-15rem)] items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 sm:px-6 transition-all duration-300">
-      <div className="flex items-center gap-3 w-full max-w-xl">
+    <header className="fixed left-0 md:left-60 top-0 z-30 flex h-16 w-full md:w-[calc(100%-15rem)] items-center justify-between gap-3 overflow-hidden border-b bg-background/95 px-4 sm:px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60 transition-all duration-300">
+      <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
         {/* Mobile menu button */}
         <button
           className="md:hidden p-2 -ml-2 rounded-md hover:bg-secondary text-muted-foreground"
@@ -55,7 +55,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
         </button>
 
         {/* Breadcrumb */}
-        <div className="hidden md:flex items-center text-sm text-muted-foreground mr-4 shrink-0">
+        <div className="hidden min-w-0 lg:flex items-center text-sm text-muted-foreground mr-2 xl:mr-4">
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
@@ -64,17 +64,17 @@ export function Header({ onMenuToggle }: HeaderProps) {
             Lectura
           </button>
           <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground/50" />
-          <span className="font-medium text-foreground animate-in fade-in slide-in-from-left-2 duration-300 whitespace-nowrap">
+          <span className="truncate font-medium text-foreground animate-in fade-in slide-in-from-left-2 duration-300">
             {getPageTitle(location.pathname)}
           </span>
         </div>
 
         {/* Mobile title */}
-        <span className="md:hidden font-semibold text-sm">{getPageTitle(location.pathname)}</span>
+        <span className="truncate lg:hidden font-semibold text-sm">{getPageTitle(location.pathname)}</span>
 
         <form
           onSubmit={handleSearchSubmit}
-          className={`relative w-full transition-all duration-300 hidden sm:block ${isSearchFocused ? 'max-w-md scale-105' : 'max-w-sm'}`}
+          className={`relative hidden xl:block w-full max-w-xs 2xl:max-w-sm transition-all duration-300 ${isSearchFocused ? 'xl:max-w-md' : ''}`}
         >
           <Search className={`absolute left-2.5 top-2.5 h-4 w-4 transition-colors ${isSearchFocused ? 'text-primary' : 'text-muted-foreground'}`} />
           <Input
@@ -89,9 +89,9 @@ export function Header({ onMenuToggle }: HeaderProps) {
         </form>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-4">
+      <div className="ml-2 flex shrink-0 items-center gap-2 sm:gap-4">
         <div className="hidden sm:flex items-center gap-3 pl-1 group cursor-pointer p-1 rounded-full hover:bg-secondary/50 transition-colors">
-          <div className="hidden md:flex flex-col items-end">
+          <div className="hidden 2xl:flex flex-col items-end">
             <span className="text-sm font-medium leading-none group-hover:text-primary transition-colors">
               {user?.full_name || 'User'}
             </span>
