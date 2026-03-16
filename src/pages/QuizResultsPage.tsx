@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { AppLayout } from '../components/layout/AppLayout'
+import { SummaryChatPanel } from '../components/SummaryChatPanel'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -17,6 +19,7 @@ import {
   ChevronUp,
   ArrowRight,
   Loader2,
+  MessageCircle,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
@@ -85,6 +88,8 @@ type QuizAttemptMeta = {
   duration?: number | string | null
   quiz_id?: string | null
   summary_id?: string | null
+  content_id?: string | null
+  contentId?: string | null
   quiz_title?: string
   answers?: unknown
   answers_json?: unknown
@@ -93,6 +98,8 @@ type QuizAttemptMeta = {
 type QuizMeta = {
   id?: string
   title?: string
+  content_id?: string | null
+  contentId?: string | null
   created_at?: string
   timeTaken?: number | string | null
   duration?: number | string | null
@@ -123,10 +130,31 @@ type QuizAttemptResponse = {
   duration?: number | string | null
   quiz_id?: string | null
   summary_id?: string | null
+  content_id?: string | null
+  contentId?: string | null
   quiz_title?: string
   title?: string
   question_count?: number | string
   last_score?: number | string | null
+}
+
+function buildQuizChatMessage(
+  question: QuizReviewQuestion,
+  userAnswer: string,
+  correctAnswer: string,
+  isCorrect: boolean,
+): string {
+  return `I just completed a quiz and ${isCorrect ? 'answered this question correctly but want to understand it deeper' : 'got this question wrong'}.
+
+**Question:** ${question.question || question.text || 'Question'}
+
+**My answer:** ${userAnswer}
+
+**Correct answer:** ${correctAnswer}
+
+**Explanation:** ${question.explanation ?? 'No explanation provided.'}
+
+Can you help me understand this concept better and explain why ${isCorrect ? 'this is the correct answer' : 'my answer was incorrect'}?`
 }
 
 export async function exportQuizResultsPdf(params: {
@@ -602,6 +630,7 @@ export function QuizResultsPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [expandedQuestion, setExpandedQuestion] = useState<string | number | null>(null)
+  const [chatPrefillMessage, setChatPrefillMessage] = useState('')
   const loadRequestIdRef = useRef(0)
 
   const safeParseJSON = (value: unknown): unknown => {
@@ -707,6 +736,130 @@ export function QuizResultsPage() {
     })
   }
 
+  const score = toNumber(attemptMeta?.score_percent ?? attemptMeta?.score ?? quizMeta?.last_score) ?? 0
+  const totalQuestions = toNumber(quizMeta?.question_count) ?? reviewQuestions.length ?? 0
+  const correctCount = toNumber(attemptMeta?.correct_count) ?? Math.round((score / 100) * totalQuestions)
+  const incorrectCount = Math.max(0, totalQuestions - correctCount)
+  const timeTaken = attemptMeta?.time_taken_seconds ?? attemptMeta?.time_taken ?? attemptMeta?.duration ?? ''
+  const quizTitle = quizMeta?.title ?? attemptMeta?.quiz_title ?? 'Quiz'
+  const quizId = attemptMeta?.quiz_id ?? quizMeta?.id ?? null
+  const summaryId = quizMeta?.summary_id ?? attemptMeta?.summary_id ?? null
+  const quizContentId = quizMeta?.content_id ?? quizMeta?.contentId ?? attemptMeta?.content_id ?? attemptMeta?.contentId ?? null
+  const isPass = score >= 70
+
+  const { data: sourceSummaryId, isLoading: isSourceSummaryLoading } = useQuery<string | null>({
+    queryKey: ['quiz-source-summary', summaryId, quizContentId],
+    queryFn: async (): Promise<string | null> => {
+      if (summaryId) {
+        const summary = await api.summaries.get(summaryId)
+        return summary?.id ?? null
+      }
+
+      if (!quizContentId) return null
+
+      const response = await api.summaries.list({ limit: '100' })
+      const summaries = response?.summaries ?? []
+      const linkedSummary = summaries.find((summary) => (
+        summary.content_id === quizContentId || summary.config?.content_id === quizContentId
+      ))
+
+      return linkedSummary?.id ?? null
+    },
+    enabled: Boolean(summaryId || quizContentId),
+  })
+
+  const getQuestionReviewData = (questionItem: QuizReviewQuestion, index: number) => {
+    const q = questionItem
+    const qId = q.id || index
+    const options = Array.isArray(q.options)
+      ? q.options
+      : Array.isArray(q.answers)
+        ? q.answers
+        : []
+
+    const selectedIdx = toNumber(
+      q.user_answer_index ??
+      q.answer_index ??
+      q.selected_index ??
+      q.user_answer ??
+      answerMap.get(index),
+    )
+
+    const correctIdx = toNumber(q.correct_index ?? q.correctIndex)
+
+    const selectedLabel =
+      selectedIdx !== null && options[selectedIdx] !== undefined
+        ? options[selectedIdx]
+        : null
+
+    const correctLabel =
+      correctIdx !== null && options[correctIdx] !== undefined
+        ? options[correctIdx]
+        : q.correct_answer ?? q.correctAnswer
+
+    const fallbackUserAnswer =
+      (typeof q.user_answer === 'string' && q.user_answer) ||
+      (typeof q.userAnswer === 'string' && q.userAnswer) ||
+      ''
+
+    const fallbackCorrectAnswer =
+      (typeof q.correct_answer === 'string' && q.correct_answer) ||
+      (typeof q.correctAnswer === 'string' && q.correctAnswer) ||
+      ''
+
+    const userAnswerText = selectedLabel || fallbackUserAnswer || 'No answer'
+    const correctAnswerText = correctLabel || fallbackCorrectAnswer || 'N/A'
+
+    const explicitIsCorrect =
+      typeof q.is_correct === 'boolean'
+        ? q.is_correct
+        : typeof q.isCorrect === 'boolean'
+          ? q.isCorrect
+          : null
+
+    const isCorrect =
+      explicitIsCorrect ??
+      (selectedIdx !== null && correctIdx !== null
+        ? selectedIdx === correctIdx
+        : userAnswerText !== 'No answer' && correctAnswerText !== 'N/A' && userAnswerText === correctAnswerText)
+
+    return {
+      qId,
+      userAnswerText,
+      correctAnswerText,
+      isCorrect,
+    }
+  }
+
+  const getActiveDiscussTarget = () => {
+    if (questions.length === 0) return null
+
+    if (expandedQuestion !== null) {
+      const expandedIndex = questions.findIndex((questionItem, index) => {
+        const q = questionItem as QuizReviewQuestion
+        return (q.id || index) === expandedQuestion
+      })
+
+      if (expandedIndex >= 0) {
+        return {
+          question: questions[expandedIndex] as QuizReviewQuestion,
+          index: expandedIndex,
+        }
+      }
+    }
+
+    const firstIncorrectIndex = questions.findIndex((questionItem, index) => {
+      return !getQuestionReviewData(questionItem as QuizReviewQuestion, index).isCorrect
+    })
+
+    const targetIndex = firstIncorrectIndex >= 0 ? firstIncorrectIndex : 0
+
+    return {
+      question: questions[targetIndex] as QuizReviewQuestion,
+      index: targetIndex,
+    }
+  }
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -746,16 +899,6 @@ export function QuizResultsPage() {
       </AppLayout>
     )
   }
-
-  const score = toNumber(attemptMeta?.score_percent ?? attemptMeta?.score ?? quizMeta?.last_score) ?? 0
-  const totalQuestions = toNumber(quizMeta?.question_count) ?? reviewQuestions.length ?? 0
-  const correctCount = toNumber(attemptMeta?.correct_count) ?? Math.round((score / 100) * totalQuestions)
-  const incorrectCount = Math.max(0, totalQuestions - correctCount)
-  const timeTaken = attemptMeta?.time_taken_seconds ?? attemptMeta?.time_taken ?? attemptMeta?.duration ?? ''
-  const quizTitle = quizMeta?.title ?? attemptMeta?.quiz_title ?? 'Quiz'
-  const quizId = attemptMeta?.quiz_id ?? quizMeta?.id ?? null
-  const summaryId = quizMeta?.summary_id ?? attemptMeta?.summary_id ?? null
-  const isPass = score >= 70
 
   // Questions with answers for detailed review
   const questions = reviewQuestions
@@ -1199,6 +1342,38 @@ export function QuizResultsPage() {
     }
   }
 
+  const handleDiscussInChat = (question: QuizReviewQuestion, answer: QuizAnswer) => {
+    if (!sourceSummaryId) {
+      return
+    }
+
+    const message = buildQuizChatMessage(
+      question,
+      answer.userAnswer,
+      answer.correctAnswer,
+      answer.isCorrect,
+    )
+
+    setChatPrefillMessage(message)
+  }
+
+  const handleOpenFloatingDiscuss = () => {
+    const target = getActiveDiscussTarget()
+    if (!target) {
+      return
+    }
+
+    const { question, index } = target
+    const reviewData = getQuestionReviewData(question, index)
+
+    handleDiscussInChat(question, {
+      questionId: String(reviewData.qId),
+      userAnswer: reviewData.userAnswerText,
+      correctAnswer: reviewData.correctAnswerText,
+      isCorrect: reviewData.isCorrect,
+    })
+  }
+
   return (
     <AppLayout>
       <div className="max-w-5xl mx-auto py-8">
@@ -1285,57 +1460,7 @@ export function QuizResultsPage() {
             <div className="space-y-4">
               {questions.map((questionItem, index: number) => {
                 const q = questionItem as QuizReviewQuestion
-                const qId = q.id || index
-                const options = Array.isArray(q.options)
-                  ? q.options
-                  : Array.isArray(q.answers)
-                    ? q.answers
-                    : []
-
-                const selectedIdx = toNumber(
-                  q.user_answer_index ??
-                  q.answer_index ??
-                  q.selected_index ??
-                  q.user_answer ??
-                  answerMap.get(index),
-                )
-
-                const correctIdx = toNumber(q.correct_index ?? q.correctIndex)
-
-                const selectedLabel =
-                  selectedIdx !== null && options[selectedIdx] !== undefined
-                    ? options[selectedIdx]
-                    : null
-                const correctLabel =
-                  correctIdx !== null && options[correctIdx] !== undefined
-                    ? options[correctIdx]
-                    : q.correct_answer ?? q.correctAnswer
-
-                const fallbackUserAnswer =
-                  (typeof q.user_answer === 'string' && q.user_answer) ||
-                  (typeof q.userAnswer === 'string' && q.userAnswer) ||
-                  ''
-
-                const fallbackCorrectAnswer =
-                  (typeof q.correct_answer === 'string' && q.correct_answer) ||
-                  (typeof q.correctAnswer === 'string' && q.correctAnswer) ||
-                  ''
-
-                const userAnswerText = selectedLabel || fallbackUserAnswer || 'No answer'
-                const correctAnswerText = correctLabel || fallbackCorrectAnswer || 'N/A'
-
-                const explicitIsCorrect =
-                  typeof q.is_correct === 'boolean'
-                    ? q.is_correct
-                    : typeof q.isCorrect === 'boolean'
-                      ? q.isCorrect
-                      : null
-
-                const isCorrect =
-                  explicitIsCorrect ??
-                  (selectedIdx !== null && correctIdx !== null
-                    ? selectedIdx === correctIdx
-                    : userAnswerText !== 'No answer' && correctAnswerText !== 'N/A' && userAnswerText === correctAnswerText)
+                const { qId, userAnswerText, correctAnswerText, isCorrect } = getQuestionReviewData(q, index)
 
                 const toggleQuestion = () => {
                   setExpandedQuestion(expandedQuestion === qId ? null : qId)
@@ -1419,6 +1544,26 @@ export function QuizResultsPage() {
                             </div>
                           </div>
                         )}
+                        {isSourceSummaryLoading && !sourceSummaryId ? (
+                          <button disabled className="mt-3 text-sm text-gray-400 px-3 py-1.5 rounded-md border border-gray-200">
+                            Loading chat...
+                          </button>
+                        ) : (
+                          <button
+                            title={!sourceSummaryId ? 'Source summary not available' : 'Discuss this question in the AI chat'}
+                            disabled={!sourceSummaryId}
+                            onClick={() => handleDiscussInChat(q, {
+                              questionId: String(q.id ?? q.questionNumber ?? index),
+                              userAnswer: userAnswerText,
+                              correctAnswer: correctAnswerText,
+                              isCorrect,
+                            })}
+                            className="mt-3 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-md border border-blue-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
+                            Discuss in Chat
+                          </button>
+                        )}
                       </div>
                     )}
                   </Card>
@@ -1452,6 +1597,25 @@ export function QuizResultsPage() {
           </div>
         )}
       </div>
+      {sourceSummaryId && (
+        <SummaryChatPanel
+          summaryId={sourceSummaryId}
+          summaryTitle={quizTitle}
+          prefillMessage={chatPrefillMessage}
+          onPrefillConsumed={() => setChatPrefillMessage('')}
+          hideLauncher
+        />
+      )}
+      <button
+        type="button"
+        title={!sourceSummaryId ? 'Source summary not available' : 'Discuss the current quiz/question in chat'}
+        disabled={!sourceSummaryId || questions.length === 0}
+        onClick={handleOpenFloatingDiscuss}
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-white shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <MessageCircle className="h-5 w-5" />
+        <span className="text-sm font-medium">Discuss in Chat</span>
+      </button>
     </AppLayout>
   )
 }

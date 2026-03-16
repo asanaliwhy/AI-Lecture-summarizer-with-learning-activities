@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { api, type SummaryDetailResponse, type SummarySectionResponse } from '../lib/api'
@@ -2855,6 +2855,7 @@ return
 
 export function SummaryPage() {
   const { id } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const toast = useToast()
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -2864,6 +2865,7 @@ export function SummaryPage() {
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [chatPrefillMessage, setChatPrefillMessage] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isNotFound, setIsNotFound] = useState(false)
   const loadRequestIdRef = useRef(0)
@@ -2916,6 +2918,18 @@ export function SummaryPage() {
       loadRequestIdRef.current += 1
     }
   }, [loadSummary])
+
+  useEffect(() => {
+    const state = location.state as {
+      openChat?: boolean
+      prefillMessage?: string
+    } | null
+
+    if (state?.openChat && state.prefillMessage) {
+      setChatPrefillMessage(state.prefillMessage)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [location.state, location.pathname])
 
   useStudySession({
     activityType: 'summary',
@@ -5232,7 +5246,14 @@ export function SummaryPage() {
         </div>,
         document.body,
       )}
-      {id && <SummaryChatPanel summaryId={id} summaryTitle={title} />}
+      {id && (
+        <SummaryChatPanel
+          summaryId={id}
+          summaryTitle={title}
+          prefillMessage={chatPrefillMessage}
+          onPrefillConsumed={() => setChatPrefillMessage('')}
+        />
+      )}
     </AppLayout>
   )
 }

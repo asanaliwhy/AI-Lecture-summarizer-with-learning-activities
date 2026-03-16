@@ -13,9 +13,20 @@ interface ChatMessage {
 interface SummaryChatPanelProps {
     summaryId: string
     summaryTitle: string
+    prefillMessage?: string
+    onPrefillConsumed?: () => void
+    hideLauncher?: boolean
+    launcherLabel?: string
 }
 
-export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelProps) {
+export function SummaryChatPanel({
+    summaryId,
+    summaryTitle,
+    prefillMessage,
+    onPrefillConsumed,
+    hideLauncher = false,
+    launcherLabel = 'Ask AI',
+}: SummaryChatPanelProps) {
     const [isOpen, setIsOpen] = useState(false)
     const [messages, setMessages] = useState<ChatMessage[]>([])
     const [input, setInput] = useState('')
@@ -37,6 +48,17 @@ export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelPr
             inputRef.current.focus()
         }
     }, [isOpen])
+
+    useEffect(() => {
+        if (!prefillMessage) return
+
+        setIsOpen(true)
+        setInput(prefillMessage)
+        requestAnimationFrame(() => {
+            inputRef.current?.focus()
+        })
+        onPrefillConsumed?.()
+    }, [prefillMessage, onPrefillConsumed])
 
     const { data: history = [], isLoading: isHistoryLoading } = useQuery({
         queryKey: ['chat-history', summaryId],
@@ -141,14 +163,14 @@ export function SummaryChatPanel({ summaryId, summaryTitle }: SummaryChatPanelPr
     return (
         <>
             {/* Floating Chat Button */}
-            {!isOpen && (
+            {!hideLauncher && !isOpen && (
                 <button
                     onClick={() => setIsOpen(true)}
                     className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group"
                     style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}
                 >
                     <MessageCircle className="h-5 w-5" />
-                    <span className="text-sm font-medium">Ask AI</span>
+                    <span className="text-sm font-medium">{launcherLabel}</span>
                     {messages.length > 0 && (
                         <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
                             {messages.filter((m) => m.role === 'user').length}

@@ -26,6 +26,7 @@ type QuizQuestion = {
   answers?: string[]
   hint?: string
   type?: string
+  originalIndex?: number
 }
 
 type QuizConfig = {
@@ -87,7 +88,12 @@ function applyQuizOptions(quizData: QuizData): {
     enable_hints: typeof config.enable_hints === 'boolean' ? config.enable_hints : true,
   }
 
-  const questions = Array.isArray(quizData.questions) ? quizData.questions : []
+  const questions = Array.isArray(quizData.questions)
+    ? quizData.questions.map((question, index) => ({
+      ...question,
+      originalIndex: typeof question.originalIndex === 'number' ? question.originalIndex : index,
+    }))
+    : []
   const quizWithOptions: QuizData = {
     ...quizData,
     questions: options.shuffle_questions ? shuffleItems(questions) : questions,
@@ -196,7 +202,7 @@ export function QuizTakePage() {
 
   const handleSelectAnswer = (index: number) => {
     setSelectedAnswer(index)
-    saveAnswer(currentQuestion, index)
+    saveAnswer(currentQ?.originalIndex ?? currentQuestion, index)
   }
 
   const handleNext = async () => {
