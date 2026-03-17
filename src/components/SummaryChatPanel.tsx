@@ -15,6 +15,7 @@ interface SummaryChatPanelProps {
     summaryTitle: string
     prefillMessage?: string
     onPrefillConsumed?: () => void
+    autoSend?: boolean
     hideLauncher?: boolean
     launcherLabel?: string
 }
@@ -24,6 +25,7 @@ export function SummaryChatPanel({
     summaryTitle,
     prefillMessage,
     onPrefillConsumed,
+    autoSend = false,
     hideLauncher = false,
     launcherLabel = 'Ask AI',
 }: SummaryChatPanelProps) {
@@ -48,17 +50,6 @@ export function SummaryChatPanel({
             inputRef.current.focus()
         }
     }, [isOpen])
-
-    useEffect(() => {
-        if (!prefillMessage) return
-
-        setIsOpen(true)
-        setInput(prefillMessage)
-        requestAnimationFrame(() => {
-            inputRef.current?.focus()
-        })
-        onPrefillConsumed?.()
-    }, [prefillMessage, onPrefillConsumed])
 
     const { data: history = [], isLoading: isHistoryLoading } = useQuery({
         queryKey: ['chat-history', summaryId],
@@ -87,8 +78,8 @@ export function SummaryChatPanel({
         messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
     }, [isOpen, isHistoryLoading, messages.length])
 
-    const handleSend = async () => {
-        const trimmed = input.trim()
+    const handleSend = useCallback(async (messageOverride?: string) => {
+        const trimmed = (messageOverride ?? input).trim()
         if (!trimmed || isLoading) return
 
         const userMessage: ChatMessage = { role: 'user', content: trimmed }
@@ -129,7 +120,28 @@ export function SummaryChatPanel({
         } finally {
             setIsLoading(false)
         }
-    }
+    }, [input, isLoading, messages, queryClient, summaryId])
+
+    useEffect(() => {
+        if (!prefillMessage) return
+
+        setIsOpen(true)
+        setInput(prefillMessage)
+
+        if (autoSend) {
+            const timer = window.setTimeout(() => {
+                void handleSend(prefillMessage)
+                onPrefillConsumed?.()
+            }, 300)
+
+            return () => window.clearTimeout(timer)
+        }
+
+        requestAnimationFrame(() => {
+            inputRef.current?.focus()
+        })
+        onPrefillConsumed?.()
+    }, [autoSend, handleSend, onPrefillConsumed, prefillMessage])
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -316,7 +328,7 @@ export function SummaryChatPanel({
                                     className="flex-1 bg-muted/50 border border-border rounded-xl px-3.5 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50 disabled:opacity-50 transition-all"
                                 />
                                 <button
-                                    onClick={handleSend}
+                                    onClick={() => { void handleSend() }}
                                     disabled={!input.trim() || isLoading || isHistoryLoading}
                                     className="flex items-center justify-center h-9 w-9 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                                 >

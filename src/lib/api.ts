@@ -277,6 +277,7 @@ export interface SummaryDetailResponse extends SummaryListItemResponse {
     duration?: string
     is_quality_fallback?: boolean
     quality_fallback_reason?: string
+    follow_up_questions?: string[]
 }
 
 export interface ChatHistoryMessageResponse {

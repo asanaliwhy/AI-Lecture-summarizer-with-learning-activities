@@ -335,6 +335,75 @@ Summary:
 		description *string
 	}
 
+	followUpCh := make(chan []string, 1)
+	go func(excerpt string) {
+		questions := []string{}
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Printf("follow-up questions panic for summary %s: %v", job.ReferenceID, recovered)
+			}
+			select {
+			case followUpCh <- questions:
+			default:
+			}
+		}()
+
+		followUpCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		defer cancel()
+
+		followUpPrompt := fmt.Sprintf(`Read the following summary and generate exactly 4 follow-up questions that a curious student would ask to understand the topic more deeply.
+
+Rules:
+- Each question must be specific to the content, not generic
+- Questions should spark curiosity and go beyond surface facts
+- Each question should have a different angle: cause, implication, comparison, application
+- Keep each question under 15 words
+- Return ONLY a valid JSON array of 4 strings, no preamble, no markdown, no backticks
+
+Example format:
+["Why does X cause Y?", "How does A differ from B?", "What happens if C is removed?", "How is D applied in real life?"]
+
+Summary:
+%s`, excerpt)
+
+		resp, err := s.model.GenerateContent(followUpCtx, genai.Text(followUpPrompt))
+		if err != nil {
+			log.Printf("follow-up questions generation failed for summary %s: %v", job.ReferenceID, err)
+			return
+		}
+
+		raw := extractText(resp)
+		raw = strings.TrimPrefix(raw, "```json")
+		raw = strings.TrimPrefix(raw, "```")
+		raw = strings.TrimSuffix(raw, "```")
+		raw = strings.TrimSpace(raw)
+
+		start := strings.Index(raw, "[")
+		end := strings.LastIndex(raw, "]")
+		if start >= 0 && end > start {
+			raw = raw[start : end+1]
+		}
+
+		var parsed []string
+		if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+			log.Printf("follow-up questions JSON parse failed for summary %s: %v", job.ReferenceID, err)
+			return
+		}
+
+		valid := make([]string, 0, 4)
+		for _, q := range parsed {
+			q = strings.TrimSpace(q)
+			if q != "" {
+				valid = append(valid, q)
+			}
+			if len(valid) == 4 {
+				break
+			}
+		}
+
+		questions = valid
+	}(rawText[:min(len(rawText), 4000)])
+
 	metaCh := make(chan metaResult, 1)
 	go func(summaryExcerpt string) {
 		result := metaResult{
@@ -402,10 +471,16 @@ Summary:
 	wordCount := len(strings.Fields(rawText))
 
 	metaData := metaResult{title: "Untitled Summary", tags: []string{}, description: nil}
+	followUpQuestions := []string{}
 	select {
 	case metaData = <-metaCh:
 	case <-time.After(10 * time.Minute):
 		log.Printf("metadata generation timeout for summary %s — using defaults", job.ReferenceID)
+	}
+	select {
+	case followUpQuestions = <-followUpCh:
+	case <-time.After(90 * time.Second):
+		log.Printf("follow-up questions timeout for summary %s", job.ReferenceID)
 	}
 	title := metaData.title
 	tags := metaData.tags
@@ -419,6 +494,7 @@ Summary:
 		cues,
 		notes,
 		summaryText,
+		followUpQuestions,
 		tags,
 		description,
 		wordCount,
@@ -427,6 +503,12 @@ Summary:
 	)
 	if err != nil {
 		return err
+	}
+
+	if len(followUpQuestions) > 0 {
+		if err := s.summaryRepo.UpdateFollowUpQuestions(ctx, job.ReferenceID, followUpQuestions); err != nil {
+			log.Printf("failed to save follow-up questions for summary %s: %v", job.ReferenceID, err)
+		}
 	}
 
 	// Update title
@@ -2456,16 +2538,17 @@ func (s *GeminiService) ChatWithSummary(ctx context.Context, summaryContent, use
 
 	chatModel.SystemInstruction = &genai.Content{
 		Parts: []genai.Part{
-			genai.Text(fmt.Sprintf(`You are a friendly study tutor helping a student understand their notes. Answer questions using ONLY the summary content provided below.
+ 			genai.Text(fmt.Sprintf(`You are an expert tutor helping a student explore a topic in depth. The student has been studying the following summary and wants to understand it better.
 
-STRICT RULES:
-1. Respond in plain conversational text only. No markdown formatting whatsoever.
-2. Never use bullet points, dashes, asterisks, numbered lists, or any list formatting.
-3. Never use headers, bold, italic, or code formatting.
-4. Keep answers concise — 2 to 4 sentences maximum.
-5. Write naturally, as if you are explaining something to a friend.
-6. If the answer is not in the summary, say something like "That's not covered in this summary, but feel free to ask about something else!"
-7. Combine related points into flowing sentences instead of listing them.
+Your role:
+- Use the summary as your primary foundation and reference point
+- For analytical, comparative, or application questions that go beyond the summary, draw on your broader knowledge to give a thoughtful answer
+- Always connect your answer back to concepts mentioned in the summary when relevant
+- Be intellectually engaging — encourage deeper thinking
+- Keep answers concise — 3 to 5 sentences maximum
+- Respond in plain conversational text only. No markdown formatting, no bullet points, no headers, no bold text
+- Write naturally as if explaining to a curious student
+- If a question is completely unrelated to the summary topic, gently redirect back to the subject
 
 SUMMARY CONTENT:
 %s`, contextText)),

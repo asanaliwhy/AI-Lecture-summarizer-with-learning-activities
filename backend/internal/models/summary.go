@@ -20,6 +20,7 @@ type Summary struct {
 	CornellCues           *string         `json:"cornell_cues"`
 	CornellNotes          *string         `json:"cornell_notes"`
 	CornellSummary        *string         `json:"cornell_summary"`
+	FollowUpQuestions     []string        `json:"follow_up_questions" db:"follow_up_questions"`
 	Tags                  []string        `json:"tags"`
 	Description           *string         `json:"description"`
 	WordCount             int             `json:"word_count"`

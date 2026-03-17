@@ -38,19 +38,25 @@ func (r *SummaryRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Summar
 	s := &models.Summary{}
 	query := `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
 		s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
-		s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
+		COALESCE(s.follow_up_questions, '[]'::jsonb), s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
 		FROM summaries s
 		LEFT JOIN content c ON c.id = s.content_id
 		WHERE s.id = $1`
+	var followUpQuestionsRaw []byte
 
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&s.ID, &s.UserID, &s.ContentID, &s.Source, &s.Title, &s.Format, &s.LengthSetting, &s.ConfigJSON,
 		&s.ContentRaw, &s.CornellCues, &s.CornellNotes, &s.CornellSummary,
-		&s.Tags, &s.Description, &s.WordCount, &s.IsFavorite, &s.IsArchived, &s.IsQualityFallback, &s.QualityFallbackReason,
+		&followUpQuestionsRaw, &s.Tags, &s.Description, &s.WordCount, &s.IsFavorite, &s.IsArchived, &s.IsQualityFallback, &s.QualityFallbackReason,
 		&s.CreatedAt, &s.LastAccessedAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+	if len(followUpQuestionsRaw) == 0 {
+		s.FollowUpQuestions = []string{}
+	} else if err := json.Unmarshal(followUpQuestionsRaw, &s.FollowUpQuestions); err != nil || s.FollowUpQuestions == nil {
+		s.FollowUpQuestions = []string{}
 	}
 
 	// Update last_accessed_at
@@ -78,7 +84,7 @@ func (r *SummaryRepo) ListByUser(ctx context.Context, userID uuid.UUID, search, 
 	case "title":
 		query = `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
 			s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
-			s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
+			COALESCE(s.follow_up_questions, '[]'::jsonb), s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
 			FROM summaries s
 			LEFT JOIN content c ON c.id = s.content_id
 			WHERE s.user_id = $1
@@ -89,7 +95,7 @@ func (r *SummaryRepo) ListByUser(ctx context.Context, userID uuid.UUID, search, 
 	case "oldest":
 		query = `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
 			s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
-			s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
+			COALESCE(s.follow_up_questions, '[]'::jsonb), s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
 			FROM summaries s
 			LEFT JOIN content c ON c.id = s.content_id
 			WHERE s.user_id = $1
@@ -100,7 +106,7 @@ func (r *SummaryRepo) ListByUser(ctx context.Context, userID uuid.UUID, search, 
 	case "recent":
 		query = `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
 			s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
-			s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
+			COALESCE(s.follow_up_questions, '[]'::jsonb), s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
 			FROM summaries s
 			LEFT JOIN content c ON c.id = s.content_id
 			WHERE s.user_id = $1
@@ -111,7 +117,7 @@ func (r *SummaryRepo) ListByUser(ctx context.Context, userID uuid.UUID, search, 
 	default:
 		query = `SELECT s.id, s.user_id, s.content_id, COALESCE(c.type, '') AS source, s.title, s.format, s.length_setting, s.config_json,
 			s.content_raw, s.cornell_cues, s.cornell_notes, s.cornell_summary,
-			s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
+			COALESCE(s.follow_up_questions, '[]'::jsonb), s.tags, s.description, s.word_count, s.is_favorite, s.is_archived, s.is_quality_fallback, s.quality_fallback_reason, s.created_at, s.last_accessed_at
 			FROM summaries s
 			LEFT JOIN content c ON c.id = s.content_id
 			WHERE s.user_id = $1
@@ -130,14 +136,20 @@ func (r *SummaryRepo) ListByUser(ctx context.Context, userID uuid.UUID, search, 
 	var summaries []*models.Summary
 	for rows.Next() {
 		s := &models.Summary{}
+		var followUpQuestionsRaw []byte
 		err := rows.Scan(
 			&s.ID, &s.UserID, &s.ContentID, &s.Source, &s.Title, &s.Format, &s.LengthSetting, &s.ConfigJSON,
 			&s.ContentRaw, &s.CornellCues, &s.CornellNotes, &s.CornellSummary,
-			&s.Tags, &s.Description, &s.WordCount, &s.IsFavorite, &s.IsArchived, &s.IsQualityFallback, &s.QualityFallbackReason,
+			&followUpQuestionsRaw, &s.Tags, &s.Description, &s.WordCount, &s.IsFavorite, &s.IsArchived, &s.IsQualityFallback, &s.QualityFallbackReason,
 			&s.CreatedAt, &s.LastAccessedAt,
 		)
 		if err != nil {
 			return nil, 0, err
+		}
+		if len(followUpQuestionsRaw) == 0 {
+			s.FollowUpQuestions = []string{}
+		} else if err := json.Unmarshal(followUpQuestionsRaw, &s.FollowUpQuestions); err != nil || s.FollowUpQuestions == nil {
+			s.FollowUpQuestions = []string{}
 		}
 		summaries = append(summaries, s)
 	}
@@ -166,16 +178,33 @@ func (r *SummaryRepo) UpdateContent(
 	id uuid.UUID,
 	raw string,
 	cues, notes, summary *string,
+	followUpQuestions []string,
 	tags []string,
 	desc *string,
 	wordCount int,
 	isQualityFallback bool,
 	qualityFallbackReason *string,
 ) error {
-	_, err := r.pool.Exec(ctx,
+	followUpQuestionsJSON, err := json.Marshal(followUpQuestions)
+	if err != nil {
+		return err
+	}
+	_, err = r.pool.Exec(ctx,
 		`UPDATE summaries SET content_raw = $1, cornell_cues = $2, cornell_notes = $3, cornell_summary = $4,
-		 tags = $5, description = $6, word_count = $7, is_quality_fallback = $8, quality_fallback_reason = $9 WHERE id = $10`,
-		raw, cues, notes, summary, tags, desc, wordCount, isQualityFallback, qualityFallbackReason, id,
+		 follow_up_questions = $5, tags = $6, description = $7, word_count = $8, is_quality_fallback = $9, quality_fallback_reason = $10 WHERE id = $11`,
+		raw, cues, notes, summary, followUpQuestionsJSON, tags, desc, wordCount, isQualityFallback, qualityFallbackReason, id,
+	)
+	return err
+}
+
+func (r *SummaryRepo) UpdateFollowUpQuestions(ctx context.Context, summaryID uuid.UUID, questions []string) error {
+	data, err := json.Marshal(questions)
+	if err != nil {
+		return err
+	}
+	_, err = r.pool.Exec(ctx,
+		`UPDATE summaries SET follow_up_questions = $1 WHERE id = $2`,
+		data, summaryID,
 	)
 	return err
 }

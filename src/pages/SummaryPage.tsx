@@ -7,6 +7,7 @@ import { api, type SummaryDetailResponse, type SummarySectionResponse } from '..
 import { ApiError } from '../lib/api'
 import { useStudySession } from '../lib/useStudySession'
 import { SummaryChatPanel } from '../components/SummaryChatPanel'
+import { FollowUpQuestions } from '../components/FollowUpQuestions'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -2866,6 +2867,7 @@ export function SummaryPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [chatPrefillMessage, setChatPrefillMessage] = useState('')
+  const [chatAutoSend, setChatAutoSend] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isNotFound, setIsNotFound] = useState(false)
   const loadRequestIdRef = useRef(0)
@@ -3028,6 +3030,11 @@ export function SummaryPage() {
     } catch {
       toast.error('Failed to copy text')
     }
+  }
+
+  function handleFollowUpClick(question: string) {
+    setChatPrefillMessage(question)
+    setChatAutoSend(true)
   }
 
   const sanitizeFileName = (value: string) => {
@@ -5142,6 +5149,10 @@ export function SummaryPage() {
                 )}
               </CardContent>
             </Card>
+            <FollowUpQuestions
+              questions={summary?.follow_up_questions ?? []}
+              onQuestionClick={handleFollowUpClick}
+            />
           </div>
 
           {/* Right Sidebar - Actions (20%) */}
@@ -5251,7 +5262,11 @@ export function SummaryPage() {
           summaryId={id}
           summaryTitle={title}
           prefillMessage={chatPrefillMessage}
-          onPrefillConsumed={() => setChatPrefillMessage('')}
+          onPrefillConsumed={() => {
+            setChatPrefillMessage('')
+            setChatAutoSend(false)
+          }}
+          autoSend={chatAutoSend}
         />
       )}
     </AppLayout>

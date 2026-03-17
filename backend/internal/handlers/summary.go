@@ -128,6 +128,11 @@ func (h *SummaryHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to fetch summaries", r))
 		return
 	}
+	for _, summary := range summaries {
+		if summary.FollowUpQuestions == nil {
+			summary.FollowUpQuestions = []string{}
+		}
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"summaries": summaries,
@@ -154,6 +159,9 @@ func (h *SummaryHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if summary.UserID != userID {
 		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
 		return
+	}
+	if summary.FollowUpQuestions == nil {
+		summary.FollowUpQuestions = []string{}
 	}
 
 	writeJSON(w, http.StatusOK, summary)
