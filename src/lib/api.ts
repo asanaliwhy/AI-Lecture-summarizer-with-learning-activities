@@ -1,3 +1,6 @@
+import type { GeneratePresentationConfig, Presentation, PresentationStatus, Slide, SlideTheme } from './presentationTypes'
+import { normalizePresentation } from './presentationTypes'
+
 const DEFAULT_API_BASE = 'http://localhost:8081/api/v1'
 
 function getProductionFallbackApiBase(): string {
@@ -179,22 +182,25 @@ export class ApiError extends Error {
     }
 }
 
-export type DashboardGoalType = 'summary' | 'quiz' | 'flashcard'
+export type DashboardGoalType = 'summary' | 'quiz' | 'flashcard' | 'presentation'
 
 export interface DashboardStatsResponse {
     summaries?: number
     quizzes_taken?: number
     flashcard_decks?: number
+    presentations?: number
     study_hours?: number
     summaries_trend?: number
     quizzes_trend?: number
     flashcards_trend?: number
+    presentations_trend?: number
     study_hours_trend?: number
     weekly_goal_target?: number
     weekly_goal_type?: DashboardGoalType
     weekly_summaries?: number
     weekly_quizzes?: number
     weekly_flashcards?: number
+    weekly_presentations?: number
 }
 
 export interface DashboardRecentItemResponse {
@@ -296,6 +302,63 @@ export interface GenerateSummaryPayload {
     language: string
 }
 
+export interface PresentationSlideResponse extends Omit<Slide, 'id' | 'type'> {
+    id?: string
+    type?: Slide['type'] | string
+}
+
+export interface PresentationResponse {
+    id: string
+    content_id?: string | null
+    title?: string
+    topic?: string | null
+    language?: string
+    theme?: SlideTheme | string
+    slide_count?: number
+    slides?: PresentationSlideResponse[]
+    status?: PresentationStatus
+    is_favorite?: boolean
+    quality_fallback?: boolean
+    created_at?: string
+    updated_at?: string
+    last_accessed_at?: string | null
+}
+
+export interface PresentationListResponse {
+    presentations: PresentationResponse[]
+    total?: number
+    limit?: number
+    offset?: number
+}
+
+export const presentationQueryKeys = {
+    all: ['presentations'] as const,
+    detail: (id: string) => ['presentation', id] as const,
+}
+
+function toPresentation(raw: PresentationResponse): Presentation {
+    return normalizePresentation({
+        id: raw.id,
+        contentId: raw.content_id ?? null,
+        title: raw.title || 'Untitled Presentation',
+        topic: raw.topic ?? null,
+        language: raw.language || 'en',
+        theme: (raw.theme as SlideTheme) || 'navy',
+        slideCount: Number(raw.slide_count || 0),
+        slides: Array.isArray(raw.slides) ? raw.slides.map((slide, index) => ({
+            ...slide,
+            id: slide.id || `slide-${index + 1}`,
+            type: (slide.type as Slide['type']) || 'content',
+        })) : [],
+        status: raw.status || 'completed',
+        isFavorite: Boolean(raw.is_favorite),
+        qualityFallback: Boolean(raw.quality_fallback),
+        createdAt: raw.created_at,
+        updatedAt: raw.updated_at,
+        lastAccessedAt: raw.last_accessed_at ?? null,
+    })
+}
+
 export interface QuizQuestionResponse {
     question?: string
     type?: string
@@ -345,7 +408,7 @@ export interface FlashcardDeckListItemResponse {
     created_at?: string
 }
 
-export type LibraryItemType = 'summary' | 'quiz' | 'flashcard' | 'flashcards' | string
+export type LibraryItemType = 'summary' | 'quiz' | 'flashcard' | 'flashcards' | 'presentation' | 'presentations' | string
 
 export interface LibraryItemResponse {
     id: string
@@ -644,6 +707,33 @@ export const api = {
 
         // PDF export is canonical client-side in SummaryPage.tsx via jsPDF.
         // Backend /summaries/{id}/export has been deprecated to avoid dual-path drift.
+    },
+
+    presentations: {
+        create: (data: GeneratePresentationConfig) =>
+            apiFetch<{ presentation_id: string; job_id: string }>('/presentations', {
+                method: 'POST',
+                body: JSON.stringify(data),
+            }),
+
+        get: async (id: string) => toPresentation(await apiFetch<PresentationResponse>(`/presentations/${id}`)),
+
+        list: async (params?: Record<string, string>) => {
+            const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+            const response = await apiFetch<PresentationListResponse>(`/presentations${qs}`)
+            return {
+                ...response,
+                presentations: Array.isArray(response.presentations)
+                    ? response.presentations.map(toPresentation)
+                    : [],
+            }
+        },
+
+        delete: (id: string) =>
+            apiFetch<{ message: string }>(`/presentations/${id}`, { method: 'DELETE' }),
+
+        toggleFavorite: (id: string) =>
+            apiFetch<{ message: string }>(`/presentations/${id}/favorite`, { method: 'PUT' }),
     },
 
     // Quizzes

@@ -21,8 +21,9 @@ import { DashboardSkeleton } from '../components/ui/Skeleton'
 import { useToast } from '../components/ui/Toast'
 import {
   FileText,
-  BrainCircuit,
-  Play,
+	BrainCircuit,
+	Presentation,
+	Play,
   Clock,
   MoreHorizontal,
   Plus,
@@ -38,7 +39,7 @@ import {
 import { cn } from '../lib/utils'
 
 type GoalType = DashboardGoalType
-type RecentContentType = 'Summary' | 'Quiz' | 'Flashcards'
+type RecentContentType = 'Summary' | 'Quiz' | 'Flashcards' | 'Presentation'
 
 interface RecentContentCard {
   id: string
@@ -73,6 +74,7 @@ export function DashboardPage() {
   const [summaryGoalInput, setSummaryGoalInput] = useState('5')
   const [quizGoalInput, setQuizGoalInput] = useState('3')
   const [flashcardGoalInput, setFlashcardGoalInput] = useState('10')
+  const [presentationGoalInput, setPresentationGoalInput] = useState('2')
   const [selectedGoalType, setSelectedGoalType] = useState<GoalType>('summary')
   const [goalError, setGoalError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -165,13 +167,7 @@ export function DashboardPage() {
   const summariesTrend = Number(dashStats?.summaries_trend ?? 0)
   const quizzesTrend = Number(dashStats?.quizzes_trend ?? 0)
   const flashcardsTrend = Number(dashStats?.flashcards_trend ?? 0)
-  const studyHoursTrend = Number(dashStats?.study_hours_trend ?? 0)
-
-  const formatStudyHours = (value: number) => {
-    const safe = Number.isFinite(value) ? Math.max(0, value) : 0
-    const rounded = Math.round(safe * 10) / 10
-    return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}h`
-  }
+  const presentationsTrend = Number(dashStats?.presentations_trend ?? 0)
 
   const stats = [
     {
@@ -211,16 +207,16 @@ export function DashboardPage() {
       clickable: true,
     },
     {
-      label: 'Study Hours',
-      value: formatStudyHours(Number(dashStats?.study_hours ?? 0)),
-      change: formatTrend(studyHoursTrend),
-      trend: getTrend(studyHoursTrend),
-      icon: Clock,
-      color: 'text-green-600 dark:text-green-300',
-      bgColor: 'bg-green-100 dark:bg-green-500/15',
-      hoverGradientTo: 'group-hover:to-green-500',
-      link: null,
-      clickable: false,
+      label: 'Presentations',
+      value: String(dashStats?.presentations ?? 0),
+      change: formatTrend(presentationsTrend),
+      trend: getTrend(presentationsTrend),
+      icon: Presentation,
+      color: 'text-emerald-600 dark:text-emerald-300',
+      bgColor: 'bg-emerald-100 dark:bg-emerald-500/15',
+      hoverGradientTo: 'group-hover:to-emerald-500',
+      link: '/presentations',
+      clickable: true,
     },
   ]
 
@@ -234,6 +230,8 @@ export function DashboardPage() {
       ? 'quiz'
       : weeklyGoalTypeRaw === 'flashcard' || weeklyGoalTypeRaw === 'flashcards'
         ? 'flashcard'
+        : weeklyGoalTypeRaw === 'presentation' || weeklyGoalTypeRaw === 'presentations'
+          ? 'presentation'
         : 'summary'
 
   const weeklySummaryCountRaw = Number(dashStats?.weekly_summaries ?? 0)
@@ -242,12 +240,16 @@ export function DashboardPage() {
   const weeklyQuizCount = Number.isFinite(weeklyQuizCountRaw) && weeklyQuizCountRaw > 0 ? weeklyQuizCountRaw : 0
   const weeklyFlashcardCountRaw = Number(dashStats?.weekly_flashcards ?? 0)
   const weeklyFlashcardCount = Number.isFinite(weeklyFlashcardCountRaw) && weeklyFlashcardCountRaw > 0 ? weeklyFlashcardCountRaw : 0
+  const weeklyPresentationCountRaw = Number(dashStats?.weekly_presentations ?? 0)
+  const weeklyPresentationCount = Number.isFinite(weeklyPresentationCountRaw) && weeklyPresentationCountRaw > 0 ? weeklyPresentationCountRaw : 0
 
   const weeklyCurrentValue =
     weeklyGoalType === 'quiz'
       ? weeklyQuizCount
       : weeklyGoalType === 'flashcard'
         ? weeklyFlashcardCount
+        : weeklyGoalType === 'presentation'
+          ? weeklyPresentationCount
         : weeklySummaryCount
 
   const weeklyGoalLabel =
@@ -255,6 +257,8 @@ export function DashboardPage() {
       ? 'Quizzes Completed'
       : weeklyGoalType === 'flashcard'
         ? 'Flashcards Created'
+        : weeklyGoalType === 'presentation'
+          ? 'Presentations Created'
         : 'Summaries Created'
 
   const weeklyGoalProgress = Math.max(
@@ -268,6 +272,7 @@ export function DashboardPage() {
     setSummaryGoalInput(String(weeklyGoalType === 'summary' ? weeklyGoalTarget : 5))
     setQuizGoalInput(String(weeklyGoalType === 'quiz' ? weeklyGoalTarget : 3))
     setFlashcardGoalInput(String(weeklyGoalType === 'flashcard' ? weeklyGoalTarget : 10))
+    setPresentationGoalInput(String(weeklyGoalType === 'presentation' ? weeklyGoalTarget : 2))
     setGoalError('')
     setGoalModalOpen(true)
   }
@@ -280,6 +285,8 @@ export function DashboardPage() {
         ? quizGoalInput
         : selectedGoalType === 'flashcard'
           ? flashcardGoalInput
+          : selectedGoalType === 'presentation'
+            ? presentationGoalInput
           : summaryGoalInput
 
     const parsed = Number(inputValue)
@@ -347,6 +354,8 @@ export function DashboardPage() {
     const type: RecentContentType =
       rawType === 'quiz'
         ? 'Quiz'
+        : rawType === 'presentation'
+          ? 'Presentation'
         : rawType === 'flashcard' || rawType === 'flashcards' || rawType === 'flashcard_deck'
           ? 'Flashcards'
           : 'Summary'
@@ -354,6 +363,8 @@ export function DashboardPage() {
     const link =
       rawType === 'quiz'
         ? `/quiz/take/${id}`
+        : rawType === 'presentation'
+          ? `/presentations/${id}`
         : rawType === 'flashcard' || rawType === 'flashcards' || rawType === 'flashcard_deck'
           ? `/flashcards/study/${id}`
           : `/summary/${id}`
@@ -379,12 +390,14 @@ export function DashboardPage() {
   const getContinueIcon = (type: RecentContentType) => {
     if (type === 'Quiz') return BrainCircuit
     if (type === 'Flashcards') return Play
+    if (type === 'Presentation') return Presentation
     return BookOpen
   }
 
   const getContinueDescription = (type: RecentContentType) => {
     if (type === 'Quiz') return 'Continue practicing your quiz to improve retention.'
     if (type === 'Flashcards') return 'Resume your flashcard session and reinforce memory.'
+    if (type === 'Presentation') return 'Continue reviewing your presentation slides and speaking notes.'
     return 'Continue reading and reviewing your generated summary.'
   }
 
@@ -393,6 +406,8 @@ export function DashboardPage() {
       ? quizGoalInput
       : selectedGoalType === 'flashcard'
         ? flashcardGoalInput
+        : selectedGoalType === 'presentation'
+          ? presentationGoalInput
         : summaryGoalInput
 
   const previewGoalTargetRaw = Number(selectedGoalInputValue)
@@ -454,14 +469,19 @@ export function DashboardPage() {
                 : 'Start by creating your first summary!'}
             </p>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-orange-50 text-orange-700 px-4 py-2 rounded-full border border-orange-100 shadow-sm hover:shadow-md transition-all cursor-default">
-              <Flame className="h-5 w-5 fill-orange-500 text-orange-500 animate-pulse" />
-              <span className="font-semibold">{streakData?.current_streak || 0} Day Streak</span>
-            </div>
-            <Link to="/create">
-              <Button className="shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
-                <Plus className="mr-2 h-4 w-4" /> New Summary
+            <div className="flex items-center gap-3 flex-wrap justify-end">
+              <div className="flex items-center gap-2 bg-orange-50 text-orange-700 px-4 py-2 rounded-full border border-orange-100 shadow-sm hover:shadow-md transition-all cursor-default">
+                <Flame className="h-5 w-5 fill-orange-500 text-orange-500 animate-pulse" />
+                <span className="font-semibold">{streakData?.current_streak || 0} Day Streak</span>
+              </div>
+              <Link to="/presentations/new">
+                <Button variant="outline" className="shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
+                  <Presentation className="mr-2 h-4 w-4" /> New Presentation
+                </Button>
+              </Link>
+              <Link to="/create">
+                <Button className="shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
+                  <Plus className="mr-2 h-4 w-4" /> New Summary
               </Button>
             </Link>
           </div>
@@ -747,6 +767,23 @@ export function DashboardPage() {
                     </CardContent>
                   </Card>
                 </Link>
+                <Link to="/presentations/new">
+                  <Card className="hover:bg-secondary/50 transition-all duration-300 cursor-pointer border-dashed hover:border-solid hover:shadow-md group">
+                    <CardContent className="p-4 flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-full bg-sky-100 dark:bg-sky-500/15 flex items-center justify-center text-sky-600 dark:text-sky-300 group-hover:scale-110 transition-transform">
+                        <Presentation className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm group-hover:text-sky-700 transition-colors">
+                          New Presentation
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Build a slide deck
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
                 <Link to="/flashcards">
                   <Card className="hover:bg-secondary/50 transition-all duration-300 cursor-pointer border-dashed hover:border-solid hover:shadow-md group">
                     <CardContent className="p-4 flex items-center gap-4">
@@ -867,6 +904,8 @@ export function DashboardPage() {
                         ? `Complete ${weeklyGoalRemaining} more ${weeklyGoalRemaining === 1 ? 'quiz' : 'quizzes'} to reach your weekly goal!`
                         : weeklyGoalType === 'flashcard'
                           ? `Create ${weeklyGoalRemaining} more ${weeklyGoalRemaining === 1 ? 'flashcard' : 'flashcards'} to reach your weekly goal!`
+                          : weeklyGoalType === 'presentation'
+                            ? `Create ${weeklyGoalRemaining} more ${weeklyGoalRemaining === 1 ? 'presentation' : 'presentations'} to reach your weekly goal!`
                           : `Create ${weeklyGoalRemaining} more ${weeklyGoalRemaining === 1 ? 'summary' : 'summaries'} to reach your weekly goal!`}
                     </p>
                   ) : (
@@ -1020,6 +1059,40 @@ export function DashboardPage() {
                       />
                     </div>
                     {selectedGoalType === 'flashcard' && goalError && <p className="text-xs text-destructive mt-2">{goalError}</p>}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGoalType('presentation')
+                      if (goalError) setGoalError('')
+                    }}
+                    className={cn(
+                      'w-full text-left p-4 border rounded-lg hover:bg-secondary/20 transition-colors',
+                      selectedGoalType === 'presentation' && 'ring-2 ring-primary border-primary/40 bg-secondary/20',
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-sky-100 dark:bg-sky-500/15 text-sky-600 dark:text-sky-300 flex items-center justify-center">
+                          <Presentation className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">Presentations Created</p>
+                          <p className="text-xs text-muted-foreground">Per week</p>
+                        </div>
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={presentationGoalInput}
+                        onChange={(e) => setPresentationGoalInput(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-20 text-center font-mono"
+                      />
+                    </div>
+                    {selectedGoalType === 'presentation' && goalError && <p className="text-xs text-destructive mt-2">{goalError}</p>}
                   </button>
                 </div>
 

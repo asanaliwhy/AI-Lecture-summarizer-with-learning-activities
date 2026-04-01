@@ -82,16 +82,19 @@ describe('DashboardPage production behaviors', () => {
             summaries: 6,
             quizzes_taken: 4,
             flashcard_decks: 3,
+            presentations: 2,
             study_hours: 7.5,
             summaries_trend: 12,
             quizzes_trend: 8,
             flashcards_trend: 3,
+            presentations_trend: 10,
             study_hours_trend: 15,
             weekly_goal_target: 5,
             weekly_goal_type: 'summary',
             weekly_summaries: 2,
             weekly_quizzes: 1,
             weekly_flashcards: 0,
+            weekly_presentations: 1,
         })
         mocked.dashboardApi.recent.mockResolvedValue({
             recent: [
@@ -154,7 +157,7 @@ describe('DashboardPage production behaviors', () => {
         expect(container.textContent).toContain('Total Summaries')
         expect(container.textContent).toContain('Quizzes Taken')
         expect(container.textContent).toContain('Flashcard Decks')
-        expect(container.textContent).toContain('Study Hours')
+        expect(container.textContent).toContain('Presentations')
         expect(container.textContent).toContain('Neural Networks Intro')
         expect(container.textContent).toContain('3 Day Streak')
     })

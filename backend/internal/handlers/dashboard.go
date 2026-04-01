@@ -83,6 +83,17 @@ const recentActivityQuery = `
 			0::float8 AS progress
 		FROM flashcard_decks f
 		WHERE f.user_id = $1
+
+		UNION ALL
+
+		SELECT
+			'presentation'::text AS type,
+			p.id,
+			p.title,
+			COALESCE(p.last_accessed_at, p.created_at) AS last_accessed_at,
+			0::float8 AS progress
+		FROM presentations p
+		WHERE p.user_id = $1
 	) recent
 	ORDER BY last_accessed_at DESC NULLS LAST
 	LIMIT $2
@@ -114,9 +125,9 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	g, gctx := errgroup.WithContext(r.Context())
 
-	var summaryCount, quizCount, flashcardCount, weeklySummaryCount int
-	var weeklyQuizCount, weeklyFlashcardCount int
-	var prevWeeklySummaryCount, prevWeeklyQuizCount, prevWeeklyFlashcardCount int
+	var summaryCount, quizCount, flashcardCount, presentationCount, weeklySummaryCount int
+	var weeklyQuizCount, weeklyFlashcardCount, weeklyPresentationCount int
+	var prevWeeklySummaryCount, prevWeeklyQuizCount, prevWeeklyFlashcardCount, prevWeeklyPresentationCount int
 	var weeklyGoalTarget int
 	var weeklyGoalType string
 
@@ -130,6 +141,10 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 	g.Go(func() error {
 		return h.pool.QueryRow(gctx, "SELECT COUNT(*) FROM flashcard_decks WHERE user_id = $1", userID).Scan(&flashcardCount)
+	})
+
+	g.Go(func() error {
+		return h.pool.QueryRow(gctx, "SELECT COUNT(*) FROM presentations WHERE user_id = $1", userID).Scan(&presentationCount)
 	})
 
 	g.Go(func() error {
@@ -163,6 +178,15 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	g.Go(func() error {
 		return h.pool.QueryRow(gctx, `
 			SELECT COUNT(*)
+			FROM presentations
+			WHERE user_id = $1
+			  AND created_at >= NOW() - INTERVAL '7 days'
+		`, userID).Scan(&weeklyPresentationCount)
+	})
+
+	g.Go(func() error {
+		return h.pool.QueryRow(gctx, `
+			SELECT COUNT(*)
 			FROM summaries
 			WHERE user_id = $1
 			  AND is_archived = FALSE
@@ -189,6 +213,16 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 			  AND created_at >= NOW() - INTERVAL '14 days'
 			  AND created_at < NOW() - INTERVAL '7 days'
 		`, userID).Scan(&prevWeeklyFlashcardCount)
+	})
+
+	g.Go(func() error {
+		return h.pool.QueryRow(gctx, `
+			SELECT COUNT(*)
+			FROM presentations
+			WHERE user_id = $1
+			  AND created_at >= NOW() - INTERVAL '14 days'
+			  AND created_at < NOW() - INTERVAL '7 days'
+		`, userID).Scan(&prevWeeklyPresentationCount)
 	})
 
 	g.Go(func() error {
@@ -262,6 +296,7 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	summariesTrend := calcTrend(float64(weeklySummaryCount), float64(prevWeeklySummaryCount))
 	quizzesTrend := calcTrend(float64(weeklyQuizCount), float64(prevWeeklyQuizCount))
 	flashcardsTrend := calcTrend(float64(weeklyFlashcardCount), float64(prevWeeklyFlashcardCount))
+	presentationsTrend := calcTrend(float64(weeklyPresentationCount), float64(prevWeeklyPresentationCount))
 	studyHoursTrend := calcTrend(weeklyStudyHours, prevWeeklyStudyHours)
 
 	if studyHours < 0 {
@@ -275,19 +310,22 @@ func (h *DashboardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"summaries":          summaryCount,
-		"quizzes_taken":      quizCount,
-		"flashcard_decks":    flashcardCount,
-		"study_hours":        studyHours,
-		"summaries_trend":    summariesTrend,
-		"quizzes_trend":      quizzesTrend,
-		"flashcards_trend":   flashcardsTrend,
-		"study_hours_trend":  studyHoursTrend,
-		"weekly_summaries":   weeklySummaryCount,
-		"weekly_quizzes":     weeklyQuizCount,
-		"weekly_flashcards":  weeklyFlashcardCount,
-		"weekly_goal_target": weeklyGoalTarget,
-		"weekly_goal_type":   weeklyGoalType,
+		"summaries":            summaryCount,
+		"quizzes_taken":        quizCount,
+		"flashcard_decks":      flashcardCount,
+		"presentations":        presentationCount,
+		"study_hours":          studyHours,
+		"summaries_trend":      summariesTrend,
+		"quizzes_trend":        quizzesTrend,
+		"flashcards_trend":     flashcardsTrend,
+		"presentations_trend":  presentationsTrend,
+		"study_hours_trend":    studyHoursTrend,
+		"weekly_summaries":     weeklySummaryCount,
+		"weekly_quizzes":       weeklyQuizCount,
+		"weekly_flashcards":    weeklyFlashcardCount,
+		"weekly_presentations": weeklyPresentationCount,
+		"weekly_goal_target":   weeklyGoalTarget,
+		"weekly_goal_type":     weeklyGoalType,
 	})
 }
 
@@ -309,8 +347,8 @@ func (h *DashboardHandler) SetWeeklyGoal(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if req.GoalType != "summary" && req.GoalType != "quiz" && req.GoalType != "flashcard" {
-		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Goal type must be summary, quiz, or flashcard", r))
+	if req.GoalType != "summary" && req.GoalType != "quiz" && req.GoalType != "flashcard" && req.GoalType != "presentation" {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Goal type must be summary, quiz, flashcard, or presentation", r))
 		return
 	}
 
@@ -582,6 +620,40 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Err(); err != nil {
 			rows.Close()
 			log.Printf("LibraryHandler.List: flashcard rows iteration failed for user %s: %v", userID, err)
+			writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+			return
+		}
+		rows.Close()
+	}
+
+	if typeFilter == "" || typeFilter == "presentation" || typeFilter == "presentations" {
+		query := "SELECT id, title, is_favorite, created_at FROM presentations WHERE user_id = $1"
+		args := []interface{}{userID}
+		if searchQuery != "" {
+			query += " AND LOWER(title) LIKE $2"
+			args = append(args, searchLike)
+		}
+		query += " ORDER BY created_at DESC"
+
+		rows, err := h.pool.Query(ctx, query, args...)
+		if err != nil {
+			log.Printf("LibraryHandler.List: failed to query presentations for user %s: %v", userID, err)
+			writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+			return
+		}
+		for rows.Next() {
+			item := LibraryItem{Type: "presentation"}
+			if err := rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt); err != nil {
+				rows.Close()
+				log.Printf("LibraryHandler.List: failed to scan presentation row for user %s: %v", userID, err)
+				writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
+				return
+			}
+			items = append(items, item)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			log.Printf("LibraryHandler.List: presentation rows iteration failed for user %s: %v", userID, err)
 			writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
 			return
 		}
@@ -880,18 +952,20 @@ func (h *UserHandler) UpdateNotificationSetting(w http.ResponseWriter, r *http.R
 // Job handler
 
 type JobHandler struct {
-	jobRepo     *repository.JobRepo
-	summaryRepo *repository.SummaryRepo
-	quizRepo    *repository.QuizRepo
-	flashcardRepo *repository.FlashcardRepo
+	jobRepo          *repository.JobRepo
+	summaryRepo      *repository.SummaryRepo
+	quizRepo         *repository.QuizRepo
+	flashcardRepo    *repository.FlashcardRepo
+	presentationRepo *repository.PresentationRepo
 }
 
-func NewJobHandler(jobRepo *repository.JobRepo, summaryRepo *repository.SummaryRepo, quizRepo *repository.QuizRepo, flashcardRepo *repository.FlashcardRepo) *JobHandler {
+func NewJobHandler(jobRepo *repository.JobRepo, summaryRepo *repository.SummaryRepo, quizRepo *repository.QuizRepo, flashcardRepo *repository.FlashcardRepo, presentationRepo *repository.PresentationRepo) *JobHandler {
 	return &JobHandler{
-		jobRepo:     jobRepo,
-		summaryRepo: summaryRepo,
-		quizRepo:    quizRepo,
-		flashcardRepo: flashcardRepo,
+		jobRepo:          jobRepo,
+		summaryRepo:      summaryRepo,
+		quizRepo:         quizRepo,
+		flashcardRepo:    flashcardRepo,
+		presentationRepo: presentationRepo,
 	}
 }
 
@@ -964,6 +1038,10 @@ func (h *JobHandler) CancelJob(w http.ResponseWriter, r *http.Request) {
 		case "flashcard-generation":
 			if err := h.flashcardRepo.DeleteDeck(r.Context(), job.ReferenceID); err != nil {
 				log.Printf("CancelJob: failed to delete orphaned flashcard deck %s: %v", job.ReferenceID, err)
+			}
+		case "presentation":
+			if err := h.presentationRepo.Delete(r.Context(), job.ReferenceID); err != nil {
+				log.Printf("CancelJob: failed to delete orphaned presentation %s: %v", job.ReferenceID, err)
 			}
 		}
 	}

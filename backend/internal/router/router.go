@@ -18,6 +18,7 @@ func New(
 	wsTicketHandler *handlers.WSTicketHandler,
 	contentHandler *handlers.ContentHandler,
 	summaryHandler *handlers.SummaryHandler,
+	presentationHandler *handlers.PresentationHandler,
 	quizHandler *handlers.QuizHandler,
 	flashcardHandler *handlers.FlashcardHandler,
 	studySessionHandler *handlers.StudySessionHandler,
@@ -105,6 +106,16 @@ func New(
 			r.Get("/{id}/chat-history", chatHandler.GetChatHistory)
 			r.Post("/{id}/chat-history", chatHandler.CreateChatHistory)
 			r.Delete("/{id}/chat-history", chatHandler.ClearChatHistory)
+		})
+
+		// ──── Presentation Routes ────
+		r.Route("/presentations", func(r chi.Router) {
+			r.Use(jwtAuth.Middleware)
+			r.Post("/", presentationHandler.CreatePresentation)
+			r.Get("/", presentationHandler.ListPresentations)
+			r.Get("/{id}", presentationHandler.GetPresentation)
+			r.Put("/{id}/favorite", presentationHandler.ToggleFavorite)
+			r.Delete("/{id}", presentationHandler.DeletePresentation)
 		})
 
 		// ──── Quiz Routes ────

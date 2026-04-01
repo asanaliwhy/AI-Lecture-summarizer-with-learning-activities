@@ -44,7 +44,8 @@ type Config struct {
 	SMTPFrom string
 
 	// Frontend
-	FrontendURL string
+	FrontendURL       string
+	UnsplashAccessKey string
 
 	// Proxy trust (for forwarded headers)
 	TrustedProxyCIDRs []string
@@ -79,6 +80,7 @@ func Load() *Config {
 		SMTPPass:             getEnvOrDefault("SMTP_PASS", ""),
 		SMTPFrom:             getEnvOrDefault("SMTP_FROM", "noreply@lectura.app"),
 		FrontendURL:          getEnvOrDefault("FRONTEND_URL", "http://localhost:5173"),
+		UnsplashAccessKey:    os.Getenv("UNSPLASH_ACCESS_KEY"),
 		TrustedProxyCIDRs:    getEnvAsCSV("TRUSTED_PROXY_CIDRS"),
 		GoogleClientID:       getEnvOrDefault("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:   getEnvOrDefault("GOOGLE_CLIENT_SECRET", ""),

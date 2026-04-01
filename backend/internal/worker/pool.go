@@ -38,6 +38,7 @@ type Pool struct {
 	jobRepo             workerJobRepo
 	contentRepo         *repository.ContentRepo
 	summaryRepo         *repository.SummaryRepo
+	presentationRepo    *repository.PresentationRepo
 	quizRepo            *repository.QuizRepo
 	flashRepo           *repository.FlashcardRepo
 	storagePath         string
@@ -56,6 +57,7 @@ func NewPool(
 	jobRepo *repository.JobRepo,
 	contentRepo *repository.ContentRepo,
 	summaryRepo *repository.SummaryRepo,
+	presentationRepo *repository.PresentationRepo,
 	quizRepo *repository.QuizRepo,
 	flashRepo *repository.FlashcardRepo,
 	storagePath string,
@@ -72,6 +74,7 @@ func NewPool(
 		jobRepo:             jobRepo,
 		contentRepo:         contentRepo,
 		summaryRepo:         summaryRepo,
+		presentationRepo:    presentationRepo,
 		quizRepo:            quizRepo,
 		flashRepo:           flashRepo,
 		storagePath:         storagePath,
@@ -85,6 +88,7 @@ func (p *Pool) Start() {
 	queues := []string{
 		"queue:content-processing",
 		"queue:summary-generation",
+		"queue:presentation",
 		"queue:quiz-generation",
 		"queue:flashcard-generation",
 	}
@@ -139,6 +143,9 @@ func (p *Pool) worker(id int, queues []string) {
 
 		// Update status
 		p.jobRepo.UpdateStatus(ctx, job.ID, "processing")
+		if job.Type == "presentation" {
+			_ = p.presentationRepo.UpdateStatus(ctx, job.ReferenceID, "processing")
+		}
 
 		// Publish status update
 		p.gemini.PublishUpdate(ctx, job.UserID, models.WSMessage{
@@ -155,6 +162,8 @@ func (p *Pool) worker(id int, queues []string) {
 		switch job.Type {
 		case "summary-generation":
 			processErr = p.processSummary(ctx, &job)
+		case "presentation":
+			processErr = p.processPresentation(ctx, &job)
 		case "quiz-generation":
 			processErr = p.processQuiz(ctx, &job)
 		case "flashcard-generation":
@@ -256,6 +265,85 @@ func (p *Pool) processSummary(ctx context.Context, job *models.Job) error {
 	}
 
 	return p.gemini.GenerateSummary(ctx, job, transcript)
+}
+
+func (p *Pool) processPresentation(ctx context.Context, job *models.Job) error {
+	presentation, err := p.presentationRepo.GetByID(ctx, job.ReferenceID)
+	if err != nil {
+		return fmt.Errorf("failed to get presentation: %w", err)
+	}
+
+	if presentation.ContentID == nil {
+		return fmt.Errorf("presentation has no linked content")
+	}
+
+	content, err := p.contentRepo.GetByID(ctx, *presentation.ContentID)
+	if err != nil {
+		return fmt.Errorf("failed to get content: %w", err)
+	}
+
+	if content.Type == "file" && (content.Transcript == nil || *content.Transcript == "") {
+		if _, waitErr := p.waitForContentReady(ctx, content.ID, p.contentReadyTimeout); waitErr != nil {
+			log.Printf("File transcript not ready for content %s, proceeding with fallback: %v", content.ID, waitErr)
+		}
+
+		refreshed, getErr := p.contentRepo.GetByID(ctx, content.ID)
+		if getErr == nil {
+			content = refreshed
+		}
+	}
+
+	if content.Type == "youtube" && (content.Transcript == nil || *content.Transcript == "") {
+		if content.SourceURL == nil {
+			return fmt.Errorf("youtube content has no source URL")
+		}
+
+		videoID, extractErr := extractVideoID(*content.SourceURL)
+		if extractErr != nil {
+			return extractErr
+		}
+
+		p.gemini.PublishUpdate(ctx, job.UserID, models.WSMessage{
+			Type: "status_update",
+			Payload: models.StatusUpdate{
+				JobID:    job.ID,
+				Step:     2,
+				StepName: "Preparing presentation transcript",
+			},
+		})
+
+		transcript, transcriptErr := p.youtube.GetTranscript(ctx, videoID)
+		if transcriptErr != nil {
+			audioBytes, mimeType, audioErr := p.youtube.DownloadAudio(*content.SourceURL)
+			if audioErr != nil {
+				return fmt.Errorf("transcript extraction failed for video %s: %v; audio fallback download failed: %w", videoID, transcriptErr, audioErr)
+			}
+
+			transcribed, transcribeErr := p.gemini.TranscribeAudio(ctx, audioBytes, mimeType)
+			if transcribeErr != nil {
+				return fmt.Errorf("transcript extraction failed for video %s: %v; STT fallback transcription failed: %w", videoID, transcriptErr, transcribeErr)
+			}
+
+			transcript = transcribed
+		}
+
+		if updateErr := p.contentRepo.UpdateTranscript(ctx, content.ID, transcript); updateErr != nil {
+			return fmt.Errorf("failed to save transcript: %w", updateErr)
+		}
+
+		content.Transcript = &transcript
+	}
+
+	transcript := ""
+	if content.Transcript != nil && *content.Transcript != "" {
+		transcript = *content.Transcript
+	} else if content.Type == "file" || content.Type == "youtube" {
+		transcript = buildMetadataFallbackTranscript(content)
+	} else {
+		return fmt.Errorf("cannot generate presentation: transcript is not available")
+	}
+
+	return p.gemini.GeneratePresentation(ctx, job, transcript)
 }
 
 func (p *Pool) waitForContentReady(ctx context.Context, contentID uuid.UUID, timeout time.Duration) (*models.Content, error) {
@@ -683,6 +771,9 @@ func (p *Pool) handleFailure(ctx context.Context, job *models.Job, err error) {
 		if job.Type == "content-processing" {
 			p.contentRepo.UpdateStatus(ctx, job.ReferenceID, "failed")
 		}
+		if job.Type == "presentation" {
+			_ = p.presentationRepo.UpdateStatus(ctx, job.ReferenceID, "failed")
+		}
 
 		p.gemini.PublishUpdate(ctx, job.UserID, models.WSMessage{
 			Type: "error",
@@ -701,6 +792,8 @@ func jobQueueName(jobType string) string {
 		return "queue:content-processing"
 	case "summary-generation":
 		return "queue:summary-generation"
+	case "presentation":
+		return "queue:presentation"
 	case "quiz-generation":
 		return "queue:quiz-generation"
 	case "flashcard-generation":
@@ -714,6 +807,8 @@ func getResultType(jobType string) string {
 	switch jobType {
 	case "summary-generation":
 		return "summary"
+	case "presentation":
+		return "presentation"
 	case "quiz-generation":
 		return "quiz"
 	case "flashcard-generation":

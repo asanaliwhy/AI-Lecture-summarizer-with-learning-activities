@@ -3,8 +3,9 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   FileText,
-  BrainCircuit,
-  Layers,
+	BrainCircuit,
+	Presentation,
+	Layers,
   Library,
   Settings,
   LogOut,
@@ -38,9 +39,10 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
 
   const navItems: NavItem[] = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
-    { icon: FileText, label: 'Summaries', href: '/summaries' },
-    { icon: BrainCircuit, label: 'Quizzes', href: '/quizzes' },
-    { icon: Layers, label: 'Flashcards', href: '/flashcards' },
+		{ icon: FileText, label: 'Summaries', href: '/summaries' },
+		{ icon: BrainCircuit, label: 'Quizzes', href: '/quizzes' },
+		{ icon: Presentation, label: 'Presentations', href: '/presentations' },
+		{ icon: Layers, label: 'Flashcards', href: '/flashcards' },
     { icon: Library, label: 'Library', href: '/library' },
     { icon: Settings, label: 'Settings', href: '/settings' },
   ]

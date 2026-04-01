@@ -54,6 +54,7 @@ func main() {
 	userRepo := repository.NewUserRepo(pool)
 	contentRepo := repository.NewContentRepo(pool)
 	summaryRepo := repository.NewSummaryRepo(pool)
+	presentationRepo := repository.NewPresentationRepo(pool)
 	quizRepo := repository.NewQuizRepo(pool)
 	flashcardRepo := repository.NewFlashcardRepo(pool)
 	jobRepo := repository.NewJobRepo(pool)
@@ -65,10 +66,12 @@ func main() {
 		cfg.GeminiAPIKey,
 		cfg.GeminiConcurrentReqs,
 		summaryRepo,
+		presentationRepo,
 		quizRepo,
 		flashcardRepo,
 		jobRepo,
 		redisClients.Queue,
+		cfg.UnsplashAccessKey,
 	)
 	if err != nil {
 		log.Fatalf("✗ Gemini client initialization failed: %v", err)
@@ -96,13 +99,14 @@ func main() {
 	wsTicketHandler := handlers.NewWSTicketHandler(redisClients.Queue)
 	contentHandler := handlers.NewContentHandler(contentRepo, jobRepo, redisClients.Queue, cfg.StoragePath, youtubeService)
 	summaryHandler := handlers.NewSummaryHandler(summaryRepo, contentRepo, jobRepo, redisClients.Queue)
+	presentationHandler := handlers.NewPresentationHandler(presentationRepo, contentRepo, jobRepo, redisClients.Queue)
 	quizHandler := handlers.NewQuizHandler(quizRepo, summaryRepo, jobRepo, redisClients.Queue)
 	flashcardHandler := handlers.NewFlashcardHandler(flashcardRepo, summaryRepo, jobRepo, redisClients.Queue)
 	studySessionHandler := handlers.NewStudySessionHandler(studySessionRepo)
 	dashboardHandler := handlers.NewDashboardHandler(pool, userRepo)
 	libraryHandler := handlers.NewLibraryHandler(pool)
 	userHandler := handlers.NewUserHandler(userRepo)
-	jobHandler := handlers.NewJobHandler(jobRepo, summaryRepo, quizRepo, flashcardRepo)
+	jobHandler := handlers.NewJobHandler(jobRepo, summaryRepo, quizRepo, flashcardRepo, presentationRepo)
 	chatHandler := handlers.NewChatHandler(summaryRepo, chatMessageRepo, geminiService)
 
 	// ──── Step 6: Start Job Worker Pool ────
@@ -116,6 +120,7 @@ func main() {
 		jobRepo,
 		contentRepo,
 		summaryRepo,
+		presentationRepo,
 		quizRepo,
 		flashcardRepo,
 		cfg.StoragePath,
@@ -140,6 +145,7 @@ func main() {
 		wsTicketHandler,
 		contentHandler,
 		summaryHandler,
+		presentationHandler,
 		quizHandler,
 		flashcardHandler,
 		studySessionHandler,

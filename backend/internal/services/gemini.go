@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -24,24 +27,29 @@ import (
 )
 
 type GeminiService struct {
-	client      *genai.Client
-	model       *genai.GenerativeModel
-	summaryRepo *repository.SummaryRepo
-	quizRepo    *repository.QuizRepo
-	flashRepo   *repository.FlashcardRepo
-	jobRepo     *repository.JobRepo
-	redis       *redis.Client
-	rateChan    chan struct{} // Token bucket
+	client            *genai.Client
+	model             *genai.GenerativeModel
+	summaryRepo       *repository.SummaryRepo
+	presentationRepo  *repository.PresentationRepo
+	quizRepo          *repository.QuizRepo
+	flashRepo         *repository.FlashcardRepo
+	jobRepo           *repository.JobRepo
+	redis             *redis.Client
+	unsplashAccessKey string
+	httpClient        *http.Client
+	rateChan          chan struct{} // Token bucket
 }
 
 func NewGeminiService(
 	apiKey string,
 	concurrentReqs int,
 	summaryRepo *repository.SummaryRepo,
+	presentationRepo *repository.PresentationRepo,
 	quizRepo *repository.QuizRepo,
 	flashRepo *repository.FlashcardRepo,
 	jobRepo *repository.JobRepo,
 	redisClient *redis.Client,
+	unsplashAccessKey string,
 ) (*GeminiService, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
@@ -60,14 +68,17 @@ func NewGeminiService(
 	}
 
 	return &GeminiService{
-		client:      client,
-		model:       model,
-		summaryRepo: summaryRepo,
-		quizRepo:    quizRepo,
-		flashRepo:   flashRepo,
-		jobRepo:     jobRepo,
-		redis:       redisClient,
-		rateChan:    rateChan,
+		client:            client,
+		model:             model,
+		summaryRepo:       summaryRepo,
+		presentationRepo:  presentationRepo,
+		quizRepo:          quizRepo,
+		flashRepo:         flashRepo,
+		jobRepo:           jobRepo,
+		redis:             redisClient,
+		unsplashAccessKey: strings.TrimSpace(unsplashAccessKey),
+		httpClient:        &http.Client{Timeout: 15 * time.Second},
+		rateChan:          rateChan,
 	}, nil
 }
 
@@ -514,6 +525,103 @@ Summary:
 	// Update title
 	if title != "" {
 		s.summaryRepo.UpdateTitle(ctx, job.ReferenceID, title)
+	}
+
+	return nil
+}
+
+func (s *GeminiService) GeneratePresentation(ctx context.Context, job *models.Job, transcript string) error {
+	if err := s.acquireRate(ctx); err != nil {
+		return err
+	}
+	defer s.releaseRate()
+
+	var config models.GeneratePresentationRequest
+	_ = json.Unmarshal(job.ConfigJSON, &config)
+	if config.SlideCount <= 0 {
+		config.SlideCount = 7
+	}
+	if config.Language == "" {
+		config.Language = "en"
+	}
+	if strings.TrimSpace(config.TextStyle) == "" {
+		config.TextStyle = "formal"
+	}
+	if strings.TrimSpace(config.Theme) == "" {
+		config.Theme = "navy"
+	}
+	if config.FocusAreas == nil {
+		config.FocusAreas = []string{}
+	}
+
+	s.PublishUpdate(ctx, job.UserID, models.WSMessage{
+		Type: "status_update",
+		Payload: models.StatusUpdate{
+			JobID: job.ID, Step: 3, StepName: "Designing presentation",
+			EstimatedSecondsRemaining: 35,
+		},
+	})
+
+	prompt := buildPresentationPrompt(config, transcript)
+	resp, err := generateContentWithTimeout(ctx, s.model, 10*time.Minute, genai.Text(prompt))
+	if err != nil {
+		return fmt.Errorf("Gemini API error: %w", err)
+	}
+
+	rawText := extractText(resp)
+	rawText = strings.TrimSpace(rawText)
+	rawText = strings.TrimPrefix(rawText, "```json")
+	rawText = strings.TrimPrefix(rawText, "```")
+	rawText = strings.TrimSuffix(rawText, "```")
+	rawText = strings.TrimSpace(rawText)
+
+	var slides []models.PresentationSlide
+	qualityFallback := false
+	if rawText != "" {
+		if err := json.Unmarshal([]byte(rawText), &slides); err != nil {
+			start := strings.Index(rawText, "[")
+			end := strings.LastIndex(rawText, "]")
+			if start >= 0 && end > start {
+				rawText = rawText[start : end+1]
+				_ = json.Unmarshal([]byte(rawText), &slides)
+			}
+		}
+	}
+
+	if len(slides) == 0 {
+		qualityFallback = true
+		slides = buildFallbackPresentationSlides(transcript, config.SlideCount)
+	}
+
+	normalizePresentationSlides(slides)
+	enforcePresentationImageQueries(slides, transcript)
+
+	s.PublishUpdate(ctx, job.UserID, models.WSMessage{
+		Type: "status_update",
+		Payload: models.StatusUpdate{
+			JobID: job.ID, Step: 4, StepName: "Attaching presentation images",
+			EstimatedSecondsRemaining: 10,
+		},
+	})
+
+	s.attachPresentationImages(ctx, slides, transcript)
+
+	s.PublishUpdate(ctx, job.UserID, models.WSMessage{
+		Type: "status_update",
+		Payload: models.StatusUpdate{
+			JobID: job.ID, Step: 5, StepName: "Saving presentation",
+			EstimatedSecondsRemaining: 3,
+		},
+	})
+
+	if err := s.presentationRepo.UpdateSlides(ctx, job.ReferenceID, slides, "completed", qualityFallback); err != nil {
+		return err
+	}
+
+	if title := derivePresentationTitle(slides); title != "" {
+		if err := s.presentationRepo.UpdateTitle(ctx, job.ReferenceID, title); err != nil {
+			log.Printf("failed to update presentation title for %s: %v", job.ReferenceID, err)
+		}
 	}
 
 	return nil
@@ -2120,6 +2228,599 @@ func buildSmartSummaryStructureFallbackPrompt(rawText string, metadataOnlyMode b
 	return b.String()
 }
 
+func buildPresentationPrompt(config models.GeneratePresentationRequest, transcript string) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Language: Respond entirely in %s.\n\n", presentationLanguageName(config.Language)))
+	b.WriteString("You are an expert presentation designer and instructional storyteller. Read the transcript and generate a clean, audience-ready slide deck.\n\n")
+	b.WriteString(fmt.Sprintf("Generate exactly %d slides. Return ONLY a valid JSON array of slide objects. No preamble, no markdown fences, no backticks, no explanations.\n\n", config.SlideCount))
+	b.WriteString("Allowed slide types: title, section, content, two_column, stats, summary.\n")
+	b.WriteString("Every slide object must contain these keys exactly: index, type, title, subtitle, bullets, leftColumn, rightColumn, leftLabel, rightLabel, quote, quoteAuthor, stats, imageQuery, speakerNotes.\n")
+	b.WriteString("Use null for optional scalar fields when absent, [] for optional arrays when absent.\n")
+	b.WriteString("stats must be an array of objects shaped like {\"value\":\"...\",\"label\":\"...\"}.\n")
+	b.WriteString("imageQuery must be a 3-6 word English search query describing the ideal photo for that slide. Prefer realistic photo concepts.\n")
+	b.WriteString("The title slide (index 1, type=title) MUST have a non-empty imageQuery.\n")
+	b.WriteString("When possible, include the main topic/entity from the transcript in imageQuery (for example, Spider-Man, NASA, Kubernetes). Avoid generic-only queries.\n")
+	b.WriteString("speakerNotes must be concise presenter notes for that slide.\n\n")
+
+	switch {
+	case config.SlideCount <= 8:
+		b.WriteString("Short deck structure: exactly 1 title slide, 4-6 content or section slides, and 1 summary slide. Keep the narrative compact and focused.\n")
+	case config.SlideCount <= 14:
+		b.WriteString("Medium deck structure: exactly 1 title slide, multiple section and content slides, at least 1 two_column slide, and 1 summary slide.\n")
+	default:
+		b.WriteString("Large deck structure: exactly 1 title slide, multiple section slides, multiple content slides, at least 1 two_column slide, at least 1 stats slide, and 1 summary slide.\n")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(config.TextStyle)) {
+	case "academic":
+		b.WriteString("Text style: Academic. Cite concepts, use domain terminology, and build a structured argument with precise wording.\n")
+	case "conversational":
+		b.WriteString("Text style: Conversational. Use shorter bullets, plain language, and accessible explanations.\n")
+	default:
+		b.WriteString("Text style: Formal. Use professional language, full-sentence bullets when needed, and technical vocabulary where appropriate.\n")
+	}
+
+	b.WriteString("Slide writing rules:\n")
+	b.WriteString("- Keep each slide distinct and non-redundant.\n")
+	b.WriteString("- Use specific, transcript-grounded facts only.\n")
+	b.WriteString("- Prefer 4-7 bullets for content slides, 3-5 bullets per column for two_column slides, and 3-5 stats for stats slides.\n")
+	b.WriteString("- Keep title and subtitle presentation-friendly: title <= 14 words, subtitle <= 28 words.\n")
+	b.WriteString("- Bullet text should be informative and concise: roughly 10-22 words each, no paragraphs.\n")
+	b.WriteString("- Design for strong visuals: at least 70% of slides should have a non-empty imageQuery.\n")
+	b.WriteString("- Vary slide rhythm: alternate text-heavy and image-led moments to avoid repetitive layouts.\n")
+	b.WriteString("- For image-led slides, keep bullets complementary to the visual while preserving enough explanatory context.\n")
+	b.WriteString("- Keep imageQuery specific to the slide topic; generic queries like 'business meeting' or 'technology' are discouraged unless unavoidable.\n")
+	b.WriteString("- Do not generate quote slides. Set type to title, section, content, two_column, stats, or summary only.\n")
+	b.WriteString("- Summary slides should synthesize the core lessons, include 4-6 takeaways, and avoid repeating slide titles.\n")
+	b.WriteString("- speakerNotes should be 2-4 concise sentences that help the presenter elaborate key points.\n")
+	b.WriteString("- The theme preference is '")
+	b.WriteString(config.Theme)
+	b.WriteString("'; reflect that mood implicitly in structure and wording, but do not mention theme names in the output.\n")
+	if len(config.FocusAreas) > 0 {
+		b.WriteString("- Prioritize these focus areas where relevant: ")
+		b.WriteString(strings.Join(config.FocusAreas, ", "))
+		b.WriteString(".\n")
+	}
+	b.WriteString("\nTranscript:\n---TRANSCRIPT START---\n")
+	b.WriteString(transcript)
+	b.WriteString("\n---TRANSCRIPT END---")
+	return b.String()
+}
+
+func presentationLanguageName(language string) string {
+	switch strings.ToLower(strings.TrimSpace(language)) {
+	case "kk":
+		return "Kazakh"
+	case "ru":
+		return "Russian"
+	case "fr":
+		return "French"
+	case "es":
+		return "Spanish"
+	default:
+		return "English"
+	}
+}
+
+func buildFallbackPresentationSlides(transcript string, slideCount int) []models.PresentationSlide {
+	if slideCount < 3 {
+		slideCount = 3
+	}
+	sentences := splitPresentationSentences(transcript)
+	if len(sentences) == 0 {
+		sentences = []string{"Transcript content was limited, so this fallback presentation captures only the high-level topic."}
+	}
+	words := strings.Fields(transcript)
+	title := "Generated Presentation"
+	if len(words) > 0 {
+		limit := min(len(words), 8)
+		title = strings.Join(words[:limit], " ")
+	}
+
+	slides := make([]models.PresentationSlide, 0, slideCount)
+	titleQuery := fallbackSlideImageQuery(title)
+	slides = append(slides, models.PresentationSlide{
+		Index:        1,
+		ID:           "slide-1",
+		Type:         "title",
+		Title:        title,
+		ImageQuery:   &titleQuery,
+		SpeakerNotes: "Introduce the topic and explain that this deck was generated from limited structured output.",
+	})
+
+	contentSlides := slideCount - 2
+	chunkSize := max(1, (len(sentences)+contentSlides-1)/contentSlides)
+	for i := 0; i < contentSlides; i++ {
+		start := i * chunkSize
+		end := min(len(sentences), start+chunkSize)
+		chunk := sentences[start:end]
+		if len(chunk) == 0 {
+			chunk = []string{"Additional detail was limited in the source transcript."}
+		}
+		bullets := make([]string, 0, min(4, len(chunk)))
+		for _, sentence := range chunk {
+			trimmed := strings.TrimSpace(sentence)
+			if trimmed != "" {
+				bullets = append(bullets, trimmed)
+			}
+			if len(bullets) == 4 {
+				break
+			}
+		}
+		slides = append(slides, models.PresentationSlide{
+			Index:        len(slides) + 1,
+			ID:           fmt.Sprintf("slide-%d", len(slides)+1),
+			Type:         "content",
+			Title:        fmt.Sprintf("Key Point %d", i+1),
+			Bullets:      bullets,
+			ImageQuery:   stringPtr(fallbackSlideImageQuery(strings.Join(bullets, " "))),
+			SpeakerNotes: strings.Join(bullets, " "),
+		})
+	}
+
+	summaryBullets := make([]string, 0, 4)
+	for _, sentence := range sentences {
+		trimmed := strings.TrimSpace(sentence)
+		if trimmed != "" {
+			summaryBullets = append(summaryBullets, trimmed)
+		}
+		if len(summaryBullets) == 4 {
+			break
+		}
+	}
+	if len(summaryBullets) == 0 {
+		summaryBullets = []string{"Source transcript was limited, so the summary remains high level."}
+	}
+	slides = append(slides, models.PresentationSlide{
+		Index:        len(slides) + 1,
+		ID:           fmt.Sprintf("slide-%d", len(slides)+1),
+		Type:         "summary",
+		Title:        "Key Takeaways",
+		Bullets:      summaryBullets,
+		ImageQuery:   stringPtr(fallbackSlideImageQuery(strings.Join(summaryBullets, " "))),
+		SpeakerNotes: "Close by restating the main ideas and next actions.",
+	})
+
+	return slides
+}
+
+func splitPresentationSentences(text string) []string {
+	text = strings.Join(strings.Fields(text), " ")
+	if text == "" {
+		return nil
+	}
+	parts := regexp.MustCompile(`[.!?]\s+`).Split(text, -1)
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+
+	words := strings.Fields(text)
+	for i := 0; i < len(words); i += 16 {
+		out = append(out, strings.Join(words[i:min(len(words), i+16)], " "))
+	}
+	return out
+}
+
+func normalizePresentationSlides(slides []models.PresentationSlide) {
+	for i := range slides {
+		if slides[i].Index <= 0 {
+			slides[i].Index = i + 1
+		}
+		if strings.TrimSpace(slides[i].ID) == "" {
+			slides[i].ID = fmt.Sprintf("slide-%d", slides[i].Index)
+		}
+		if strings.TrimSpace(slides[i].Type) == "" {
+			slides[i].Type = "content"
+		}
+		if slides[i].Bullets == nil {
+			slides[i].Bullets = []string{}
+		}
+		if slides[i].LeftColumn == nil {
+			slides[i].LeftColumn = []string{}
+		}
+		if slides[i].RightColumn == nil {
+			slides[i].RightColumn = []string{}
+		}
+		if slides[i].Stats == nil {
+			slides[i].Stats = []models.PresentationStat{}
+		}
+		if slides[i].Columns == nil {
+			slides[i].Columns = []models.PresentationColumn{}
+		}
+		if slides[i].Takeaways == nil {
+			slides[i].Takeaways = []models.PresentationTakeaway{}
+		}
+		if slides[i].SpeakerNotes == "" && slides[i].Notes != nil {
+			slides[i].SpeakerNotes = strings.TrimSpace(*slides[i].Notes)
+		}
+		if slides[i].Notes == nil && strings.TrimSpace(slides[i].SpeakerNotes) != "" {
+			notes := strings.TrimSpace(slides[i].SpeakerNotes)
+			slides[i].Notes = &notes
+		}
+	}
+}
+
+func enforcePresentationImageQueries(slides []models.PresentationSlide, transcript string) {
+	if len(slides) == 0 {
+		return
+	}
+
+	primaryTopic := detectPresentationPrimaryTopic(slides, transcript)
+	titleIndex := findTitleSlideIndex(slides)
+
+	for i := range slides {
+		existing := pointerStringValue(slides[i].ImageQuery)
+		if existing != "" {
+			normalized := normalizeImageQuery(existing)
+			if normalized != "" {
+				slides[i].ImageQuery = stringPtr(normalized)
+			}
+			continue
+		}
+
+		seed := fallbackSlideImageQuery(strings.Join([]string{
+			primaryTopic,
+			slides[i].Title,
+			pointerStringValue(slides[i].Subtitle),
+			strings.Join(slides[i].Bullets, " "),
+		}, " "))
+		if seed != "" {
+			slides[i].ImageQuery = stringPtr(seed)
+		}
+	}
+
+	if titleIndex >= 0 && strings.TrimSpace(pointerStringValue(slides[titleIndex].ImageQuery)) == "" {
+		titleSeed := fallbackSlideImageQuery(strings.Join([]string{primaryTopic, slides[titleIndex].Title, pointerStringValue(slides[titleIndex].Subtitle)}, " "))
+		if titleSeed == "" {
+			titleSeed = "presentation hero background"
+		}
+		slides[titleIndex].ImageQuery = stringPtr(titleSeed)
+	}
+}
+
+func findTitleSlideIndex(slides []models.PresentationSlide) int {
+	for i := range slides {
+		if strings.EqualFold(strings.TrimSpace(slides[i].Type), "title") {
+			return i
+		}
+	}
+	if len(slides) > 0 {
+		return 0
+	}
+	return -1
+}
+
+func detectPresentationPrimaryTopic(slides []models.PresentationSlide, transcript string) string {
+	var titleText strings.Builder
+	for _, slide := range slides {
+		if strings.EqualFold(strings.TrimSpace(slide.Type), "title") {
+			titleText.WriteString(slide.Title)
+			titleText.WriteString(" ")
+			titleText.WriteString(pointerStringValue(slide.Subtitle))
+			break
+		}
+	}
+	source := strings.ToLower(titleText.String() + " " + transcript)
+
+	if strings.Contains(source, "spider-man") || strings.Contains(source, "spiderman") || strings.Contains(source, "spider man") {
+		return "spider-man"
+	}
+
+	if query := fallbackSlideImageQuery(titleText.String()); query != "" {
+		return query
+	}
+
+	if query := fallbackSlideImageQuery(transcript); query != "" {
+		return query
+	}
+
+	return ""
+}
+
+func fallbackSlideImageQuery(text string) string {
+	normalized := normalizeImageQuery(text)
+	if normalized == "" {
+		return ""
+	}
+	words := strings.Fields(normalized)
+	if len(words) > 6 {
+		words = words[:6]
+	}
+	return strings.Join(words, " ")
+}
+
+func normalizeImageQuery(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return ""
+	}
+
+	if strings.Contains(raw, "spider-man") || strings.Contains(raw, "spiderman") || strings.Contains(raw, "spider man") {
+		return "spider-man superhero new york"
+	}
+
+	re := regexp.MustCompile(`[^a-z0-9\s-]+`)
+	clean := re.ReplaceAllString(raw, " ")
+	clean = strings.Join(strings.Fields(clean), " ")
+	if clean == "" {
+		return ""
+	}
+
+	words := strings.Fields(clean)
+	filtered := make([]string, 0, len(words))
+	for _, word := range words {
+		if isGenericImageWord(word) {
+			continue
+		}
+		filtered = append(filtered, word)
+	}
+	if len(filtered) == 0 {
+		filtered = words
+	}
+	if len(filtered) > 6 {
+		filtered = filtered[:6]
+	}
+	return strings.Join(filtered, " ")
+}
+
+func isGenericImageWord(word string) bool {
+	switch word {
+	case "presentation", "presentations", "slide", "slides", "section", "summary", "takeaway", "takeaways", "overview", "intro", "introduction", "lecture", "project", "content", "point", "points", "final", "key":
+		return true
+	default:
+		return false
+	}
+}
+
+func buildSlideImageQueryCandidates(slide models.PresentationSlide, primaryTopic string, isTitle bool) []string {
+	candidates := make([]string, 0, 8)
+	seen := make(map[string]struct{}, 8)
+	add := func(query string) {
+		query = normalizeImageQuery(query)
+		if query == "" {
+			return
+		}
+		if _, exists := seen[query]; exists {
+			return
+		}
+		seen[query] = struct{}{}
+		candidates = append(candidates, query)
+	}
+
+	add(pointerStringValue(slide.ImageQuery))
+	if primaryTopic != "" {
+		if isTitle {
+			add(primaryTopic + " cinematic poster")
+			add(primaryTopic + " character portrait")
+			add(primaryTopic + " movie scene")
+		} else {
+			add(primaryTopic + " " + slide.Title)
+			add(primaryTopic + " " + firstNWords(strings.Join(slide.Bullets, " "), 4))
+		}
+	}
+	add(slide.Title)
+	add(pointerStringValue(slide.Subtitle))
+	add(firstNWords(strings.Join(slide.Bullets, " "), 6))
+
+	if isTitle && len(candidates) == 0 {
+		add("presentation hero background")
+	}
+
+	return candidates
+}
+
+func firstNWords(text string, n int) string {
+	words := strings.Fields(strings.TrimSpace(text))
+	if len(words) == 0 {
+		return ""
+	}
+	if n <= 0 || len(words) <= n {
+		return strings.Join(words, " ")
+	}
+	return strings.Join(words[:n], " ")
+}
+
+func derivePresentationTitle(slides []models.PresentationSlide) string {
+	for _, slide := range slides {
+		if strings.EqualFold(strings.TrimSpace(slide.Type), "title") && strings.TrimSpace(slide.Title) != "" {
+			return strings.TrimSpace(slide.Title)
+		}
+	}
+	for _, slide := range slides {
+		if strings.TrimSpace(slide.Title) != "" {
+			return strings.TrimSpace(slide.Title)
+		}
+	}
+	return ""
+}
+
+func (s *GeminiService) attachPresentationImages(ctx context.Context, slides []models.PresentationSlide, transcript string) {
+	if strings.TrimSpace(s.unsplashAccessKey) == "" || len(slides) == 0 {
+		return
+	}
+
+	primaryTopic := detectPresentationPrimaryTopic(slides, transcript)
+	titleIndex := findTitleSlideIndex(slides)
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var firstFoundImage string
+	sem := make(chan struct{}, 5)
+
+	for i := range slides {
+		candidates := buildSlideImageQueryCandidates(slides[i], primaryTopic, i == titleIndex)
+		if len(candidates) == 0 {
+			continue
+		}
+
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(index int, candidateQueries []string, mustHaveImage bool) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			imageURL, usedQuery, err := s.fetchUnsplashImageFromCandidates(ctx, candidateQueries, mustHaveImage)
+			if err != nil || imageURL == "" {
+				if err != nil {
+					log.Printf("unsplash lookup failed for slide %d queries %v: %v", index, candidateQueries, err)
+				}
+				return
+			}
+
+			mu.Lock()
+			slides[index].ImageURL = &imageURL
+			if strings.TrimSpace(pointerStringValue(slides[index].ImageQuery)) == "" && usedQuery != "" {
+				slides[index].ImageQuery = stringPtr(usedQuery)
+			}
+			if firstFoundImage == "" {
+				firstFoundImage = imageURL
+			}
+			mu.Unlock()
+		}(i, candidates, i == titleIndex)
+	}
+
+	wg.Wait()
+
+	if titleIndex >= 0 && slides[titleIndex].ImageURL == nil {
+		if firstFoundImage != "" {
+			slides[titleIndex].ImageURL = &firstFoundImage
+			return
+		}
+
+		titleQuery := pointerStringValue(slides[titleIndex].ImageQuery)
+		if titleQuery == "" {
+			titleQuery = fallbackSlideImageQuery(strings.Join([]string{primaryTopic, slides[titleIndex].Title, pointerStringValue(slides[titleIndex].Subtitle)}, " "))
+			if titleQuery == "" {
+				titleQuery = "presentation hero background"
+			}
+			slides[titleIndex].ImageQuery = stringPtr(titleQuery)
+		}
+
+		fallbackURL := "https://source.unsplash.com/1600x900/?" + url.QueryEscape(titleQuery)
+		slides[titleIndex].ImageURL = &fallbackURL
+		log.Printf("title slide image fallback used with query %q", titleQuery)
+	}
+}
+
+func (s *GeminiService) fetchUnsplashImageFromCandidates(ctx context.Context, candidates []string, requireImage bool) (string, string, error) {
+	var lastErr error
+	for _, query := range candidates {
+		imageURL, err := s.fetchUnsplashImage(ctx, query)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if strings.TrimSpace(imageURL) != "" {
+			return imageURL, query, nil
+		}
+	}
+
+	if requireImage && len(candidates) > 0 {
+		for _, query := range candidates[:min(2, len(candidates))] {
+			imageURL, err := s.fetchUnsplashRandomImage(ctx, query)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			if strings.TrimSpace(imageURL) != "" {
+				return imageURL, query, nil
+			}
+		}
+	}
+
+	return "", "", lastErr
+}
+
+func (s *GeminiService) fetchUnsplashImage(ctx context.Context, imageQuery string) (string, error) {
+	values := url.Values{}
+	values.Set("query", imageQuery)
+	values.Set("per_page", "1")
+	values.Set("orientation", "landscape")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.unsplash.com/search/photos?"+values.Encode(), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Client-ID "+s.unsplashAccessKey)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("unsplash returned status %d", resp.StatusCode)
+	}
+
+	var payload struct {
+		Results []struct {
+			URLs struct {
+				Regular string `json:"regular"`
+			} `json:"urls"`
+		} `json:"results"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", err
+	}
+	if len(payload.Results) == 0 {
+		return "", nil
+	}
+	return strings.TrimSpace(payload.Results[0].URLs.Regular), nil
+}
+
+func (s *GeminiService) fetchUnsplashRandomImage(ctx context.Context, imageQuery string) (string, error) {
+	values := url.Values{}
+	values.Set("query", imageQuery)
+	values.Set("orientation", "landscape")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.unsplash.com/photos/random?"+values.Encode(), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Client-ID "+s.unsplashAccessKey)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("unsplash random returned status %d", resp.StatusCode)
+	}
+
+	var payload struct {
+		URLs struct {
+			Regular string `json:"regular"`
+		} `json:"urls"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(payload.URLs.Regular), nil
+}
+
+func stringPtr(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+func pointerStringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
+}
+
 func buildQuizPrompt(config models.GenerateQuizRequest, content string) string {
 	var b strings.Builder
 
@@ -2538,7 +3239,7 @@ func (s *GeminiService) ChatWithSummary(ctx context.Context, summaryContent, use
 
 	chatModel.SystemInstruction = &genai.Content{
 		Parts: []genai.Part{
- 			genai.Text(fmt.Sprintf(`You are an expert tutor helping a student explore a topic in depth. The student has been studying the following summary and wants to understand it better.
+			genai.Text(fmt.Sprintf(`You are an expert tutor helping a student explore a topic in depth. The student has been studying the following summary and wants to understand it better.
 
 Your role:
 - Use the summary as your primary foundation and reference point

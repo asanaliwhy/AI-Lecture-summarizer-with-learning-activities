@@ -22,6 +22,7 @@ func buildTestRouter() http.Handler {
 		(*handlers.WSTicketHandler)(nil),
 		(*handlers.ContentHandler)(nil),
 		(*handlers.SummaryHandler)(nil),
+		(*handlers.PresentationHandler)(nil),
 		(*handlers.QuizHandler)(nil),
 		(*handlers.FlashcardHandler)(nil),
 		(*handlers.StudySessionHandler)(nil),

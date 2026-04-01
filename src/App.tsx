@@ -23,6 +23,9 @@ import { FlashcardsPage } from './pages/FlashcardsPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { PresentationPage } from './pages/PresentationPage'
+import { PresentationsPage } from './pages/PresentationsPage'
+import { PresentationConfigPage } from './pages/PresentationConfigPage'
 
 export function App() {
   return (
@@ -35,7 +38,7 @@ export function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            <Route path="/callback" element={<AuthCallbackPage />} />
             <Route path="/verify-email" element={<EmailVerificationPage />} />
 
             {/* Authenticated Routes */}
@@ -55,6 +58,12 @@ export function App() {
             <Route path="/flashcards" element={<ProtectedRoute><FlashcardsPage /></ProtectedRoute>} />
             <Route path="/flashcards/create/:summaryId" element={<ProtectedRoute><FlashcardConfigPage /></ProtectedRoute>} />
             <Route path="/flashcards/study/:deckId" element={<ProtectedRoute><FlashcardStudyPage /></ProtectedRoute>} />
+
+            {/* Presentation Routes */}
+            <Route path="/presentations" element={<ProtectedRoute><PresentationsPage /></ProtectedRoute>} />
+            <Route path="/presentations/new" element={<ProtectedRoute><PresentationConfigPage /></ProtectedRoute>} />
+            <Route path="/presentations/test" element={<ProtectedRoute><PresentationPage /></ProtectedRoute>} />
+            <Route path="/presentations/:id" element={<ProtectedRoute><PresentationPage /></ProtectedRoute>} />
 
             {/* Management Routes */}
             <Route path="/library" element={<ProtectedRoute><LibraryPage /></ProtectedRoute>} />

@@ -98,3 +98,12 @@ func (r *JobRepo) UpdateError(ctx context.Context, id uuid.UUID, errMsg string, 
 	)
 	return err
 }
+
+func (r *JobRepo) DeleteByReference(ctx context.Context, referenceID uuid.UUID, jobTypes ...string) error {
+	if len(jobTypes) == 0 {
+		_, err := r.pool.Exec(ctx, `DELETE FROM jobs WHERE reference_id = $1`, referenceID)
+		return err
+	}
+	_, err := r.pool.Exec(ctx, `DELETE FROM jobs WHERE reference_id = $1 AND type = ANY($2)`, referenceID, jobTypes)
+	return err
+}

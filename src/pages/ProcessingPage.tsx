@@ -32,7 +32,7 @@ export function ProcessingPage() {
 
   type ProcessingWSCompletedPayload = {
     job_id?: string
-    result_type?: 'summary' | 'quiz' | 'flashcard' | string
+    result_type?: 'summary' | 'quiz' | 'flashcard' | 'presentation' | string
     result_id?: string
   }
 
@@ -129,6 +129,31 @@ export function ProcessingPage() {
       ]
     }
 
+    if (jobType === 'presentation') {
+      return [
+        {
+          title: 'Analyzing Content',
+          description: 'Checking source content and presentation settings',
+        },
+        {
+          title: 'Preparing Transcript',
+          description: 'Loading transcript and extracting presentation-ready material',
+        },
+        {
+          title: 'Designing Slides',
+          description: 'Generating slide structure, titles, and speaker notes',
+        },
+        {
+          title: 'Attaching Visuals',
+          description: 'Fetching supporting images when available',
+        },
+        {
+          title: 'Finalizing',
+          description: 'Saving presentation and preparing the viewer',
+        },
+      ]
+    }
+
     return [
       {
         title: 'Analyzing Content',
@@ -166,7 +191,8 @@ export function ProcessingPage() {
         setCurrentStep(Math.max(0, stepFromBackend - 1))
         setStepName(statusPayload.step_name || '')
 
-        if (stepFromBackend >= 4) {
+        const finalizingThreshold = job?.type === 'presentation' ? 5 : 4
+        if (stepFromBackend >= finalizingThreshold) {
           if (finalizingSinceRef.current === null) {
             finalizingSinceRef.current = Date.now()
           }
@@ -177,15 +203,17 @@ export function ProcessingPage() {
     },
     onCompleted: (payload: unknown) => {
       const completedPayload = toCompletedPayload(payload)
-      if (completedPayload.job_id === jobId || !jobId) {
-        finalizingSinceRef.current = null
-        setIsComplete(true)
+        if (completedPayload.job_id === jobId || !jobId) {
+          finalizingSinceRef.current = null
+          setIsComplete(true)
         if (completedPayload.result_type === 'summary' && completedPayload.result_id) {
           navigate(`/summary/${completedPayload.result_id}`, { replace: true })
         } else if (completedPayload.result_type === 'quiz' && completedPayload.result_id) {
           navigate(`/quiz/take/${completedPayload.result_id}`, { replace: true })
         } else if (completedPayload.result_type === 'flashcard' && completedPayload.result_id) {
           navigate(`/flashcards/study/${completedPayload.result_id}`, { replace: true })
+        } else if (completedPayload.result_type === 'presentation' && completedPayload.result_id) {
+          navigate(`/presentations/${completedPayload.result_id}`, { replace: true })
         } else {
           navigate('/dashboard', { replace: true })
         }
@@ -242,6 +270,8 @@ export function ProcessingPage() {
             navigate(`/quiz/take/${data.reference_id}`, { replace: true })
           } else if (data.type === 'flashcard-generation') {
             navigate(`/flashcards/study/${data.reference_id}`, { replace: true })
+          } else if (data.type === 'presentation') {
+            navigate(`/presentations/${data.reference_id}`, { replace: true })
           } else {
             navigate('/dashboard', { replace: true })
           }
@@ -263,27 +293,32 @@ export function ProcessingPage() {
           return
         }
 
-        if (
-          data.status === 'processing' &&
-          data.type === 'summary-generation' &&
-          data.reference_id &&
-          finalizingSinceRef.current !== null &&
-          Date.now() - finalizingSinceRef.current >= FINALIZING_STALE_MS
-        ) {
+        if (data.status === 'processing' && data.reference_id && finalizingSinceRef.current !== null && Date.now() - finalizingSinceRef.current >= FINALIZING_STALE_MS) {
           try {
-            const summary = await api.summaries?.get?.(data.reference_id)
-            const hasReadyContent = Boolean(
-              summary &&
-              (summary.content_raw || summary.cornell_summary || summary.content || summary.body),
-            )
+            if (data.type === 'summary-generation') {
+              const summary = await api.summaries?.get?.(data.reference_id)
+              const hasReadyContent = Boolean(
+                summary &&
+                (summary.content_raw || summary.cornell_summary || summary.content || summary.body),
+              )
 
-            if (hasReadyContent) {
-              setIsComplete(true)
-              navigate(`/summary/${data.reference_id}`, { replace: true })
-              return
+              if (hasReadyContent) {
+                setIsComplete(true)
+                navigate(`/summary/${data.reference_id}`, { replace: true })
+                return
+              }
+            }
+
+            if (data.type === 'presentation') {
+              const presentation = await api.presentations.get(data.reference_id)
+              if (presentation && presentation.slides.length > 0) {
+                setIsComplete(true)
+                navigate(`/presentations/${data.reference_id}`, { replace: true })
+                return
+              }
             }
           } catch {
-            // keep polling when summary is not ready yet
+            // keep polling when the result is not ready yet
           }
         }
 

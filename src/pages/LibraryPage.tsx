@@ -25,6 +25,7 @@ import {
   FileText,
   BrainCircuit,
   Layers,
+  Presentation,
   Calendar,
   Grid,
   List as ListIcon,
@@ -40,9 +41,9 @@ import type { jsPDF } from 'jspdf'
 
 type LibraryTab = 'all' | 'favorites'
 type ViewMode = 'grid' | 'list'
-type TypeFilter = 'all' | 'summary' | 'quiz' | 'flashcards'
+type TypeFilter = 'all' | 'summary' | 'quiz' | 'flashcards' | 'presentations'
 
-type NormalizedLibraryItemType = 'summary' | 'quiz' | 'flashcard'
+type NormalizedLibraryItemType = 'summary' | 'quiz' | 'flashcard' | 'presentation'
 
 interface LibraryItem extends Omit<LibraryItemResponse, 'type'> {
   type: NormalizedLibraryItemType
@@ -54,7 +55,15 @@ const normalizeItemType = (type: LibraryItemType): NormalizedLibraryItemType => 
   const value = String(type || '').toLowerCase()
   if (value === 'quiz') return 'quiz'
   if (value === 'flashcard' || value === 'flashcards') return 'flashcard'
+  if (value === 'presentation' || value === 'presentations') return 'presentation'
   return 'summary'
+}
+
+const mapTypeFilterToApiType = (typeFilter: TypeFilter): string | null => {
+  if (typeFilter === 'all') return null
+  if (typeFilter === 'flashcards') return 'flashcard'
+  if (typeFilter === 'presentations') return 'presentation'
+  return typeFilter
 }
 
 const normalizeLibraryItems = (items: LibraryItemResponse[] | undefined): LibraryItem[] => {
@@ -109,6 +118,11 @@ export function LibraryPage() {
       return
     }
 
+    if (type === 'presentations' || type === 'presentation') {
+      setTypeFilter('presentations')
+      return
+    }
+
     if (type === 'summary' || type === 'quiz' || type === 'flashcard' || type === 'all') {
       setTypeFilter(type === 'flashcard' ? 'flashcards' : type)
     }
@@ -124,8 +138,9 @@ export function LibraryPage() {
       try {
         const params: Record<string, string> = {}
         if (debouncedSearchQuery) params.search = debouncedSearchQuery
-        if (typeFilter !== 'all') {
-          params.type = typeFilter === 'flashcards' ? 'flashcard' : typeFilter
+        const apiType = mapTypeFilterToApiType(typeFilter)
+        if (apiType) {
+          params.type = apiType
         }
         const data = await api.library.list(params)
 
@@ -163,8 +178,9 @@ export function LibraryPage() {
     try {
       const params: Record<string, string> = {}
       if (debouncedSearchQuery) params.search = debouncedSearchQuery
-      if (typeFilter !== 'all') {
-        params.type = typeFilter === 'flashcards' ? 'flashcard' : typeFilter
+      const apiType = mapTypeFilterToApiType(typeFilter)
+      if (apiType) {
+        params.type = apiType
       }
 
       const data = await api.library.list(params)
@@ -210,6 +226,8 @@ export function LibraryPage() {
           await api.summaries.delete(id)
         } else if (item.type === 'quiz') {
           await api.quizzes.delete(id)
+        } else if (item.type === 'presentation') {
+          await api.presentations.delete(id)
         } else {
           await api.flashcards.deleteDeck(id)
         }
@@ -221,8 +239,9 @@ export function LibraryPage() {
 
     const params: Record<string, string> = {}
     if (debouncedSearchQuery) params.search = debouncedSearchQuery
-    if (typeFilter !== 'all') {
-      params.type = typeFilter === 'flashcards' ? 'flashcard' : typeFilter
+    const apiType = mapTypeFilterToApiType(typeFilter)
+    if (apiType) {
+      params.type = apiType
     }
 
     try {
@@ -682,10 +701,16 @@ export function LibraryPage() {
 
       let successCount = 0
       let failureCount = 0
+      let unsupportedCount = 0
 
       for (const id of selectedItems) {
         const item = items.find((i) => i.id === id)
         if (!item) continue
+
+        if (item.type === 'presentation') {
+          unsupportedCount += 1
+          continue
+        }
 
         try {
           if (item.type === 'summary') {
@@ -757,6 +782,10 @@ export function LibraryPage() {
       } else if (failureCount > 0) {
         toast.error(`Export failed for ${failureCount} item${failureCount === 1 ? '' : 's'}`)
       }
+
+      if (unsupportedCount > 0) {
+        toast.warning(`Skipped ${unsupportedCount} presentation${unsupportedCount === 1 ? '' : 's'} (export arrives in Stage 3).`)
+      }
     } finally {
       setIsExporting(false)
     }
@@ -766,6 +795,7 @@ export function LibraryPage() {
     if (item.type === 'summary') return `/summary/${item.id}`
     if (item.type === 'quiz') return `/quiz/take/${item.id}`
     if (item.type === 'flashcard') return `/flashcards/study/${item.id}`
+    if (item.type === 'presentation') return `/presentations/${item.id}`
     return '/library'
   }
 
@@ -776,6 +806,7 @@ export function LibraryPage() {
   const summaryCount = items.filter((item) => item?.type === 'summary').length
   const quizCount = items.filter((item) => item?.type === 'quiz').length
   const flashcardCount = items.filter((item) => item?.type === 'flashcard').length
+  const presentationCount = items.filter((item) => item?.type === 'presentation').length
   const favoriteCount = items.filter((item) => Boolean(item?.is_favorite)).length
 
   const getTypeMeta = (type: NormalizedLibraryItemType) => {
@@ -796,6 +827,16 @@ export function LibraryPage() {
         iconClass: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
         badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/40',
         railClass: 'from-emerald-500/50 to-emerald-300/20',
+      }
+    }
+
+    if (type === 'presentation') {
+      return {
+        label: 'Presentation',
+        icon: Presentation,
+        iconClass: 'bg-cyan-100 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300',
+        badgeClass: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/40',
+        railClass: 'from-cyan-500/50 to-cyan-300/20',
       }
     }
 
@@ -842,12 +883,12 @@ export function LibraryPage() {
           </div>
 
           <div className="relative mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              { label: 'Total', value: items.length, icon: Search },
-              { label: 'Favorites', value: favoriteCount, icon: Heart },
-              { label: 'Summaries', value: summaryCount, icon: FileText },
-              { label: 'Quizzes / Flashcards', value: quizCount + flashcardCount, icon: BrainCircuit },
-            ].map((stat) => {
+              {[
+                { label: 'Total', value: items.length, icon: Search },
+                { label: 'Favorites', value: favoriteCount, icon: Heart },
+                { label: 'Summaries', value: summaryCount, icon: FileText },
+                { label: 'Quizzes / Flashcards / Presentations', value: quizCount + flashcardCount + presentationCount, icon: BrainCircuit },
+              ].map((stat) => {
               const Icon = stat.icon
               return (
                 <div key={stat.label} className="rounded-xl border bg-card/90 p-3 shadow-sm">
@@ -912,6 +953,7 @@ export function LibraryPage() {
                       { id: 'summary', label: 'Summaries' },
                       { id: 'quiz', label: 'Quizzes' },
                       { id: 'flashcards', label: 'Flashcards' },
+                      { id: 'presentations', label: 'Presentations' },
                     ] as Array<{ id: TypeFilter; label: string }>).map(opt => (
                       <div key={opt.id} className={cn(
                         'flex items-center space-x-2 rounded-lg border px-3 py-2 transition-colors',
