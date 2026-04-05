@@ -2339,15 +2339,39 @@ func buildFallbackPresentationSlides(transcript string, slideCount int) []models
 	if slideCount < 3 {
 		slideCount = 3
 	}
-	sentences := splitPresentationSentences(transcript)
-	if len(sentences) == 0 {
-		sentences = []string{"Transcript content was limited, so this fallback presentation captures only the high-level topic."}
+	sentenceCandidates := make([]string, 0, max(slideCount*5, 16))
+	seen := map[string]struct{}{}
+	for _, sentence := range splitPresentationSentences(transcript) {
+		normalized := normalizePresentationBullet(sentence, 16)
+		if normalized == "" || isConversationalTranscriptLine(normalized) || isStatMetadataText(normalized) {
+			continue
+		}
+		normalized = ensureTrailingDot(normalized)
+		key := normalizeCompareText(normalized)
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		sentenceCandidates = append(sentenceCandidates, normalized)
+		if len(sentenceCandidates) >= max(slideCount*5, 24) {
+			break
+		}
 	}
-	words := strings.Fields(transcript)
-	title := "Generated Presentation"
-	if len(words) > 0 {
-		limit := min(len(words), 8)
-		title = strings.Join(words[:limit], " ")
+
+	if len(sentenceCandidates) == 0 {
+		sentenceCandidates = []string{
+			"The source transcript was noisy, so this fallback deck focuses on validated high level insights.",
+			"Core themes are organized into concise points that avoid transcript artifacts and conversational fragments.",
+			"Each slide emphasizes practical understanding with clear phrasing and presentation ready structure.",
+		}
+	}
+
+	title := strings.TrimRight(firstNWords(sentenceCandidates[0], 7), " .;:!?")
+	if title == "" {
+		title = "Generated Presentation"
 	}
 
 	slides := make([]models.PresentationSlide, 0, slideCount)
@@ -2363,17 +2387,17 @@ func buildFallbackPresentationSlides(transcript string, slideCount int) []models
 	})
 
 	contentSlides := slideCount - 2
-	chunkSize := max(1, (len(sentences)+contentSlides-1)/contentSlides)
+	chunkSize := max(1, (len(sentenceCandidates)+contentSlides-1)/contentSlides)
 	for i := 0; i < contentSlides; i++ {
 		start := i * chunkSize
-		end := min(len(sentences), start+chunkSize)
-		chunk := sentences[start:end]
+		end := min(len(sentenceCandidates), start+chunkSize)
+		chunk := sentenceCandidates[start:end]
 		if len(chunk) == 0 {
-			chunk = []string{"Additional detail was limited in the source transcript."}
+			chunk = []string{"Additional validated detail was limited in the source transcript."}
 		}
 		bullets := make([]string, 0, min(4, len(chunk)))
 		for _, sentence := range chunk {
-			trimmed := strings.TrimSpace(sentence)
+			trimmed := ensureTrailingDot(strings.TrimSpace(sentence))
 			if trimmed != "" {
 				bullets = append(bullets, trimmed)
 			}
@@ -2381,11 +2405,18 @@ func buildFallbackPresentationSlides(transcript string, slideCount int) []models
 				break
 			}
 		}
+		slideTitle := fmt.Sprintf("Insight %d", i+1)
+		if len(bullets) > 0 {
+			candidateTitle := strings.TrimRight(firstNWords(stripNumericPrefixes(bullets[0]), 4), " .;:!?")
+			if candidateTitle != "" {
+				slideTitle = candidateTitle
+			}
+		}
 		slides = append(slides, models.PresentationSlide{
 			Index:         len(slides) + 1,
 			ID:            fmt.Sprintf("slide-%d", len(slides)+1),
 			Type:          "content",
-			Title:         fmt.Sprintf("Key Point %d", i+1),
+			Title:         slideTitle,
 			Bullets:       bullets,
 			ImageQuery:    stringPtr(fallbackSlideImageQuery(strings.Join(bullets, " "))),
 			ImagePosition: stringPtr("right"),
@@ -2394,8 +2425,8 @@ func buildFallbackPresentationSlides(transcript string, slideCount int) []models
 	}
 
 	summaryBullets := make([]string, 0, 4)
-	for _, sentence := range sentences {
-		trimmed := strings.TrimSpace(sentence)
+	for _, sentence := range sentenceCandidates {
+		trimmed := ensureTrailingDot(strings.TrimSpace(sentence))
 		if trimmed != "" {
 			summaryBullets = append(summaryBullets, trimmed)
 		}
@@ -2529,10 +2560,24 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 			title = ""
 		}
 		if title == "" {
-			title = firstNonEmpty(pointerStringValue(slides[i].Subtitle), "Key Insight")
+			if slideType == "content" && len(slides[i].Bullets) > 0 {
+				title = strings.TrimRight(firstNWords(stripNumericPrefixes(slides[i].Bullets[0]), 5), " .;:!?")
+			}
+			if title == "" {
+				title = firstNonEmpty(pointerStringValue(slides[i].Subtitle), "Key Insight")
+			}
 			title = sanitizePresentationText(title)
 			if isConversationalTranscriptLine(title) {
-				title = "Key Insight"
+				switch slideType {
+				case "stats":
+					title = "Key Metrics"
+				case "two_column":
+					title = "Comparison Overview"
+				case "summary":
+					title = "Key Takeaways"
+				default:
+					title = "Core Insight"
+				}
 			}
 		}
 		slides[i].Title = title
@@ -4078,6 +4123,9 @@ func isConversationalTranscriptLine(value string) bool {
 	if regexp.MustCompile(`(?i)^key\s*(?:point|takeaway|insight|step|item)\s*\d+\b`).MatchString(clean) {
 		return true
 	}
+	if regexp.MustCompile(`(?i)^key\s*insights?$`).MatchString(clean) {
+		return true
+	}
 	if regexp.MustCompile(`(?i)^key\s*takeaways?$`).MatchString(clean) {
 		return true
 	}
@@ -4099,6 +4147,9 @@ func isConversationalTranscriptLine(value string) bool {
 		"finally here", "before we even start",
 		"if you're new here", "if you are new here",
 		"english podcast", "hosted by me",
+		"as i said", "i'm here to", "i am here to",
+		"i'd like to", "i would like to", "let me make",
+		"if you want to understand", "they come to me",
 		"going against each other", "going to get this",
 		"by the end", "let me know in the comments",
 		"comment asking me", "check out the link",
@@ -4114,7 +4165,7 @@ func isConversationalTranscriptLine(value string) bool {
 	}
 
 	// Detect first-person casual address patterns.
-	casualPatterns := regexp.MustCompile(`(?i)^(?:if everyone|before we|we have chad|we're finally|the long[- ]awaited)`)
+	casualPatterns := regexp.MustCompile(`(?i)^(?:if everyone|before we|we have chad|we're finally|the long[- ]awaited|[a-z]+\s+(?:emphasized|said|noted|mentioned|explained|stated)\s+that)`)
 	if casualPatterns.MatchString(clean) {
 		return true
 	}
@@ -4568,6 +4619,7 @@ func firstNonEmpty(values ...string) string {
 
 func stripNumericPrefixes(value string) string {
 	value = sanitizePresentationText(value)
+	value = regexp.MustCompile(`(?i)^\s*key\s*insight(?:\s*\d+)?\s*[:.)-]?\s*`).ReplaceAllString(value, "")
 	value = regexp.MustCompile(`(?i)^\s*(?:(?:key\s*)?(?:point|takeaway|insight|step|item)\s*\d+\s*[:.)-]?\s*)`).ReplaceAllString(value, "")
 	value = regexp.MustCompile(`(?i)^\s*(?:(?:\(?\d{1,2}\)?|[ivxlcdm]{1,5})\s*(?:[).:-]|-\s)\s*|[-*•]+\s*)`).ReplaceAllString(value, "")
 	return strings.TrimSpace(value)
