@@ -1429,7 +1429,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
               ...layoutPadding,
               zIndex: 2,
               display: 'grid',
-                gridTemplateColumns: hasImage ? (useCardGrid ? '54% 46%' : '50% 50%') : '1fr',
+                gridTemplateColumns: hasImage
+                  ? imagePosition === 'left'
+                    ? (useCardGrid ? '44% 56%' : '46% 54%')
+                    : (useCardGrid ? '54% 46%' : '50% 50%')
+                  : '1fr',
               gap: s(22),
               alignItems: 'stretch',
               flex: 1,
