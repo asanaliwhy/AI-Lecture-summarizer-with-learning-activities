@@ -2838,7 +2838,7 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 	for (len(left) < targetMin || len(right) < targetMin) && extraIdx < len(extra) {
 		candidate := extra[extraIdx]
 		extraIdx++
-		if candidate == "" || isConversationalTranscriptLine(candidate) {
+		if candidate == "" || isConversationalTranscriptLine(candidate) || isTwoColumnMetaItem(candidate) {
 			continue
 		}
 		// Reject candidates that overlap with the slide title or subtitle.
@@ -4097,6 +4097,8 @@ func isConversationalTranscriptLine(value string) bool {
 		"hits that subscribe", "everyone hits that",
 		"the long-awaited video", "the long awaited video",
 		"finally here", "before we even start",
+		"if you're new here", "if you are new here",
+		"english podcast", "hosted by me",
 		"going against each other", "going to get this",
 		"by the end", "let me know in the comments",
 		"comment asking me", "check out the link",
@@ -4118,6 +4120,64 @@ func isConversationalTranscriptLine(value string) bool {
 	}
 
 	return false
+}
+
+func isTwoColumnMetaItem(value string) bool {
+	clean := strings.ToLower(strings.TrimSpace(value))
+	if clean == "" {
+		return true
+	}
+
+	metaPhrases := []string{
+		"this slide",
+		"emphasizes that",
+		"compares the",
+		"as discussed",
+		"as mentioned",
+		"the problems discussed",
+	}
+	for _, phrase := range metaPhrases {
+		if strings.Contains(clean, phrase) {
+			return true
+		}
+	}
+
+	if regexp.MustCompile(`(?i)^[A-Z][a-z]+\s+(?:emphasized|said|noted|mentioned|explained|stated)\s+that`).MatchString(strings.TrimSpace(value)) {
+		return true
+	}
+
+	return false
+}
+
+func isStatFirstPersonLeak(value string) bool {
+	clean := strings.ToLower(strings.TrimSpace(value))
+	if clean == "" {
+		return false
+	}
+
+	leakPhrases := []string{
+		"hosted by",
+		"this is my",
+		"join me",
+		"i am",
+		"i'm",
+		"by me",
+	}
+	for _, phrase := range leakPhrases {
+		if strings.Contains(clean, phrase) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func statValueLooksNumeric(value string) bool {
+	clean := strings.TrimSpace(value)
+	if clean == "" {
+		return false
+	}
+	return regexp.MustCompile(`\d`).MatchString(clean)
 }
 
 func isStatMetadataText(value string) bool {
@@ -4147,7 +4207,7 @@ func normalizeStatLabel(value string) string {
 	label := regexp.MustCompile(`\[[^\]]*\]`).ReplaceAllString(value, " ")
 	label = sanitizePresentationText(label)
 	label = strings.Trim(label, "-,:; ")
-	if label == "" || isStatMetadataText(label) || isConversationalTranscriptLine(label) {
+	if label == "" || isStatMetadataText(label) || isConversationalTranscriptLine(label) || isStatFirstPersonLeak(label) {
 		return ""
 	}
 	words := trimDanglingEndingWords(strings.Fields(label))
@@ -4171,6 +4231,9 @@ func normalizeStatDescription(value string) string {
 	if description == "" {
 		return ""
 	}
+	if isStatFirstPersonLeak(description) {
+		return ""
+	}
 	if isStatMetadataText(description) {
 		return ""
 	}
@@ -4190,7 +4253,7 @@ func normalizeStatDescription(value string) string {
 		chosen := make([]string, 0, 2)
 		for _, sentence := range sentences {
 			candidate := sanitizePresentationText(sentence)
-			if candidate == "" || containsTranscriptNoiseTag(candidate) || isConversationalTranscriptLine(candidate) {
+			if candidate == "" || containsTranscriptNoiseTag(candidate) || isConversationalTranscriptLine(candidate) || isStatFirstPersonLeak(candidate) {
 				continue
 			}
 			chosen = append(chosen, candidate)
@@ -4338,13 +4401,13 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 		if containsTranscriptNoiseTag(stat.Label) || containsTranscriptNoiseTag(stat.Description) || isConversationalTranscriptLine(stat.Label) || isConversationalTranscriptLine(stat.Description) || isStatMetadataText(stat.Label) || isStatMetadataText(stat.Description) {
 			continue
 		}
-		if value == "" || label == "" {
+		if value == "" || label == "" || !statValueLooksNumeric(value) {
 			continue
 		}
 		if description == "" {
 			description = buildStatDescriptionFallback(label, value)
 		}
-		if description == "" {
+		if description == "" || isStatFirstPersonLeak(description) {
 			continue
 		}
 
@@ -5218,7 +5281,7 @@ func extractStatsFromBullets(bullets []string) []models.PresentationStat {
 		if description == "" {
 			description = buildStatDescriptionFallback(label, match)
 		}
-		if description == "" {
+		if description == "" || isStatFirstPersonLeak(description) || !statValueLooksNumeric(match) {
 			continue
 		}
 
@@ -5287,7 +5350,7 @@ func normalizePresentationPhrases(items []string, maxItems, maxWords int) []stri
 	out := make([]string, 0, min(maxItems, len(items)))
 	for _, item := range items {
 		normalized := normalizePhraseSentence(item, maxWords)
-		if normalized == "" || isConversationalTranscriptLine(normalized) {
+		if normalized == "" || isConversationalTranscriptLine(normalized) || isTwoColumnMetaItem(normalized) {
 			continue
 		}
 		key := normalizeCompareText(normalized)
@@ -5320,10 +5383,16 @@ func normalizePhraseSentence(value string, maxWords int) string {
 	if clean == "" || containsTranscriptNoiseTag(clean) {
 		return ""
 	}
+	if isTwoColumnMetaItem(clean) {
+		return ""
+	}
 
 	sentences := splitPresentationSentences(clean)
 	if len(sentences) > 0 {
 		clean = sanitizePresentationText(sentences[0])
+		if isTwoColumnMetaItem(clean) {
+			return ""
+		}
 	}
 
 	normalized := normalizePresentationBullet(clean, maxWords)

@@ -380,6 +380,26 @@ function stripNumericPrefix(value: string): string {
     .trim()
 }
 
+function isTwoColumnMetaItem(value: string): boolean {
+  const raw = String(value || '').trim()
+  const text = raw.toLowerCase()
+  if (!text) return true
+
+  const phrases = [
+    'this slide',
+    'emphasizes that',
+    'compares the',
+    'as discussed',
+    'as mentioned',
+    'the problems discussed',
+  ]
+  if (phrases.some((phrase) => text.includes(phrase))) return true
+
+  if (/^[A-Z][a-z]+\s+(?:emphasized|said|noted|mentioned|explained|stated)\s+that/.test(raw)) return true
+
+  return false
+}
+
 function isStubSummaryTitle(value: string): boolean {
   return /^(?:takeaway|point|key\s*point|item|insight)\s*\d+$/i.test(String(value || '').trim())
 }
@@ -469,11 +489,15 @@ function withMinimumStatsCards(stats: SlideStat[]): SlideStat[] {
     if (!clean) return true
     if (/https?:\/\/|www\.|watch\?v=|youtube/.test(clean)) return true
     if (/(^|\b)(translator|reviewer|caption|subtitle|key point|key takeaway|source url|source:|title:)\b/.test(clean)) return true
+    if (/(^|\b)(hosted by|this is my|join me|i am|i'm|by me)\b/.test(clean)) return true
     return false
   }
 
+  const hasNumericValue = (value: string) => /\d/.test(String(value || '').trim())
+
   const clean = (Array.isArray(stats) ? stats : [])
     .filter((item) => item && String(item.value || '').trim() && String(item.label || '').trim())
+    .filter((item) => hasNumericValue(String(item.value || '')))
     .filter((item) => !isNoisyStatText(String(item.label || '')) && !isNoisyStatText(String(item.description || '')))
     .slice(0, 4)
 
@@ -2036,58 +2060,65 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(14), flex: 1, minHeight: 0 }}>
-                {columns.slice(0, 2).map((col, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      ...panelCard,
-                      padding: `${s(20)}px ${s(20)}px`,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      minHeight: 0,
-                    }}
-                  >
-                    {textOverline(col.label)}
+                {columns.slice(0, 2).map((col, index) => {
+                  const cleanItems = col.items
+                    .map((item) => stripNumericPrefix(item))
+                    .filter((item) => Boolean(item) && !isTwoColumnMetaItem(item))
+                    .slice(0, 4)
+
+                  return (
                     <div
+                      key={index}
                       style={{
-                        marginTop: s(20),
-                        flex: 1,
+                        ...panelCard,
+                        padding: `${s(20)}px ${s(20)}px`,
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: s(9),
-                        justifyContent: 'flex-start',
                         minHeight: 0,
-                        overflow: 'hidden',
                       }}
                     >
-                      {col.items.slice(0, 4).map((item, itemIndex) => (
-                        <div
-                          key={itemIndex}
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: `${s(10)}px 1fr`,
-                            gap: s(10),
-                            fontSize: fs(18),
-                            fontWeight: 400,
-                            lineHeight: 1.6,
-                            color: theme.text,
-                          }}
-                        >
-                          <span
+                      {textOverline(col.label)}
+                      <div
+                        style={{
+                          marginTop: s(20),
+                          flex: 1,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: s(9),
+                          justifyContent: 'flex-start',
+                          minHeight: 0,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {cleanItems.map((item, itemIndex) => (
+                          <div
+                            key={itemIndex}
                             style={{
-                              width: s(12),
-                              height: s(12),
-                              borderRadius: '50%',
-                              marginTop: s(4),
-                              background: `linear-gradient(135deg, ${theme.accent}, ${theme.accentSoft})`,
+                              display: 'grid',
+                              gridTemplateColumns: `${s(10)}px 1fr`,
+                              gap: s(10),
+                              fontSize: fs(18),
+                              fontWeight: 400,
+                              lineHeight: 1.6,
+                              color: theme.text,
                             }}
-                          />
-                          {item}
-                        </div>
-                      ))}
+                          >
+                            <span
+                              style={{
+                                width: s(12),
+                                height: s(12),
+                                borderRadius: '50%',
+                                marginTop: s(4),
+                                background: `linear-gradient(135deg, ${theme.accent}, ${theme.accentSoft})`,
+                              }}
+                            />
+                            {item}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
 
