@@ -152,6 +152,25 @@ function parseNumberedBullet(value: string): NumberedBullet | null {
   return { number, title, description }
 }
 
+function parseTimelineBullet(value: string): NumberedBullet | null {
+  const text = String(value || '').trim()
+  if (!text) return null
+
+  const match = text.match(/^(?:TIMELINE|MILESTONE):\s*(?:(\d{1,2})\s*\|\|\s*)?(.+?)\s*\|\|\s*(.+)$/i)
+  if (!match) return null
+
+  const number = Number(match[1] || 0)
+  const title = match[2].trim()
+  const description = match[3].trim()
+  if (!title || !description) return null
+
+  return {
+    number: Number.isFinite(number) && number > 0 ? number : 0,
+    title,
+    description,
+  }
+}
+
 function parseFeatureTrioBullet(value: string): FeatureTrioItem | null {
   const text = String(value || '').trim()
   if (!text) return null
@@ -879,11 +898,14 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         .map(parseNumberedBullet)
         .filter((item): item is NumberedBullet => item !== null)
         .sort((a, b) => a.number - b.number)
+      const parsedTimelineBullets = bullets
+        .map(parseTimelineBullet)
+        .filter((item): item is NumberedBullet => item !== null)
       const cardBullets = bullets.map(parseCardBullet).filter((item): item is CardBullet => item !== null).slice(0, 3)
       const tags = bullets.flatMap(parseTagsBullet)
       const nonStructuredBullets = bullets.filter((bullet) => {
         const trimmed = bullet.trim()
-        return !parseCardBullet(trimmed) && !parseNumberedBullet(trimmed) && !/^TAGS:\s*/i.test(trimmed)
+        return !parseCardBullet(trimmed) && !parseNumberedBullet(trimmed) && !parseTimelineBullet(trimmed) && !/^TAGS:\s*/i.test(trimmed)
       })
       const inferredNumberedBullets = parsedNumberedBullets.length === 0
         ? guessNumberedBulletsFromLongText(nonStructuredBullets)
@@ -893,6 +915,32 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       const nonCardBullets = nonStructuredBullets
       const useCardGrid = !useNumberedStack && cardBullets.length >= 2
       const variant = String(slide.variant || '').toLowerCase()
+      const timelineBullets = parsedTimelineBullets.length > 0
+        ? (parsedTimelineBullets.every((item) => item.number > 0)
+          ? [...parsedTimelineBullets].sort((a, b) => a.number - b.number)
+          : parsedTimelineBullets)
+        : []
+      const fallbackTimelineBullets = variant === 'timeline' && timelineBullets.length === 0
+        ? (numberedBullets.length > 0
+          ? numberedBullets
+          : nonStructuredBullets
+            .map((raw, index) => {
+              const cleaned = stripNumericPrefix(raw)
+              const words = cleaned.split(/\s+/).filter(Boolean)
+              if (words.length < 4) return null
+              const title = words.slice(0, Math.min(4, words.length)).join(' ')
+              const description = words.slice(4).join(' ') || cleaned
+              if (!title || !description) return null
+              return { number: index + 1, title, description }
+            })
+            .filter((item): item is NumberedBullet => item !== null))
+        : []
+      const timelineItems = (timelineBullets.length > 0 ? timelineBullets : fallbackTimelineBullets)
+        .slice(0, 5)
+        .map((item, index) => ({
+          ...item,
+          number: item.number > 0 ? item.number : index + 1,
+        }))
       const featureTrioItems = bullets
         .map(parseFeatureTrioBullet)
         .filter((item): item is FeatureTrioItem => item !== null)
@@ -942,6 +990,213 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
 
               <div style={{ flex: 1, minHeight: 0 }}>
                 {renderComparisonTable(comparisonTable)}
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      if ((variant === 'timeline' || timelineBullets.length >= 3) && timelineItems.length >= 3) {
+        return (
+          <div style={baseStyle}>
+            {renderDecor()}
+
+            <div
+              style={{
+                ...layoutPadding,
+                zIndex: 2,
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+              }}
+            >
+              <h2
+                style={{
+                  margin: 0,
+                  fontFamily: theme.displayFont,
+                  fontSize: fs(64),
+                  lineHeight: 1.04,
+                  letterSpacing: '-0.03em',
+                  fontWeight: 700,
+                }}
+              >
+                {slide.title}
+              </h2>
+              {slide.subtitle && (
+                <p
+                  style={{
+                    marginTop: s(12),
+                    color: theme.subtext,
+                    fontSize: fs(36),
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {slide.subtitle}
+                </p>
+              )}
+
+              <div
+                style={{
+                  marginTop: s(26),
+                  flex: 1,
+                  minHeight: 0,
+                  position: 'relative',
+                  padding: `${s(10)}px 0 ${s(12)}px`,
+                }}
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    top: s(8),
+                    bottom: s(8),
+                    width: s(2),
+                    transform: 'translateX(-50%)',
+                    background: `linear-gradient(180deg, ${theme.border}, ${theme.accent}8a, ${theme.border})`,
+                    opacity: 0.9,
+                  }}
+                />
+
+                <div
+                  style={{
+                    position: 'relative',
+                    height: '100%',
+                    display: 'grid',
+                    gap: s(8),
+                    gridTemplateRows: `repeat(${timelineItems.length}, minmax(${s(82)}px, 1fr))`,
+                  }}
+                >
+                  {timelineItems.map((item, index) => {
+                    const isLeft = index % 2 === 0
+
+                    return (
+                      <div
+                        key={`${item.number}-${item.title}-${index}`}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr auto 1fr',
+                          alignItems: 'center',
+                          columnGap: s(14),
+                          minHeight: s(84),
+                        }}
+                      >
+                        {isLeft ? (
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: '1fr auto',
+                              alignItems: 'center',
+                              gap: s(14),
+                              minWidth: 0,
+                            }}
+                          >
+                            <div style={{ minWidth: 0, textAlign: 'right' }}>
+                              <div
+                                style={{
+                                  fontFamily: theme.displayFont,
+                                  fontSize: fs(52),
+                                  lineHeight: 1.12,
+                                  letterSpacing: '-0.02em',
+                                  fontWeight: 650,
+                                  color: theme.text,
+                                }}
+                              >
+                                {item.title}
+                              </div>
+                              <p
+                                style={{
+                                  margin: `${s(8)}px 0 0`,
+                                  fontSize: fs(34),
+                                  lineHeight: 1.38,
+                                  color: theme.subtext,
+                                }}
+                              >
+                                {item.description}
+                              </p>
+                            </div>
+                            <span
+                              style={{
+                                width: s(58),
+                                height: s(2),
+                                background: `${theme.border}`,
+                                opacity: 0.9,
+                              }}
+                            />
+                          </div>
+                        ) : <div />}
+
+                        <div style={{ width: s(68), display: 'flex', justifyContent: 'center', zIndex: 1 }}>
+                          <div
+                            style={{
+                              minWidth: s(42),
+                              height: s(42),
+                              borderRadius: s(8),
+                              background: `${theme.surfaceStrong}f0`,
+                              border: `1px solid ${theme.border}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontFamily: theme.displayFont,
+                              fontSize: fs(26),
+                              lineHeight: 1,
+                              fontWeight: 700,
+                              color: theme.text,
+                              padding: `0 ${s(8)}px`,
+                            }}
+                          >
+                            {item.number}
+                          </div>
+                        </div>
+
+                        {!isLeft ? (
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'auto 1fr',
+                              alignItems: 'center',
+                              gap: s(14),
+                              minWidth: 0,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: s(58),
+                                height: s(2),
+                                background: `${theme.border}`,
+                                opacity: 0.9,
+                              }}
+                            />
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                style={{
+                                  fontFamily: theme.displayFont,
+                                  fontSize: fs(52),
+                                  lineHeight: 1.12,
+                                  letterSpacing: '-0.02em',
+                                  fontWeight: 650,
+                                  color: theme.text,
+                                }}
+                              >
+                                {item.title}
+                              </div>
+                              <p
+                                style={{
+                                  margin: `${s(8)}px 0 0`,
+                                  fontSize: fs(34),
+                                  lineHeight: 1.38,
+                                  color: theme.subtext,
+                                }}
+                              >
+                                {item.description}
+                              </p>
+                            </div>
+                          </div>
+                        ) : <div />}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </div>
