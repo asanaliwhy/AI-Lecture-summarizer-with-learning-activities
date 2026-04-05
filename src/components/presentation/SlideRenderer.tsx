@@ -2130,7 +2130,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                       padding: `${s(16)}px ${s(14)}px`,
                       textAlign: 'center',
                       display: 'grid',
-                      alignContent: 'center',
+                      alignContent: 'start',
                     }}
                   >
                     <div

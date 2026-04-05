@@ -3964,6 +3964,60 @@ func synthesizeComparisonRow(candidate string, columnCount int) []string {
 	return []string{left, middle, right}
 }
 
+func containsTranscriptNoiseTag(value string) bool {
+	clean := strings.TrimSpace(value)
+	if clean == "" {
+		return false
+	}
+	return regexp.MustCompile(`(?i)\[(?:music|applause|laugh(?:ter|s)?|inaudible|silence|noise|sfx)[^\]]*\]`).MatchString(clean)
+}
+
+func normalizeStatLabel(value string) string {
+	label := regexp.MustCompile(`\[[^\]]*\]`).ReplaceAllString(value, " ")
+	label = sanitizePresentationText(label)
+	label = strings.Trim(label, "-,:; ")
+	if label == "" {
+		return ""
+	}
+	words := trimDanglingEndingWords(strings.Fields(label))
+	if len(words) > 5 {
+		words = words[:5]
+		words = trimDanglingEndingWords(words)
+	}
+	if len(words) == 0 {
+		return ""
+	}
+	return strings.Join(words, " ")
+}
+
+func normalizeStatDescription(value string) string {
+	description := regexp.MustCompile(`\[[^\]]*\]`).ReplaceAllString(value, " ")
+	description = sanitizePresentationText(description)
+	if description == "" {
+		return ""
+	}
+
+	sentences := splitPresentationSentences(description)
+	if len(sentences) > 0 {
+		description = sanitizePresentationText(sentences[0])
+	}
+
+	words := trimDanglingEndingWords(strings.Fields(description))
+	if len(words) > 18 {
+		words = words[:18]
+		words = trimDanglingEndingWords(words)
+	}
+	if len(words) < 6 {
+		return ""
+	}
+
+	description = strings.TrimRight(strings.TrimSpace(strings.Join(words, " ")), " .;:!?")
+	if description == "" {
+		return ""
+	}
+	return description + "."
+}
+
 func normalizePresentationStats(stats []models.PresentationStat, maxItems int) []models.PresentationStat {
 	if maxItems <= 0 {
 		return []models.PresentationStat{}
@@ -3976,13 +4030,20 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 	out := make([]models.PresentationStat, 0, min(len(stats), maxItems))
 	for _, stat := range stats {
 		value := sanitizePresentationText(stat.Value)
-		label := sanitizePresentationText(stat.Label)
-		description := sanitizePresentationText(stat.Description)
+		label := normalizeStatLabel(stat.Label)
+		description := normalizeStatDescription(stat.Description)
+
+		if containsTranscriptNoiseTag(stat.Label) || containsTranscriptNoiseTag(stat.Description) {
+			continue
+		}
 		if value == "" || label == "" {
 			continue
 		}
 		if description == "" {
-			description = firstNWords(label, 12)
+			description = normalizeStatDescription(label + " with measurable impact on execution outcomes and stakeholder decisions")
+		}
+		if description == "" {
+			continue
 		}
 
 		key := normalizeCompareText(value + "|" + label)
@@ -3997,7 +4058,7 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 		out = append(out, models.PresentationStat{
 			Value:       value,
 			Label:       label,
-			Description: strings.TrimRight(description, " .;:!?") + ".",
+			Description: description,
 		})
 		if len(out) >= maxItems {
 			break
@@ -4704,8 +4765,11 @@ func extractStatsFromBullets(bullets []string) []models.PresentationStat {
 		if len(stats) >= 6 {
 			break
 		}
-		clean := strings.TrimSpace(bullet)
+		clean := sanitizePresentationText(strings.TrimSpace(bullet))
 		if clean == "" {
+			continue
+		}
+		if containsTranscriptNoiseTag(clean) {
 			continue
 		}
 		match := numberPattern.FindString(clean)
@@ -4713,15 +4777,16 @@ func extractStatsFromBullets(bullets []string) []models.PresentationStat {
 			continue
 		}
 
-		label := strings.TrimSpace(numberPattern.ReplaceAllString(clean, ""))
-		label = strings.Trim(label, "-,:; ")
+		label := normalizeStatLabel(numberPattern.ReplaceAllString(clean, ""))
 		if label == "" {
 			label = "Measured metric"
 		}
-		description := strings.TrimSpace(clean)
-		description = strings.TrimRight(description, " .;:!?")
-		if description != "" {
-			description += "."
+		description := normalizeStatDescription(clean)
+		if description == "" {
+			description = normalizeStatDescription(label + " with measurable impact on outcomes")
+		}
+		if description == "" {
+			continue
 		}
 
 		labelWords := strings.Fields(label)
