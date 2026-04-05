@@ -2299,7 +2299,7 @@ func buildPresentationPrompt(config models.GeneratePresentationRequest, transcri
 	b.WriteString("- If transcript has any quantifiable claim (number, percentage, count, cost, threshold, duration), include at least 1 stats slide regardless of deck size.\n")
 	b.WriteString("- Slide rhythm: never place more than 2 consecutive content slides.\n")
 	b.WriteString("- Deck size rhythm: short <=8 must include title + >=1 stats + >=1 two_column + summary; large includes >=2 stats and >=2 two_column.\n")
-	b.WriteString("- Variant rhythm (medium/large decks): include at least one 3-column CARD grid content slide, exactly one feature_trio slide, and exactly one comparison_table slide.\n")
+	b.WriteString("- Variant rhythm (medium/large decks): include at least one timeline content slide, at least one 3-column CARD grid content slide, exactly one feature_trio slide, and exactly one comparison_table slide.\n")
 	b.WriteString("- Image rhythm: set imagePosition to alternate left/right across consecutive image slides.\n")
 	b.WriteString("- Density guard: every non-title slide must carry meaningful visible payload. For content/prose slides target at least 30-40 words total across subtitle and bullets/cards.\n")
 	b.WriteString("- Design for visuals: at least 70% of eligible slides (title/content/prose) should have a non-empty imageQuery.\n")
@@ -5802,13 +5802,17 @@ func enforcePresentationVariantCoverage(slides []models.PresentationSlide, trans
 		return
 	}
 
+	mediumOrLargeDeck := len(slides) >= 9
+
 	contentIndices := make([]int, 0, len(slides))
 	proseIndices := make([]int, 0, len(slides))
 	twoColumnIndices := make([]int, 0, len(slides))
 	featureIndices := make([]int, 0, 3)
 	comparisonIndices := make([]int, 0, 3)
+	timelineIndices := make([]int, 0, 2)
 	featureIndex := -1
 	comparisonIndex := -1
+	timelineIndex := -1
 	cardGridIndex := -1
 
 	for i := range slides {
@@ -5818,6 +5822,9 @@ func enforcePresentationVariantCoverage(slides []models.PresentationSlide, trans
 			contentIndices = append(contentIndices, i)
 			if variant == "feature_trio" {
 				featureIndices = append(featureIndices, i)
+			}
+			if variant == "timeline" {
+				timelineIndices = append(timelineIndices, i)
 			}
 			if cardGridCount(slides[i]) >= 3 && variant != "feature_trio" && variant != "comparison_table" {
 				cardGridIndex = i
@@ -5839,6 +5846,9 @@ func enforcePresentationVariantCoverage(slides []models.PresentationSlide, trans
 	}
 	if len(comparisonIndices) > 0 {
 		comparisonIndex = comparisonIndices[0]
+	}
+	if len(timelineIndices) > 0 {
+		timelineIndex = timelineIndices[0]
 	}
 
 	if len(featureIndices) > 1 {
@@ -5945,6 +5955,62 @@ func enforcePresentationVariantCoverage(slides []models.PresentationSlide, trans
 			enrichComparisonTableSlide(&slides[idx])
 			if len(slides[idx].TableRows) > 0 {
 				comparisonIndex = idx
+				break
+			}
+		}
+	}
+
+	if mediumOrLargeDeck && timelineIndex == -1 {
+		for _, idx := range contentIndices {
+			if idx == featureIndex || idx == comparisonIndex || idx == cardGridIndex {
+				continue
+			}
+			typeName := strings.ToLower(strings.TrimSpace(slides[idx].Type))
+			if typeName != "content" {
+				continue
+			}
+			slides[idx].Variant = stringPtr("timeline")
+			enrichTimelineSlide(&slides[idx], transcript)
+			if strings.EqualFold(strings.TrimSpace(pointerStringValue(slides[idx].Variant)), "timeline") {
+				timelineIndex = idx
+				break
+			}
+		}
+	}
+
+	if mediumOrLargeDeck && timelineIndex == -1 {
+		for _, idx := range contentIndices {
+			if idx == featureIndex || idx == comparisonIndex {
+				continue
+			}
+			typeName := strings.ToLower(strings.TrimSpace(slides[idx].Type))
+			if typeName != "content" {
+				continue
+			}
+			slides[idx].Variant = stringPtr("timeline")
+			enrichTimelineSlide(&slides[idx], transcript)
+			if strings.EqualFold(strings.TrimSpace(pointerStringValue(slides[idx].Variant)), "timeline") {
+				timelineIndex = idx
+				break
+			}
+		}
+	}
+
+	if mediumOrLargeDeck && timelineIndex == -1 {
+		for _, idx := range proseIndices {
+			if idx == featureIndex || idx == comparisonIndex {
+				continue
+			}
+			slides[idx].Type = "content"
+			if len(slides[idx].Bullets) == 0 {
+				source := strings.Join([]string{slides[idx].Title, pointerStringValue(slides[idx].Subtitle), pointerStringValue(slides[idx].Body), slides[idx].SpeakerNotes, transcript}, " ")
+				slides[idx].Bullets = buildCompactBulletsFromText(source, 5, 14)
+			}
+			slides[idx].Variant = stringPtr("timeline")
+			enrichTimelineSlide(&slides[idx], transcript)
+			if strings.EqualFold(strings.TrimSpace(pointerStringValue(slides[idx].Variant)), "timeline") {
+				timelineIndex = idx
+				contentIndices = append(contentIndices, idx)
 				break
 			}
 		}
