@@ -2279,6 +2279,7 @@ func buildPresentationPrompt(config models.GeneratePresentationRequest, transcri
 	b.WriteString("- content variants:\n")
 	b.WriteString("  * variant='feature_trio': exactly 3 feature cards. Encode each bullet as 'FEATURE: icon || Title || Description' or 'CARD: Title || Description'. Description should be one complete sentence around 15 words (target 13-17), never clipped.\n")
 	b.WriteString("  * variant='comparison_table': use tabular comparisons. Provide tableHeaders and tableRows, or encode bullets as 'HEADER: Col1 || Col2 || Col3' and 'ROW: v1 || v2 || v3'. Include 4-5 data rows. Set imageQuery to null for this variant.\n")
+	b.WriteString("  * variant='flow_arrows': use exactly 3 sequential arrows. Encode each bullet as 'FLOW: N || Title || Description'. Title must be 2-4 words; description should be one complete sentence around 12-18 words. Set imageQuery to null for this variant.\n")
 	b.WriteString("- two_column slide: comparison only. Each column must have 3-5 items. Each item MUST be a full sentence of 12-25 words — not a short phrase or fragment. One sentence states the fact, optionally a second states the consequence. Column items are sentences, not bullets.\n")
 	b.WriteString("- stats slide: include 3-6 stats entries (value + label + description), values must come from transcript.\n")
 	b.WriteString("- prose slide: no bullets. body must contain 2-3 paragraphs of 25-45 words each separated by newlines. Paragraph 1: specific context or problem with a concrete claim. Paragraph 2: mechanism, solution, or key insight. Paragraph 3 (optional): implication or significance. Never one-sentence paragraphs. Never restate the slide title.\n")
@@ -2600,6 +2601,9 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 		if slideType == "content" && pointerStringValue(slides[i].Variant) == "timeline" {
 			enrichTimelineSlide(&slides[i], transcript)
 		}
+		if slideType == "content" && pointerStringValue(slides[i].Variant) == "flow_arrows" {
+			enrichFlowArrowsSlide(&slides[i], transcript)
+		}
 		if pointerStringValue(slides[i].Variant) == "comparison_table" {
 			enrichComparisonTableSlide(&slides[i])
 		}
@@ -2644,6 +2648,9 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 		if slideType == "content" && pointerStringValue(slides[i].Variant) == "timeline" {
 			enrichTimelineSlide(&slides[i], transcript)
 		}
+		if slideType == "content" && pointerStringValue(slides[i].Variant) == "flow_arrows" {
+			enrichFlowArrowsSlide(&slides[i], transcript)
+		}
 		if pointerStringValue(slides[i].Variant) == "comparison_table" {
 			enrichComparisonTableSlide(&slides[i])
 		}
@@ -2683,7 +2690,7 @@ func normalizePresentationVariant(value, slideType string) string {
 
 	if slideType == "content" {
 		switch variant {
-		case "", "default", "feature_trio", "comparison_table", "timeline":
+		case "", "default", "feature_trio", "comparison_table", "timeline", "flow_arrows":
 			if variant == "" {
 				return "default"
 			}
@@ -3040,6 +3047,15 @@ func inferContentVariant(slide *models.PresentationSlide) string {
 	if timelineCount >= 3 {
 		return "timeline"
 	}
+	flowCount := 0
+	for _, bullet := range slide.Bullets {
+		if isFlowEncodedBullet(bullet) {
+			flowCount++
+		}
+	}
+	if flowCount >= 3 {
+		return "flow_arrows"
+	}
 	featureCount := 0
 	cardCount := 0
 	for _, bullet := range slide.Bullets {
@@ -3360,6 +3376,176 @@ func enrichTimelineSlide(slide *models.PresentationSlide, transcript string) {
 
 	slide.Type = "content"
 	slide.Variant = stringPtr("timeline")
+	slide.Bullets = out
+	slide.ImageQuery = nil
+}
+
+func enrichFlowArrowsSlide(slide *models.PresentationSlide, transcript string) {
+	if slide == nil {
+		return
+	}
+
+	type flowItem struct {
+		Title       string
+		Description string
+	}
+
+	items := make([]flowItem, 0, 3)
+	seen := map[string]struct{}{}
+	appendItem := func(title, description string) {
+		if len(items) >= 3 {
+			return
+		}
+		title = strings.TrimRight(trimDanglingPhrase(title), " .;:!?")
+		description = normalizeFeatureDescriptionSentence(description)
+		if description == "" {
+			description = "Explains the implementation step with clear ownership and measurable operational impact."
+		}
+
+		titleWords := trimDanglingEndingWords(strings.Fields(title))
+		if len(titleWords) > 4 {
+			titleWords = titleWords[:4]
+		}
+		if len(titleWords) < 2 {
+			descWords := trimDanglingEndingWords(strings.Fields(description))
+			if len(descWords) >= 3 {
+				titleWords = descWords[:3]
+			}
+		}
+		if len(titleWords) == 0 {
+			return
+		}
+		title = strings.Join(titleWords, " ")
+
+		key := normalizeCompareText(title + " " + description)
+		if key == "" {
+			return
+		}
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		items = append(items, flowItem{Title: title, Description: description})
+	}
+
+	for _, bullet := range slide.Bullets {
+		if !isFlowEncodedBullet(bullet) {
+			continue
+		}
+		title, description, ok := parseFlowBullet(bullet)
+		if !ok {
+			continue
+		}
+		appendItem(title, description)
+		if len(items) >= 3 {
+			break
+		}
+	}
+
+	if len(items) < 3 {
+		for _, bullet := range slide.Bullets {
+			if !isNumberedCardEncodedBullet(bullet) {
+				continue
+			}
+			normalized := normalizeNumberedCardBullet(bullet)
+			if normalized == "" {
+				continue
+			}
+			body := regexp.MustCompile(`(?i)^num:\s*`).ReplaceAllString(normalized, "")
+			parts := strings.SplitN(body, "||", 3)
+			if len(parts) < 3 {
+				continue
+			}
+			title := sanitizePresentationText(parts[1])
+			description := sanitizePresentationText(parts[2])
+			appendItem(title, description)
+			if len(items) >= 3 {
+				break
+			}
+		}
+	}
+
+	if len(items) < 3 {
+		for _, bullet := range slide.Bullets {
+			if isFlowEncodedBullet(bullet) || isTimelineEncodedBullet(bullet) || isNumberedCardEncodedBullet(bullet) || isCardEncodedBullet(bullet) || isFeatureEncodedBullet(bullet) || isComparisonHeaderEncodedBullet(bullet) || isComparisonRowEncodedBullet(bullet) {
+				continue
+			}
+			clean := sanitizePresentationText(stripNumericPrefixes(bullet))
+			if clean == "" {
+				continue
+			}
+			words := strings.Fields(clean)
+			if len(words) < 4 {
+				continue
+			}
+			title := strings.Join(words[:min(4, len(words))], " ")
+			description := strings.Join(words[min(4, len(words)):], " ")
+			if description == "" {
+				description = clean
+			}
+			appendItem(title, description)
+			if len(items) >= 3 {
+				break
+			}
+		}
+	}
+
+	if len(items) < 3 {
+		source := strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), pointerStringValue(slide.Body), slide.SpeakerNotes, transcript}, " ")
+		extra := buildCompactBulletsFromText(source, 5, 14)
+		for _, bullet := range extra {
+			words := strings.Fields(bullet)
+			if len(words) < 4 {
+				continue
+			}
+			title := strings.Join(words[:min(4, len(words))], " ")
+			description := strings.Join(words[min(4, len(words)):], " ")
+			if description == "" {
+				description = bullet
+			}
+			appendItem(title, description)
+			if len(items) >= 3 {
+				break
+			}
+		}
+	}
+
+	if len(items) == 0 {
+		appendItem("Baseline Discovery", "Analyze current constraints and define success criteria that align stakeholders around measurable outcomes.")
+		appendItem("Coordinated Execution", "Implement prioritized actions with cross functional accountability to reduce delays and maintain delivery quality.")
+		appendItem("Feedback Optimization", "Measure outcomes continuously and refine the process using evidence from operational performance signals.")
+	}
+
+	for len(items) < 3 {
+		appendItem("Execution Step", "This step aligns actions, ownership, and measurable checkpoints for reliable implementation outcomes.")
+	}
+
+	if len(items) > 3 {
+		items = items[:3]
+	}
+
+	out := make([]string, 0, len(items))
+	for i, item := range items {
+		title := strings.TrimRight(sanitizePresentationText(item.Title), " .;:!?")
+		description := normalizeFeatureDescriptionSentence(item.Description)
+		if description == "" {
+			description = "Describes a concrete step with practical implementation detail and measurable project impact."
+		}
+		if title == "" {
+			title = strings.TrimRight(firstNWords(description, 3), " .;:!?")
+		}
+		if title == "" {
+			continue
+		}
+		out = append(out, fmt.Sprintf("FLOW: %d || %s || %s", i+1, title, description))
+	}
+
+	if len(out) < 3 {
+		return
+	}
+
+	slide.Type = "content"
+	slide.Variant = stringPtr("flow_arrows")
 	slide.Bullets = out
 	slide.ImageQuery = nil
 }
@@ -4013,6 +4199,87 @@ func isFeatureEncodedBullet(value string) bool {
 	return len(parts) >= 3
 }
 
+func isFlowEncodedBullet(value string) bool {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return false
+	}
+	if !(strings.HasPrefix(value, "flow:") || strings.HasPrefix(value, "arrow:") || strings.HasPrefix(value, "step_flow:")) {
+		return false
+	}
+	body := regexp.MustCompile(`(?i)^(?:flow|arrow|step_flow):\s*`).ReplaceAllString(value, "")
+	parts := strings.Split(body, "||")
+	return len(parts) >= 2
+}
+
+func parseFlowBullet(value string) (title, description string, ok bool) {
+	value = sanitizePresentationText(value)
+	if value == "" || !isFlowEncodedBullet(value) {
+		return "", "", false
+	}
+	body := regexp.MustCompile(`(?i)^(?:flow|arrow|step_flow):\s*`).ReplaceAllString(value, "")
+	parts := strings.Split(body, "||")
+	clean := make([]string, 0, 3)
+	for _, part := range parts {
+		item := strings.TrimSpace(part)
+		if item != "" {
+			clean = append(clean, item)
+		}
+	}
+
+	if len(clean) < 2 {
+		return "", "", false
+	}
+
+	if len(clean) >= 3 && regexp.MustCompile(`^\d{1,2}$`).MatchString(clean[0]) {
+		title = strings.TrimRight(sanitizePresentationText(clean[1]), " .;:!?")
+		description = sanitizePresentationText(clean[2])
+	} else {
+		title = strings.TrimRight(sanitizePresentationText(clean[0]), " .;:!?")
+		description = sanitizePresentationText(clean[1])
+	}
+
+	if title == "" || description == "" {
+		return "", "", false
+	}
+
+	description = strings.TrimRight(strings.TrimSpace(description), " .;:!?")
+	if description == "" {
+		return "", "", false
+	}
+
+	return title, description + ".", true
+}
+
+func normalizeFlowEncodedBullet(value string) string {
+	title, description, ok := parseFlowBullet(value)
+	if !ok {
+		return ""
+	}
+	title = strings.TrimRight(trimDanglingPhrase(title), " .;:!?")
+	titleWords := trimDanglingEndingWords(strings.Fields(title))
+	if len(titleWords) > 4 {
+		titleWords = titleWords[:4]
+	}
+	if len(titleWords) < 2 {
+		descWords := trimDanglingEndingWords(strings.Fields(description))
+		if len(descWords) >= 3 {
+			titleWords = descWords[:3]
+		}
+	}
+	if len(titleWords) == 0 {
+		return ""
+	}
+	title = strings.Join(titleWords, " ")
+
+	description = normalizeFeatureDescriptionSentence(description)
+	if description == "" {
+		description = "Explains the implementation step with clear ownership and measurable operational impact."
+	}
+
+	return "FLOW: " + title + " || " + description
+}
+
 func isTimelineEncodedBullet(value string) bool {
 	value = strings.TrimSpace(strings.ToLower(value))
 	if value == "" {
@@ -4296,6 +4563,9 @@ func isPlaceholderText(s string) bool {
 	if isFeatureEncodedBullet(lower) {
 		return false
 	}
+	if isFlowEncodedBullet(lower) {
+		return false
+	}
 	if isTimelineEncodedBullet(lower) {
 		return false
 	}
@@ -4341,6 +4611,10 @@ func normalizePresentationBullet(value string, maxWords int) string {
 
 	if isFeatureEncodedBullet(value) {
 		return normalizeFeatureEncodedBullet(value)
+	}
+
+	if isFlowEncodedBullet(value) {
+		return normalizeFlowEncodedBullet(value)
 	}
 
 	if isTimelineEncodedBullet(value) {
@@ -4865,6 +5139,8 @@ func enforcePresentationVariantCoverage(slides []models.PresentationSlide, trans
 		switch variant {
 		case "feature_trio":
 			enrichFeatureTrioSlide(&slides[idx], transcript)
+		case "flow_arrows":
+			enrichFlowArrowsSlide(&slides[idx], transcript)
 		case "timeline":
 			enrichTimelineSlide(&slides[idx], transcript)
 		case "comparison_table":
@@ -4892,7 +5168,7 @@ func enforcePresentationImageQueries(slides []models.PresentationSlide, transcri
 			slides[i].ImageQuery = nil
 			continue
 		}
-		if variant == "comparison_table" || variant == "feature_trio" || variant == "timeline" {
+		if variant == "comparison_table" || variant == "feature_trio" || variant == "timeline" || variant == "flow_arrows" {
 			slides[i].ImageQuery = nil
 			continue
 		}

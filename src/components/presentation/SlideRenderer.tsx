@@ -171,6 +171,25 @@ function parseTimelineBullet(value: string): NumberedBullet | null {
   }
 }
 
+function parseFlowArrowBullet(value: string): NumberedBullet | null {
+  const text = String(value || '').trim()
+  if (!text) return null
+
+  const match = text.match(/^(?:FLOW|ARROW|STEP_FLOW):\s*(?:(\d{1,2})\s*\|\|\s*)?(.+?)\s*\|\|\s*(.+)$/i)
+  if (!match) return null
+
+  const number = Number(match[1] || 0)
+  const title = match[2].trim()
+  const description = match[3].trim()
+  if (!title || !description) return null
+
+  return {
+    number: Number.isFinite(number) && number > 0 ? number : 0,
+    title,
+    description,
+  }
+}
+
 function parseFeatureTrioBullet(value: string): FeatureTrioItem | null {
   const text = String(value || '').trim()
   if (!text) return null
@@ -901,11 +920,14 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       const parsedTimelineBullets = bullets
         .map(parseTimelineBullet)
         .filter((item): item is NumberedBullet => item !== null)
+      const parsedFlowArrowBullets = bullets
+        .map(parseFlowArrowBullet)
+        .filter((item): item is NumberedBullet => item !== null)
       const cardBullets = bullets.map(parseCardBullet).filter((item): item is CardBullet => item !== null).slice(0, 3)
       const tags = bullets.flatMap(parseTagsBullet)
       const nonStructuredBullets = bullets.filter((bullet) => {
         const trimmed = bullet.trim()
-        return !parseCardBullet(trimmed) && !parseNumberedBullet(trimmed) && !parseTimelineBullet(trimmed) && !/^TAGS:\s*/i.test(trimmed)
+        return !parseCardBullet(trimmed) && !parseNumberedBullet(trimmed) && !parseTimelineBullet(trimmed) && !parseFlowArrowBullet(trimmed) && !/^TAGS:\s*/i.test(trimmed)
       })
       const inferredNumberedBullets = parsedNumberedBullets.length === 0
         ? guessNumberedBulletsFromLongText(nonStructuredBullets)
@@ -937,6 +959,32 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         : []
       const timelineItems = (timelineBullets.length > 0 ? timelineBullets : fallbackTimelineBullets)
         .slice(0, 5)
+        .map((item, index) => ({
+          ...item,
+          number: item.number > 0 ? item.number : index + 1,
+        }))
+      const flowArrowBullets = parsedFlowArrowBullets.length > 0
+        ? (parsedFlowArrowBullets.every((item) => item.number > 0)
+          ? [...parsedFlowArrowBullets].sort((a, b) => a.number - b.number)
+          : parsedFlowArrowBullets)
+        : []
+      const fallbackFlowArrowBullets = variant === 'flow_arrows' && flowArrowBullets.length === 0
+        ? (numberedBullets.length > 0
+          ? numberedBullets
+          : nonStructuredBullets
+            .map((raw, index) => {
+              const cleaned = stripNumericPrefix(raw)
+              const words = cleaned.split(/\s+/).filter(Boolean)
+              if (words.length < 4) return null
+              const title = words.slice(0, Math.min(4, words.length)).join(' ')
+              const description = words.slice(4).join(' ') || cleaned
+              if (!title || !description) return null
+              return { number: index + 1, title, description }
+            })
+            .filter((item): item is NumberedBullet => item !== null))
+        : []
+      const flowArrowItems = (flowArrowBullets.length > 0 ? flowArrowBullets : fallbackFlowArrowBullets)
+        .slice(0, 4)
         .map((item, index) => ({
           ...item,
           number: item.number > 0 ? item.number : index + 1,
@@ -1195,6 +1243,129 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                       </div>
                     )
                   })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      if ((variant === 'flow_arrows' || flowArrowBullets.length >= 3) && flowArrowItems.length >= 3) {
+        const arrowCount = Math.min(3, flowArrowItems.length)
+        const arrows = flowArrowItems.slice(0, arrowCount)
+
+        return (
+          <div style={baseStyle}>
+            {renderDecor()}
+
+            <div
+              style={{
+                ...layoutPadding,
+                zIndex: 2,
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+              }}
+            >
+              <h2
+                style={{
+                  margin: 0,
+                  fontFamily: theme.displayFont,
+                  fontSize: fs(56),
+                  lineHeight: 1.04,
+                  letterSpacing: '-0.03em',
+                  fontWeight: 700,
+                }}
+              >
+                {slide.title}
+              </h2>
+              {slide.subtitle && (
+                <p
+                  style={{
+                    marginTop: s(12),
+                    color: theme.subtext,
+                    fontSize: fs(19),
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {slide.subtitle}
+                </p>
+              )}
+
+              <div
+                style={{
+                  marginTop: s(42),
+                  display: 'grid',
+                  gap: s(20),
+                  alignContent: 'start',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${arrowCount}, minmax(0, 1fr))`,
+                    gap: s(12),
+                  }}
+                >
+                  {arrows.map((item, index) => (
+                    <div
+                      key={`flow-arrow-${item.number}-${index}`}
+                      style={{
+                        height: s(72),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        clipPath: 'polygon(0% 0%, 90% 0%, 100% 50%, 90% 100%, 0% 100%, 6% 50%)',
+                        background: index % 2 === 0 ? `${theme.surfaceStrong}dd` : `${theme.surface}dd`,
+                        boxShadow: `inset 0 0 0 1px ${theme.border}`,
+                        color: theme.text,
+                        fontFamily: theme.displayFont,
+                        fontSize: fs(44),
+                        fontWeight: 700,
+                        lineHeight: 1,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {item.number}
+                    </div>
+                  ))}
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${arrowCount}, minmax(0, 1fr))`,
+                    gap: s(16),
+                    alignItems: 'start',
+                  }}
+                >
+                  {arrows.map((item, index) => (
+                    <div key={`flow-text-${item.number}-${index}`} style={{ minWidth: 0, padding: `0 ${s(4)}px` }}>
+                      <div
+                        style={{
+                          fontFamily: theme.displayFont,
+                          fontSize: fs(40),
+                          lineHeight: 1.12,
+                          letterSpacing: '-0.018em',
+                          fontWeight: 650,
+                          color: theme.text,
+                        }}
+                      >
+                        {item.title}
+                      </div>
+                      <p
+                        style={{
+                          margin: `${s(10)}px 0 0`,
+                          color: theme.subtext,
+                          fontSize: fs(18),
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {item.description}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
