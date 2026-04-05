@@ -4092,6 +4092,9 @@ func normalizeStatDescription(value string) string {
 	if description == "" {
 		return ""
 	}
+	if strings.Contains(strings.ToLower(description), "highlights a critical benchmark that shapes implementation priorities") {
+		return ""
+	}
 	if containsTranscriptNoiseTag(description) || isConversationalTranscriptLine(description) {
 		return ""
 	}
@@ -4130,6 +4133,23 @@ func normalizeStatDescription(value string) string {
 	return description + "."
 }
 
+func statValueLooksTemporal(value string) bool {
+	clean := strings.ToLower(strings.TrimSpace(value))
+	if clean == "" {
+		return false
+	}
+	if regexp.MustCompile(`^\d{4}$`).MatchString(clean) {
+		return true
+	}
+	if regexp.MustCompile(`^\d{1,2}:\d{2}\s*(?:am|pm)?$`).MatchString(clean) {
+		return true
+	}
+	if regexp.MustCompile(`^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b`).MatchString(clean) {
+		return true
+	}
+	return false
+}
+
 func buildStatDescriptionFallback(label, value string) string {
 	cleanLabel := sanitizePresentationText(label)
 	cleanValue := sanitizePresentationText(value)
@@ -4137,20 +4157,44 @@ func buildStatDescriptionFallback(label, value string) string {
 	if cleanLabel == "" {
 		cleanLabel = "This metric"
 	}
+	lowerLabel := strings.ToLower(cleanLabel)
+
+	candidates := make([]string, 0, 6)
+	if cleanValue != "" && statValueLooksTemporal(cleanValue) {
+		candidates = append(candidates,
+			fmt.Sprintf("%s at %s marks a decisive moment in the sequence, showing what changed, why timing mattered, and how later outcomes were shaped.", cleanLabel, cleanValue),
+		)
+	}
+
+	if strings.Contains(lowerLabel, "arrival") || strings.Contains(lowerLabel, "launch") || strings.Contains(lowerLabel, "activation") || strings.Contains(lowerLabel, "start") || strings.Contains(lowerLabel, "onset") {
+		candidates = append(candidates,
+			fmt.Sprintf("%s defines the initial trigger, clarifying early constraints, immediate decisions, and the chain of effects that shaped every following phase.", cleanLabel),
+		)
+	}
+
+	if strings.Contains(lowerLabel, "day") || strings.Contains(lowerLabel, "war") || strings.Contains(lowerLabel, "victory") || strings.Contains(lowerLabel, "resolution") || strings.Contains(lowerLabel, "outcome") {
+		candidates = append(candidates,
+			fmt.Sprintf("%s captures a pivotal outcome where earlier actions converge, revealing strategic tradeoffs, operational pressure points, and the long term consequences for all sides.", cleanLabel),
+		)
+	}
 
 	if cleanValue != "" {
-		candidate := fmt.Sprintf("%s at %s highlights a critical benchmark that shapes implementation priorities, risk tradeoffs, resource allocation, and measurable outcomes for stakeholders over time.", cleanLabel, cleanValue)
+		candidates = append(candidates,
+			fmt.Sprintf("%s tied to %s anchors a key benchmark, connecting this milestone to concrete decisions, risk exposure, and measurable downstream impact.", cleanLabel, cleanValue),
+		)
+	}
+
+	candidates = append(candidates,
+		fmt.Sprintf("%s highlights a key benchmark that links strategic intent, implementation choices, and measurable outcomes across the broader timeline.", cleanLabel),
+	)
+
+	for _, candidate := range candidates {
 		if normalized := normalizeStatDescription(candidate); normalized != "" {
 			return normalized
 		}
 	}
 
-	candidate := fmt.Sprintf("%s highlights a critical benchmark that shapes implementation priorities, risk tradeoffs, resource allocation, and measurable outcomes for stakeholders over time.", cleanLabel)
-	if normalized := normalizeStatDescription(candidate); normalized != "" {
-		return normalized
-	}
-
-	return ensureTrailingDot(firstNWords(cleanLabel+" reflects a key benchmark with measurable impact on execution quality and stakeholder outcomes", 24))
+	return ensureTrailingDot(firstNWords(cleanLabel+" reflects a key benchmark that informs planning, execution discipline, and measurable stakeholder outcomes across the timeline", 24))
 }
 
 func normalizePresentationStats(stats []models.PresentationStat, maxItems int) []models.PresentationStat {
