@@ -2127,7 +2127,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     key={index}
                     style={{
                       ...panelCard,
-                      padding: `${s(30)}px ${s(14)}px ${s(18)}px`,
+                      padding: `${s(24)}px ${s(14)}px ${s(16)}px`,
                       textAlign: 'center',
                       display: 'grid',
                       alignContent: 'center',
@@ -2135,7 +2135,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   >
                     <div
                       style={{
-                        marginTop: s(6),
+                        marginTop: s(2),
                         fontFamily: theme.displayFont,
                         fontSize: fs(52),
                         color: theme.accent,
@@ -2148,7 +2148,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     </div>
                     <div
                       style={{
-                        marginTop: s(9),
+                        marginTop: s(6),
                         fontSize: fs(20),
                         color: theme.subtext,
                         textTransform: 'uppercase',
@@ -2161,7 +2161,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     {stat.description && (
                       <div
                         style={{
-                          marginTop: s(12),
+                          marginTop: s(8),
                           fontSize: fs(19),
                           color: theme.subtext,
                           lineHeight: 1.4,
