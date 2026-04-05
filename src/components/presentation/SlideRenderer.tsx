@@ -1661,8 +1661,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         : denseContent
           ? `${s(22)}px ${s(24)}px ${s(20)}px`
           : `${s(28)}px ${s(28)}px`
-      const numTitleSize = ultraDenseContent ? 18 : denseContent ? 19 : 21
-      const numDescSize = ultraDenseContent ? 15 : denseContent ? 16 : 17
+      const numTitleSize = ultraDenseContent ? 24 : denseContent ? 25 : 27
+      const numDescSize = ultraDenseContent ? 21 : denseContent ? 22 : 23
       const numPaddingY = ultraDenseContent ? 8 : denseContent ? 11 : 14
       const numPaddingX = ultraDenseContent ? 12 : denseContent ? 14 : 16
       const cardTitleSize = ultraDenseContent ? 18 : denseContent ? 20 : 22
