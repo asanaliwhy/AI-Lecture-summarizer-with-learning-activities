@@ -1015,7 +1015,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                 style={{
                   margin: 0,
                   fontFamily: theme.displayFont,
-                  fontSize: fs(54),
+                  fontSize: fs(56),
                   lineHeight: 1.04,
                   letterSpacing: '-0.03em',
                   fontWeight: 700,
@@ -1028,7 +1028,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   style={{
                     marginTop: s(12),
                     color: theme.subtext,
-                    fontSize: fs(26),
+                    fontSize: fs(19),
                     lineHeight: 1.4,
                   }}
                 >
@@ -1038,19 +1038,18 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
 
               <div
                 style={{
-                  marginTop: s(26),
-                  flex: 1,
+                  marginTop: s(18),
                   minHeight: 0,
                   position: 'relative',
-                  padding: `${s(10)}px 0 ${s(12)}px`,
+                  padding: `${s(6)}px 0 ${s(6)}px`,
                 }}
               >
                 <div
                   style={{
                     position: 'absolute',
                     left: '50%',
-                    top: s(8),
-                    bottom: s(8),
+                    top: s(4),
+                    bottom: s(4),
                     width: s(2),
                     transform: 'translateX(-50%)',
                     background: `linear-gradient(180deg, ${theme.border}, ${theme.accent}8a, ${theme.border})`,
@@ -1061,10 +1060,10 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                 <div
                   style={{
                     position: 'relative',
-                    height: '100%',
+                    height: 'auto',
                     display: 'grid',
-                    gap: s(8),
-                    gridTemplateRows: `repeat(${timelineItems.length}, minmax(${s(82)}px, 1fr))`,
+                    gap: s(2),
+                    gridTemplateRows: `repeat(${timelineItems.length}, minmax(${s(66)}px, auto))`,
                   }}
                 >
                   {timelineItems.map((item, index) => {
@@ -1078,7 +1077,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                           gridTemplateColumns: '1fr auto 1fr',
                           alignItems: 'center',
                           columnGap: s(14),
-                          minHeight: s(84),
+                          minHeight: s(66),
                         }}
                       >
                         {isLeft ? (
@@ -1095,7 +1094,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <div
                                 style={{
                                   fontFamily: theme.displayFont,
-                                  fontSize: fs(42),
+                                  fontSize: fs(32),
                                   lineHeight: 1.12,
                                   letterSpacing: '-0.02em',
                                   fontWeight: 650,
@@ -1107,7 +1106,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <p
                                 style={{
                                   margin: `${s(8)}px 0 0`,
-                                  fontSize: fs(24),
+                                  fontSize: fs(19),
                                   lineHeight: 1.38,
                                   color: theme.subtext,
                                 }}
@@ -1138,7 +1137,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               alignItems: 'center',
                               justifyContent: 'center',
                               fontFamily: theme.displayFont,
-                              fontSize: fs(16),
+                              fontSize: fs(25),
                               lineHeight: 1,
                               fontWeight: 700,
                               color: theme.text,
@@ -1171,7 +1170,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <div
                                 style={{
                                   fontFamily: theme.displayFont,
-                                  fontSize: fs(42),
+                                  fontSize: fs(32),
                                   lineHeight: 1.12,
                                   letterSpacing: '-0.02em',
                                   fontWeight: 650,
@@ -1183,7 +1182,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <p
                                 style={{
                                   margin: `${s(8)}px 0 0`,
-                                  fontSize: fs(24),
+                                  fontSize: fs(19),
                                   lineHeight: 1.38,
                                   color: theme.subtext,
                                 }}
