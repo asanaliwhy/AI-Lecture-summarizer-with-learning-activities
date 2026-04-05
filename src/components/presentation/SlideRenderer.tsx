@@ -423,7 +423,7 @@ function normalizeSummaryItems(slide: Slide, bullets: string[]): SummaryItem[] {
 function statsGridColumns(count: number): string {
   if (count <= 1) return '1fr'
   if (count === 2) return 'repeat(2, 1fr)'
-  if (count === 3) return 'repeat(3, 1fr)'
+  if (count === 3) return 'repeat(2, 1fr)'
   if (count === 4) return 'repeat(2, 1fr)'
   return 'repeat(3, 1fr)'
 }

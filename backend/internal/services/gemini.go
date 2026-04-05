@@ -3787,12 +3787,21 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 
 		metaPhrases := []string{
 			"this table", "table outlines", "table summar", "table presents", "table shows", "the following table",
-			"overview of", "evaluation of", "evaluating different methods",
+			"overview of", "evaluation of", "evaluating different methods", "each method plays", "unique role in",
 		}
 		for _, phrase := range metaPhrases {
 			if strings.Contains(joinedNorm, phrase) {
 				return true
 			}
+		}
+
+		firstCellNorm := normalizeCompareText(firstNonEmpty(cells[0]))
+		if regexp.MustCompile(`^(?:each|this|these|those|our|their|the|in\s+this)\b`).MatchString(firstCellNorm) {
+			return true
+		}
+
+		if len(strings.Fields(joinedNorm)) >= 14 && len(strings.Fields(firstCellNorm)) >= 3 {
+			return true
 		}
 
 		if subtitleNorm != "" && (strings.Contains(joinedNorm, subtitleNorm) || strings.Contains(subtitleNorm, joinedNorm)) {
@@ -3907,7 +3916,7 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 	}
 
 	minRows := 4
-	targetRows := 5
+	targetRows := 4
 	if len(normalizedRows) < targetRows {
 		seed := strings.Join([]string{
 			slide.SpeakerNotes,
@@ -4150,6 +4159,23 @@ func statValueLooksTemporal(value string) bool {
 	return false
 }
 
+func chooseBySeed(options []string, seed string) string {
+	if len(options) == 0 {
+		return ""
+	}
+	if len(options) == 1 {
+		return options[0]
+	}
+	h := 0
+	for _, r := range seed {
+		h = (h*33 + int(r)) % 2147483647
+	}
+	if h < 0 {
+		h = -h
+	}
+	return options[h%len(options)]
+}
+
 func buildStatDescriptionFallback(label, value string) string {
 	cleanLabel := sanitizePresentationText(label)
 	cleanValue := sanitizePresentationText(value)
@@ -4159,34 +4185,53 @@ func buildStatDescriptionFallback(label, value string) string {
 	}
 	lowerLabel := strings.ToLower(cleanLabel)
 
-	candidates := make([]string, 0, 6)
+	candidates := make([]string, 0, 8)
+
 	if cleanValue != "" && statValueLooksTemporal(cleanValue) {
-		candidates = append(candidates,
-			fmt.Sprintf("%s at %s marks a decisive moment in the sequence, showing what changed, why timing mattered, and how later outcomes were shaped.", cleanLabel, cleanValue),
-		)
+		temporalOptions := []string{
+			fmt.Sprintf("%s at %s marks a decisive point in the sequence, clarifying what shifted operationally and why later outcomes followed this specific timing.", cleanLabel, cleanValue),
+			fmt.Sprintf("%s linked to %s captures a critical timestamp where strategic intent turned into concrete action and measurable downstream consequences.", cleanLabel, cleanValue),
+		}
+		candidates = append(candidates, chooseBySeed(temporalOptions, cleanLabel+"|"+cleanValue))
 	}
 
-	if strings.Contains(lowerLabel, "arrival") || strings.Contains(lowerLabel, "launch") || strings.Contains(lowerLabel, "activation") || strings.Contains(lowerLabel, "start") || strings.Contains(lowerLabel, "onset") {
-		candidates = append(candidates,
-			fmt.Sprintf("%s defines the initial trigger, clarifying early constraints, immediate decisions, and the chain of effects that shaped every following phase.", cleanLabel),
-		)
+	if strings.Contains(lowerLabel, "tree") || strings.Contains(lowerLabel, "forest") || strings.Contains(lowerLabel, "biodiversity") || strings.Contains(lowerLabel, "species") {
+		envScale := []string{
+			fmt.Sprintf("%s indicates ecological scale and carrying capacity, helping prioritize conservation decisions, long horizon planning, and risk controls for habitat stability.", cleanLabel),
+			fmt.Sprintf("%s quantifies biological capacity, showing where protection efforts should focus to preserve resilience, ecosystem services, and long term resource security.", cleanLabel),
+		}
+		candidates = append(candidates, chooseBySeed(envScale, cleanLabel+"|eco"))
 	}
 
-	if strings.Contains(lowerLabel, "day") || strings.Contains(lowerLabel, "war") || strings.Contains(lowerLabel, "victory") || strings.Contains(lowerLabel, "resolution") || strings.Contains(lowerLabel, "outcome") {
-		candidates = append(candidates,
-			fmt.Sprintf("%s captures a pivotal outcome where earlier actions converge, revealing strategic tradeoffs, operational pressure points, and the long term consequences for all sides.", cleanLabel),
-		)
+	if strings.Contains(lowerLabel, "water") || strings.Contains(lowerLabel, "drinkable") || strings.Contains(lowerLabel, "fresh") || strings.Contains(lowerLabel, "resource") {
+		waterOptions := []string{
+			fmt.Sprintf("%s highlights scarcity pressure, guiding allocation priorities, infrastructure investments, and policy tradeoffs needed to secure reliable supply over time.", cleanLabel),
+			fmt.Sprintf("%s reveals availability constraints that influence planning choices, operational safeguards, and coordinated actions required for sustainable access.", cleanLabel),
+		}
+		candidates = append(candidates, chooseBySeed(waterOptions, cleanLabel+"|water"))
+	}
+
+	if strings.Contains(cleanValue, "%") {
+		percentOptions := []string{
+			fmt.Sprintf("%s expresses a constrained share, emphasizing how small shifts in efficiency or protection policy can materially change overall system outcomes.", cleanLabel),
+			fmt.Sprintf("%s frames a proportional limit that helps teams evaluate tradeoffs, set realistic targets, and monitor progress against scarce capacity.", cleanLabel),
+		}
+		candidates = append(candidates, chooseBySeed(percentOptions, cleanLabel+"|percent"))
 	}
 
 	if cleanValue != "" {
-		candidates = append(candidates,
-			fmt.Sprintf("%s tied to %s anchors a key benchmark, connecting this milestone to concrete decisions, risk exposure, and measurable downstream impact.", cleanLabel, cleanValue),
-		)
+		genericValueOptions := []string{
+			fmt.Sprintf("%s tied to %s provides a concrete benchmark for comparing alternatives, prioritizing interventions, and tracking measurable performance changes.", cleanLabel, cleanValue),
+			fmt.Sprintf("%s at %s anchors decision context, connecting this metric to execution priorities, risk exposure, and expected impact across stakeholders.", cleanLabel, cleanValue),
+		}
+		candidates = append(candidates, chooseBySeed(genericValueOptions, cleanLabel+"|generic-value"))
 	}
 
-	candidates = append(candidates,
-		fmt.Sprintf("%s highlights a key benchmark that links strategic intent, implementation choices, and measurable outcomes across the broader timeline.", cleanLabel),
-	)
+	genericOptions := []string{
+		fmt.Sprintf("%s provides a clear benchmark that supports planning discipline, implementation focus, and measurable outcomes across the broader timeline.", cleanLabel),
+		fmt.Sprintf("%s captures a decision-critical signal used to prioritize actions, manage tradeoffs, and evaluate progress with objective evidence.", cleanLabel),
+	}
+	candidates = append(candidates, chooseBySeed(genericOptions, cleanLabel+"|generic"))
 
 	for _, candidate := range candidates {
 		if normalized := normalizeStatDescription(candidate); normalized != "" {
@@ -4194,7 +4239,7 @@ func buildStatDescriptionFallback(label, value string) string {
 		}
 	}
 
-	return ensureTrailingDot(firstNWords(cleanLabel+" reflects a key benchmark that informs planning, execution discipline, and measurable stakeholder outcomes across the timeline", 24))
+	return ensureTrailingDot(firstNWords(cleanLabel+" provides a concrete benchmark for planning, execution discipline, and measurable stakeholder outcomes across the timeline", 24))
 }
 
 func normalizePresentationStats(stats []models.PresentationStat, maxItems int) []models.PresentationStat {
@@ -4206,6 +4251,7 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 	}
 
 	seen := map[string]struct{}{}
+	descSeen := map[string]struct{}{}
 	out := make([]models.PresentationStat, 0, min(len(stats), maxItems))
 	for _, stat := range stats {
 		value := sanitizePresentationText(stat.Value)
@@ -4225,6 +4271,15 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 			continue
 		}
 
+		descKey := normalizeCompareText(description)
+		if _, exists := descSeen[descKey]; exists {
+			description = buildStatDescriptionFallback(label+" context", value)
+			descKey = normalizeCompareText(description)
+		}
+		if descKey == "" {
+			continue
+		}
+
 		key := normalizeCompareText(value + "|" + label)
 		if key == "" {
 			continue
@@ -4233,6 +4288,7 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 			continue
 		}
 		seen[key] = struct{}{}
+		descSeen[descKey] = struct{}{}
 
 		out = append(out, models.PresentationStat{
 			Value:       value,
