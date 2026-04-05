@@ -594,6 +594,7 @@ func (s *GeminiService) GeneratePresentation(ctx context.Context, job *models.Jo
 	}
 
 	normalizePresentationSlides(slides)
+	enforcePresentationTextQuality(slides, transcript)
 	enforcePresentationImageQueries(slides, transcript)
 
 	s.PublishUpdate(ctx, job.UserID, models.WSMessage{
@@ -2233,22 +2234,32 @@ func buildPresentationPrompt(config models.GeneratePresentationRequest, transcri
 	b.WriteString(fmt.Sprintf("Language: Respond entirely in %s.\n\n", presentationLanguageName(config.Language)))
 	b.WriteString("You are an expert presentation designer and instructional storyteller. Read the transcript and generate a clean, audience-ready slide deck.\n\n")
 	b.WriteString(fmt.Sprintf("Generate exactly %d slides. Return ONLY a valid JSON array of slide objects. No preamble, no markdown fences, no backticks, no explanations.\n\n", config.SlideCount))
-	b.WriteString("Allowed slide types: title, section, content, two_column, stats, summary.\n")
-	b.WriteString("Every slide object must contain these keys exactly: index, type, title, subtitle, bullets, leftColumn, rightColumn, leftLabel, rightLabel, quote, quoteAuthor, stats, imageQuery, speakerNotes.\n")
+	b.WriteString("Allowed slide types: title, content, two_column, stats, prose, summary.\n")
+	b.WriteString("Every slide object must contain these keys exactly: index, type, variant, title, subtitle, body, bullets, leftColumn, rightColumn, leftLabel, rightLabel, quote, quoteAuthor, stats, takeaways, tableHeaders, tableRows, imageQuery, imagePosition, speakerNotes.\n")
 	b.WriteString("Use null for optional scalar fields when absent, [] for optional arrays when absent.\n")
-	b.WriteString("stats must be an array of objects shaped like {\"value\":\"...\",\"label\":\"...\"}.\n")
-	b.WriteString("imageQuery must be a 3-6 word English search query describing the ideal photo for that slide. Prefer realistic photo concepts.\n")
-	b.WriteString("The title slide (index 1, type=title) MUST have a non-empty imageQuery.\n")
-	b.WriteString("When possible, include the main topic/entity from the transcript in imageQuery (for example, Spider-Man, NASA, Kubernetes). Avoid generic-only queries.\n")
-	b.WriteString("speakerNotes must be concise presenter notes for that slide.\n\n")
+	b.WriteString("stats must be an array of objects shaped like {\"value\":\"...\",\"label\":\"...\",\"description\":\"...\"}.\n")
+	b.WriteString("takeaways must be an array of objects shaped like {\"title\":\"...\",\"description\":\"...\",\"icon\":\"...\"}. icon should be a simple semantic token like globe, platform, workforce, equity, leaf, recycle, chart, education or an emoji.\n")
+	b.WriteString("tableRows must be an array of rows, where each row is an array of 2-3 short strings. tableHeaders should contain 2-3 column names when using table layouts.\n")
+	b.WriteString("IMAGE QUERY RULES (Unsplash side panel):\n")
+	b.WriteString("- Images are side panel visuals, not full-slide backgrounds.\n")
+	b.WriteString("- SKIP imageQuery (set null) for stats, two_column, and summary slides.\n")
+	b.WriteString("- ALWAYS include imageQuery for title and prose slides.\n")
+	b.WriteString("- Include imageQuery for content slides only when the slide has a concrete visual subject; otherwise set null.\n")
+	b.WriteString("- imageQuery must be 3-6 English words.\n")
+	b.WriteString("- Title image query should be atmospheric and high quality, not a literal product name.\n")
+	b.WriteString("- Content image queries should use concrete nouns and visible scenes, not abstract nouns alone.\n")
+	b.WriteString("- Avoid product/framework names that Unsplash rarely has (RabbitMQ, ResNet50, Kubernetes, MongoDB, etc.). Translate to visual equivalents.\n")
+	b.WriteString("- If query is abstract-only (technology, innovation, system, process), add a concrete anchor like workspace, lab, team, student, server, or device.\n")
+	b.WriteString("- The title slide (index 1, type=title) MUST have a non-empty imageQuery.\n")
+	b.WriteString("speakerNotes must contain full-sentence detail and context for the presenter.\n\n")
 
 	switch {
 	case config.SlideCount <= 8:
-		b.WriteString("Short deck structure: exactly 1 title slide, 4-6 content or section slides, and 1 summary slide. Keep the narrative compact and focused.\n")
+		b.WriteString("Short deck structure: exactly 1 title slide, 4-6 content or prose slides, and 1 summary slide. Keep the narrative compact and focused.\n")
 	case config.SlideCount <= 14:
-		b.WriteString("Medium deck structure: exactly 1 title slide, multiple section and content slides, at least 1 two_column slide, and 1 summary slide.\n")
+		b.WriteString("Medium deck structure: exactly 1 title slide, multiple content and prose slides, at least 1 two_column slide, and 1 summary slide.\n")
 	default:
-		b.WriteString("Large deck structure: exactly 1 title slide, multiple section slides, multiple content slides, at least 1 two_column slide, at least 1 stats slide, and 1 summary slide.\n")
+		b.WriteString("Large deck structure: exactly 1 title slide, multiple content and prose slides, at least 1 two_column slide, at least 1 stats slide, and 1 summary slide.\n")
 	}
 
 	switch strings.ToLower(strings.TrimSpace(config.TextStyle)) {
@@ -2260,19 +2271,39 @@ func buildPresentationPrompt(config models.GeneratePresentationRequest, transcri
 		b.WriteString("Text style: Formal. Use professional language, full-sentence bullets when needed, and technical vocabulary where appropriate.\n")
 	}
 
+	b.WriteString("Design target: Gamma-style deck quality. Slides must look visually structured and concise, not like report paragraphs.\n")
 	b.WriteString("Slide writing rules:\n")
-	b.WriteString("- Keep each slide distinct and non-redundant.\n")
-	b.WriteString("- Use specific, transcript-grounded facts only.\n")
-	b.WriteString("- Prefer 4-7 bullets for content slides, 3-5 bullets per column for two_column slides, and 3-5 stats for stats slides.\n")
-	b.WriteString("- Keep title and subtitle presentation-friendly: title <= 14 words, subtitle <= 28 words.\n")
-	b.WriteString("- Bullet text should be informative and concise: roughly 10-22 words each, no paragraphs.\n")
-	b.WriteString("- Design for strong visuals: at least 70% of slides should have a non-empty imageQuery.\n")
-	b.WriteString("- Vary slide rhythm: alternate text-heavy and image-led moments to avoid repetitive layouts.\n")
-	b.WriteString("- For image-led slides, keep bullets complementary to the visual while preserving enough explanatory context.\n")
-	b.WriteString("- Keep imageQuery specific to the slide topic; generic queries like 'business meeting' or 'technology' are discouraged unless unavoidable.\n")
-	b.WriteString("- Do not generate quote slides. Set type to title, section, content, two_column, stats, or summary only.\n")
-	b.WriteString("- Summary slides should synthesize the core lessons, include 4-6 takeaways, and avoid repeating slide titles.\n")
-	b.WriteString("- speakerNotes should be 2-4 concise sentences that help the presenter elaborate key points.\n")
+	b.WriteString("- Keep each slide distinct, transcript-grounded, and non-redundant.\n")
+	b.WriteString("- title slide: one strong thesis title + contextual subtitle; never add bullets.\n")
+	b.WriteString("- content slide: use for sequential/procedural explanation. Prefer numbered stacked items encoded as 'NUM: N || Title || Description'. Use 3-5 items. Description MUST be 2 full sentences (20-35 words): first sentence states the action or mechanism, second states the concrete outcome or why it matters. Never one sentence only.\n")
+	b.WriteString("- content variants:\n")
+	b.WriteString("  * variant='feature_trio': exactly 3 feature cards. Encode each bullet as 'FEATURE: icon || Title || Description' or 'CARD: Title || Description'. Description should be one complete sentence around 15 words (target 13-17), never clipped.\n")
+	b.WriteString("  * variant='comparison_table': use tabular comparisons. Provide tableHeaders and tableRows, or encode bullets as 'HEADER: Col1 || Col2 || Col3' and 'ROW: v1 || v2 || v3'. Include 4-5 data rows. Set imageQuery to null for this variant.\n")
+	b.WriteString("- two_column slide: comparison only. Each column must have 3-5 items. Each item MUST be a full sentence of 12-25 words — not a short phrase or fragment. One sentence states the fact, optionally a second states the consequence. Column items are sentences, not bullets.\n")
+	b.WriteString("- stats slide: include 3-6 stats entries (value + label + description), values must come from transcript.\n")
+	b.WriteString("- prose slide: no bullets. body must contain 2-3 paragraphs of 25-45 words each separated by newlines. Paragraph 1: specific context or problem with a concrete claim. Paragraph 2: mechanism, solution, or key insight. Paragraph 3 (optional): implication or significance. Never one-sentence paragraphs. Never restate the slide title.\n")
+	b.WriteString("- summary slide: prefer variant='summary_icons'. Use exactly 4 takeaways for medium/large decks; 3-4 for short decks. Each takeaway needs a title (2-4 words), a concise description around 15 words (target 13-17), and an icon token. Make the summary feel like an icon-led takeaway grid, not a document paragraph.\n")
+	b.WriteString("- Keep title and subtitle concise: title <= 9 words, subtitle <= 14 words.\n")
+	b.WriteString("- Bullets must be 6-10 words and communicate a complete idea. Never under 5 words; never over 12 words.\n")
+	b.WriteString("- Do not end bullets with periods.\n")
+	b.WriteString("- Do not prefix bullets with numeric labels like 1., 2., 3.\n")
+	b.WriteString("- Never repeat title wording inside subtitle or bullets.\n")
+	b.WriteString("- Never output placeholder text like \"Point 1\", \"Takeaway 1\", \"Slide N\", \"TBD\", \"Lorem ipsum\", or template stubs.\n")
+	b.WriteString("- If source material is thin, reduce bullet count and merge related points into stronger bullets; never use placeholders.\n")
+	b.WriteString("- Card grid pattern: for problems/solutions/features/goals/stacks/benefits, encode bullets as 'CARD: Label || Description sentence'. Use 3 cards. Description must be 1-2 full sentences (15-25 words) with at least one specific detail: a named mechanism, consequence, or quantified benefit. Never a fragment under 10 words.\n")
+	b.WriteString("- Numbered process pattern (high priority): encode sequential items as 'NUM: N || Title || Description'. Description should be 1-2 sentences.\n")
+	b.WriteString("- Use two_column for before/after, X vs Y, limitations vs future.\n")
+	b.WriteString("- Use prose for major introductions, architecture explanations, and conclusions when list format would fragment narrative flow.\n")
+	b.WriteString("- If transcript has any quantifiable claim (number, percentage, count, cost, threshold, duration), include at least 1 stats slide regardless of deck size.\n")
+	b.WriteString("- Slide rhythm: never place more than 2 consecutive content slides.\n")
+	b.WriteString("- Deck size rhythm: short <=8 must include title + >=1 stats + >=1 two_column + summary; large includes >=2 stats and >=2 two_column.\n")
+	b.WriteString("- Variant rhythm (medium/large decks): include at least one 3-column CARD grid content slide, exactly one feature_trio slide, and exactly one comparison_table slide.\n")
+	b.WriteString("- Image rhythm: set imagePosition to alternate left/right across consecutive image slides.\n")
+	b.WriteString("- Density guard: every non-title slide must carry meaningful visible payload. For content/prose slides target at least 30-40 words total across subtitle and bullets/cards.\n")
+	b.WriteString("- Design for visuals: at least 70% of eligible slides (title/content/prose) should have a non-empty imageQuery.\n")
+	b.WriteString("- Keep imageQuery specific to topic; avoid generic queries like 'business meeting' unless unavoidable.\n")
+	b.WriteString("- Do not generate quote slides. Use only title, content, two_column, stats, prose, summary.\n")
+	b.WriteString("- speakerNotes: 2-4 full sentences per slide. Put full explanations in notes, not bullets.\n")
 	b.WriteString("- The theme preference is '")
 	b.WriteString(config.Theme)
 	b.WriteString("'; reflect that mood implicitly in structure and wording, but do not mention theme names in the output.\n")
@@ -2320,12 +2351,13 @@ func buildFallbackPresentationSlides(transcript string, slideCount int) []models
 	slides := make([]models.PresentationSlide, 0, slideCount)
 	titleQuery := fallbackSlideImageQuery(title)
 	slides = append(slides, models.PresentationSlide{
-		Index:        1,
-		ID:           "slide-1",
-		Type:         "title",
-		Title:        title,
-		ImageQuery:   &titleQuery,
-		SpeakerNotes: "Introduce the topic and explain that this deck was generated from limited structured output.",
+		Index:         1,
+		ID:            "slide-1",
+		Type:          "title",
+		Title:         title,
+		ImageQuery:    &titleQuery,
+		ImagePosition: stringPtr("right"),
+		SpeakerNotes:  "Introduce the topic and explain that this deck was generated from limited structured output.",
 	})
 
 	contentSlides := slideCount - 2
@@ -2348,13 +2380,14 @@ func buildFallbackPresentationSlides(transcript string, slideCount int) []models
 			}
 		}
 		slides = append(slides, models.PresentationSlide{
-			Index:        len(slides) + 1,
-			ID:           fmt.Sprintf("slide-%d", len(slides)+1),
-			Type:         "content",
-			Title:        fmt.Sprintf("Key Point %d", i+1),
-			Bullets:      bullets,
-			ImageQuery:   stringPtr(fallbackSlideImageQuery(strings.Join(bullets, " "))),
-			SpeakerNotes: strings.Join(bullets, " "),
+			Index:         len(slides) + 1,
+			ID:            fmt.Sprintf("slide-%d", len(slides)+1),
+			Type:          "content",
+			Title:         fmt.Sprintf("Key Point %d", i+1),
+			Bullets:       bullets,
+			ImageQuery:    stringPtr(fallbackSlideImageQuery(strings.Join(bullets, " "))),
+			ImagePosition: stringPtr("right"),
+			SpeakerNotes:  strings.Join(bullets, " "),
 		})
 	}
 
@@ -2372,14 +2405,18 @@ func buildFallbackPresentationSlides(transcript string, slideCount int) []models
 		summaryBullets = []string{"Source transcript was limited, so the summary remains high level."}
 	}
 	slides = append(slides, models.PresentationSlide{
-		Index:        len(slides) + 1,
-		ID:           fmt.Sprintf("slide-%d", len(slides)+1),
-		Type:         "summary",
-		Title:        "Key Takeaways",
-		Bullets:      summaryBullets,
-		ImageQuery:   stringPtr(fallbackSlideImageQuery(strings.Join(summaryBullets, " "))),
-		SpeakerNotes: "Close by restating the main ideas and next actions.",
+		Index:         len(slides) + 1,
+		ID:            fmt.Sprintf("slide-%d", len(slides)+1),
+		Type:          "summary",
+		Variant:       stringPtr("summary_icons"),
+		Title:         "Key Takeaways",
+		Bullets:       summaryBullets,
+		ImageQuery:    stringPtr(fallbackSlideImageQuery(strings.Join(summaryBullets, " "))),
+		ImagePosition: stringPtr("right"),
+		SpeakerNotes:  "Close by restating the main ideas and next actions.",
 	})
+	lastIndex := len(slides) - 1
+	slides[lastIndex].Takeaways = buildSummaryTakeaways(&slides[lastIndex])
 
 	return slides
 }
@@ -2419,6 +2456,10 @@ func normalizePresentationSlides(slides []models.PresentationSlide) {
 		if strings.TrimSpace(slides[i].Type) == "" {
 			slides[i].Type = "content"
 		}
+		slides[i].Type = strings.ToLower(strings.TrimSpace(slides[i].Type))
+		if slides[i].Type == "section" {
+			slides[i].Type = "prose"
+		}
 		if slides[i].Bullets == nil {
 			slides[i].Bullets = []string{}
 		}
@@ -2437,12 +2478,2143 @@ func normalizePresentationSlides(slides []models.PresentationSlide) {
 		if slides[i].Takeaways == nil {
 			slides[i].Takeaways = []models.PresentationTakeaway{}
 		}
+		if slides[i].TableHeaders == nil {
+			slides[i].TableHeaders = []string{}
+		}
+		if slides[i].TableRows == nil {
+			slides[i].TableRows = [][]string{}
+		}
+		for t := range slides[i].Takeaways {
+			slides[i].Takeaways[t].Title = sanitizePresentationText(slides[i].Takeaways[t].Title)
+			slides[i].Takeaways[t].Description = sanitizePresentationText(slides[i].Takeaways[t].Description)
+			slides[i].Takeaways[t].Icon = sanitizePresentationText(slides[i].Takeaways[t].Icon)
+		}
+		for h := range slides[i].TableHeaders {
+			slides[i].TableHeaders[h] = sanitizePresentationText(slides[i].TableHeaders[h])
+		}
+		for r := range slides[i].TableRows {
+			for c := range slides[i].TableRows[r] {
+				slides[i].TableRows[r][c] = sanitizePresentationText(slides[i].TableRows[r][c])
+			}
+		}
+		slides[i].ImagePosition = stringPtr(normalizeImagePosition(pointerStringValue(slides[i].ImagePosition), slides[i].Type))
+		slides[i].Variant = stringPtr(normalizePresentationVariant(pointerStringValue(slides[i].Variant), slides[i].Type))
+		if slides[i].Body != nil {
+			body := sanitizePresentationText(pointerStringValue(slides[i].Body))
+			slides[i].Body = stringPtr(body)
+		}
 		if slides[i].SpeakerNotes == "" && slides[i].Notes != nil {
 			slides[i].SpeakerNotes = strings.TrimSpace(*slides[i].Notes)
 		}
 		if slides[i].Notes == nil && strings.TrimSpace(slides[i].SpeakerNotes) != "" {
 			notes := strings.TrimSpace(slides[i].SpeakerNotes)
 			slides[i].Notes = &notes
+		}
+	}
+}
+
+func enforcePresentationTextQuality(slides []models.PresentationSlide, transcript string) {
+	if len(slides) == 0 {
+		return
+	}
+
+	for i := range slides {
+		slideType := strings.ToLower(strings.TrimSpace(slides[i].Type))
+
+		title := sanitizePresentationText(slides[i].Title)
+		title = stripSlideIndexArtifact(title, slides[i].Index)
+		slides[i].Title = title
+
+		if slides[i].Subtitle != nil {
+			subtitle := sanitizePresentationText(*slides[i].Subtitle)
+			subtitle = stripSlideIndexArtifact(subtitle, slides[i].Index)
+			if subtitle == "" || isSubtitleRedundant(title, subtitle) {
+				slides[i].Subtitle = nil
+			} else {
+				slides[i].Subtitle = &subtitle
+			}
+		}
+
+		maxBullets := maxBulletsForSlideType(slideType)
+		maxWords := 10
+		if slideType == "content" {
+			maxWords = 18
+		}
+		if slideType == "summary" {
+			maxWords = 20
+		}
+		if slideType == "two_column" {
+			maxWords = 25
+		}
+		slides[i].Bullets = normalizePresentationBullets(slides[i].Bullets, title, pointerStringValue(slides[i].Subtitle), maxBullets, maxWords)
+
+		variant := normalizePresentationVariant(pointerStringValue(slides[i].Variant), slideType)
+		if slideType == "content" && variant == "default" {
+			variant = inferContentVariant(&slides[i])
+		}
+		if slideType == "two_column" && variant == "default" {
+			if len(slides[i].TableRows) > 0 {
+				variant = "comparison_table"
+			} else {
+				for _, bullet := range slides[i].Bullets {
+					if isComparisonRowEncodedBullet(bullet) {
+						variant = "comparison_table"
+						break
+					}
+				}
+			}
+		}
+		slides[i].Variant = stringPtr(variant)
+
+		if slideType == "prose" {
+			body := sanitizePresentationText(pointerStringValue(slides[i].Body))
+			if body == "" {
+				body = buildProseBodyFromSlide(slides[i], transcript)
+			}
+			slides[i].Body = stringPtr(body)
+			slides[i].Bullets = []string{}
+		}
+
+		if slideType == "content" && len(slides[i].Bullets) < 2 {
+			fallbackSource := strings.TrimSpace(strings.Join([]string{slides[i].SpeakerNotes, pointerStringValue(slides[i].Notes), transcript}, " "))
+			fallbackBullets := buildCompactBulletsFromText(fallbackSource, 2-len(slides[i].Bullets), 8)
+			slides[i].Bullets = append(slides[i].Bullets, fallbackBullets...)
+			if len(slides[i].Bullets) > maxBullets {
+				slides[i].Bullets = slides[i].Bullets[:maxBullets]
+			}
+		}
+
+		slides[i].LeftColumn = normalizePresentationPhrases(slides[i].LeftColumn, 5, 18)
+		slides[i].RightColumn = normalizePresentationPhrases(slides[i].RightColumn, 5, 18)
+		for c := range slides[i].Columns {
+			slides[i].Columns[c].Label = sanitizePresentationText(slides[i].Columns[c].Label)
+			slides[i].Columns[c].Items = normalizePresentationPhrases(slides[i].Columns[c].Items, 5, 18)
+		}
+
+		if slideType == "two_column" {
+			enrichTwoColumnSlide(&slides[i], transcript)
+		}
+		if slideType == "content" && pointerStringValue(slides[i].Variant) == "feature_trio" {
+			enrichFeatureTrioSlide(&slides[i], transcript)
+		}
+		if pointerStringValue(slides[i].Variant) == "comparison_table" {
+			enrichComparisonTableSlide(&slides[i])
+		}
+		if slideType == "summary" {
+			enrichSummarySlide(&slides[i])
+		}
+
+		slides[i].Stats = normalizePresentationStats(slides[i].Stats, 6)
+		if slideType == "stats" && len(slides[i].Stats) < 3 {
+			statsFromBullets := extractStatsFromBullets(append(append([]string{}, slides[i].Bullets...), splitPresentationSentences(transcript)...))
+			combined := append(slides[i].Stats, statsFromBullets...)
+			slides[i].Stats = normalizePresentationStats(combined, 6)
+		}
+
+		if strings.TrimSpace(slides[i].SpeakerNotes) == "" {
+			slides[i].SpeakerNotes = buildSpeakerNotesFromSlide(slides[i])
+		} else {
+			slides[i].SpeakerNotes = sanitizePresentationText(slides[i].SpeakerNotes)
+		}
+	}
+
+	enforceStatsSlideWhenQuantifiable(slides, transcript)
+	enforcePresentationTypeVariety(slides)
+	enforcePresentationVariantCoverage(slides, transcript)
+
+	for i := range slides {
+		slideType := strings.ToLower(strings.TrimSpace(slides[i].Type))
+		if slideType == "prose" {
+			body := sanitizePresentationText(pointerStringValue(slides[i].Body))
+			if body == "" {
+				body = buildProseBodyFromSlide(slides[i], transcript)
+			}
+			slides[i].Body = stringPtr(body)
+			slides[i].Bullets = []string{}
+		}
+		if slideType == "two_column" {
+			enrichTwoColumnSlide(&slides[i], transcript)
+		}
+		if slideType == "content" && pointerStringValue(slides[i].Variant) == "feature_trio" {
+			enrichFeatureTrioSlide(&slides[i], transcript)
+		}
+		if pointerStringValue(slides[i].Variant) == "comparison_table" {
+			enrichComparisonTableSlide(&slides[i])
+		}
+		if slideType == "summary" {
+			enrichSummarySlide(&slides[i])
+		}
+		slides[i].Stats = normalizePresentationStats(slides[i].Stats, 6)
+	}
+}
+
+func maxBulletsForSlideType(slideType string) int {
+	switch slideType {
+	case "content":
+		return 6
+	case "summary":
+		return 4
+	case "prose":
+		return 0
+	case "section":
+		return 2
+	default:
+		return 4
+	}
+}
+
+func normalizePresentationVariant(value, slideType string) string {
+	variant := strings.ToLower(strings.TrimSpace(value))
+	if slideType == "summary" {
+		if variant == "" || variant == "default" {
+			return "summary_icons"
+		}
+		if variant == "summary_icons" {
+			return variant
+		}
+		return "summary_icons"
+	}
+
+	if slideType == "content" {
+		switch variant {
+		case "", "default", "feature_trio", "comparison_table":
+			if variant == "" {
+				return "default"
+			}
+			return variant
+		default:
+			return "default"
+		}
+	}
+
+	if slideType == "two_column" {
+		switch variant {
+		case "", "default", "comparison_table":
+			if variant == "" {
+				return "default"
+			}
+			return variant
+		default:
+			return "default"
+		}
+	}
+
+	if variant == "" {
+		return "default"
+	}
+	return "default"
+}
+
+func normalizeImagePosition(value, slideType string) string {
+	position := strings.ToLower(strings.TrimSpace(value))
+	switch position {
+	case "left", "right":
+		return position
+	}
+	return "right"
+}
+
+func buildProseBodyFromSlide(slide models.PresentationSlide, transcript string) string {
+	seed := strings.TrimSpace(strings.Join([]string{
+		slide.Title,
+		pointerStringValue(slide.Subtitle),
+		pointerStringValue(slide.Body),
+		strings.Join(slide.Bullets, ". "),
+		slide.SpeakerNotes,
+		transcript,
+	}, " "))
+
+	sentences := splitPresentationSentences(seed)
+	if len(sentences) == 0 {
+		return "This section introduces the main idea and explains why it matters for the overall narrative."
+	}
+
+	out := make([]string, 0, 3)
+	for _, sentence := range sentences {
+		normalized := strings.TrimSpace(sentence)
+		if normalized == "" {
+			continue
+		}
+		normalized = firstNWords(normalized, 26)
+		normalized = strings.TrimRight(normalized, " .;:!?")
+		if normalized == "" {
+			continue
+		}
+		out = append(out, normalized+".")
+		if len(out) >= 3 {
+			break
+		}
+	}
+
+	if len(out) == 0 {
+		return "This section explains the context, core mechanism, and practical implication in clear narrative form."
+	}
+
+	return strings.Join(out, " ")
+}
+
+func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
+	if slide == nil {
+		return
+	}
+
+	left := append([]string{}, slide.LeftColumn...)
+	right := append([]string{}, slide.RightColumn...)
+
+	if len(left) == 0 || len(right) == 0 {
+		for idx, col := range slide.Columns {
+			if idx == 0 && len(left) == 0 {
+				left = append(left, col.Items...)
+			}
+			if idx == 1 && len(right) == 0 {
+				right = append(right, col.Items...)
+			}
+		}
+	}
+
+	if len(slide.Bullets) > 0 && (len(left) == 0 || len(right) == 0) {
+		for i, bullet := range slide.Bullets {
+			if i%2 == 0 {
+				left = append(left, bullet)
+			} else {
+				right = append(right, bullet)
+			}
+		}
+	}
+
+	left = normalizePresentationPhrases(left, 5, 18)
+	right = normalizePresentationPhrases(right, 5, 18)
+
+	seed := strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), slide.SpeakerNotes, transcript}, " ")
+	extra := buildCompactBulletsFromText(seed, 8, 18)
+	extraIdx := 0
+	targetMin := 4
+	for (len(left) < targetMin || len(right) < targetMin) && extraIdx < len(extra) {
+		candidate := extra[extraIdx]
+		extraIdx++
+		if candidate == "" {
+			continue
+		}
+		if len(left) < len(right) {
+			left = append(left, candidate)
+		} else {
+			right = append(right, candidate)
+		}
+	}
+
+	left = normalizePresentationPhrases(left, 5, 18)
+	right = normalizePresentationPhrases(right, 5, 18)
+
+	leftFallback := []string{
+		"Operational constraints and baseline conditions shape implementation choices",
+		"Resource availability and infrastructure readiness influence expected outcomes",
+		"Stakeholder coordination requirements determine adoption speed and consistency",
+		"Monitoring and governance practices stabilize long term execution quality",
+	}
+	rightFallback := []string{
+		"Measured benefits include reduced waste and improved system efficiency over time",
+		"Observable impacts include cost stabilization and stronger service reliability",
+		"Adoption outcomes improve when training and communication remain continuous",
+		"Sustained optimization leads to resilient performance under changing conditions",
+	}
+	for i := 0; len(left) < targetMin && i < len(leftFallback); i++ {
+		left = append(left, leftFallback[i])
+	}
+	for i := 0; len(right) < targetMin && i < len(rightFallback); i++ {
+		right = append(right, rightFallback[i])
+	}
+
+	left = normalizePresentationPhrases(left, 5, 18)
+	right = normalizePresentationPhrases(right, 5, 18)
+
+	if len(left) == 0 {
+		left = []string{"Core mechanisms and enabling factors are outlined for this side of the comparison"}
+	}
+	if len(right) == 0 {
+		right = []string{"Observed outcomes and practical implications are summarized for this side"}
+	}
+
+	slide.LeftColumn = left
+	slide.RightColumn = right
+	slide.Bullets = []string{}
+
+	leftLabel := sanitizePresentationText(pointerStringValue(slide.LeftLabel))
+	rightLabel := sanitizePresentationText(pointerStringValue(slide.RightLabel))
+	if leftLabel == "" {
+		leftLabel = "Context"
+	}
+	if rightLabel == "" {
+		rightLabel = "Outcomes"
+	}
+	slide.LeftLabel = stringPtr(leftLabel)
+	slide.RightLabel = stringPtr(rightLabel)
+
+	slide.Columns = []models.PresentationColumn{
+		{Label: leftLabel, Items: left},
+		{Label: rightLabel, Items: right},
+	}
+}
+
+func inferTakeawayIcon(title, description string) string {
+	text := strings.ToLower(strings.TrimSpace(title + " " + description))
+	switch {
+	case strings.Contains(text, "global"), strings.Contains(text, "world"), strings.Contains(text, "international"), strings.Contains(text, "planet"):
+		return "globe"
+	case strings.Contains(text, "impact"), strings.Contains(text, "result"), strings.Contains(text, "outcome"), strings.Contains(text, "growth"), strings.Contains(text, "performance"):
+		return "impact"
+	case strings.Contains(text, "platform"), strings.Contains(text, "system"), strings.Contains(text, "software"), strings.Contains(text, "infrastructure"), strings.Contains(text, "open-source"):
+		return "platform"
+	case strings.Contains(text, "network"), strings.Contains(text, "ecosystem"), strings.Contains(text, "integration"), strings.Contains(text, "connection"):
+		return "network"
+	case strings.Contains(text, "education"), strings.Contains(text, "learning"), strings.Contains(text, "student"), strings.Contains(text, "teacher"), strings.Contains(text, "study"):
+		return "education"
+	case strings.Contains(text, "workforce"), strings.Contains(text, "career"), strings.Contains(text, "skill"), strings.Contains(text, "employment"), strings.Contains(text, "development"):
+		return "workforce"
+	case strings.Contains(text, "equity"), strings.Contains(text, "access"), strings.Contains(text, "accessibility"), strings.Contains(text, "inclusion"), strings.Contains(text, "security"), strings.Contains(text, "trust"):
+		return "equity"
+	case strings.Contains(text, "environment"), strings.Contains(text, "nature"), strings.Contains(text, "forest"), strings.Contains(text, "climate"), strings.Contains(text, "sustainability"), strings.Contains(text, "water"):
+		return "environment"
+	case strings.Contains(text, "recycle"), strings.Contains(text, "waste"), strings.Contains(text, "reuse"), strings.Contains(text, "circular"):
+		return "recycle"
+	default:
+		return "innovation"
+	}
+}
+
+func buildSummaryTakeaways(slide *models.PresentationSlide) []models.PresentationTakeaway {
+	if slide == nil {
+		return []models.PresentationTakeaway{}
+	}
+
+	items := make([]models.PresentationTakeaway, 0, 4)
+	appendItem := func(title, description, icon string) {
+		title = sanitizePresentationText(title)
+		description = sanitizePresentationText(description)
+		icon = sanitizePresentationText(icon)
+		if title == "" && description == "" {
+			return
+		}
+		if title == "" && description != "" {
+			words := strings.Fields(description)
+			if len(words) > 4 {
+				title = strings.Join(words[:4], " ")
+				description = strings.TrimSpace(strings.Join(words[4:], " "))
+			} else {
+				title = description
+				description = ""
+			}
+		}
+		if description == "" {
+			description = title
+		}
+		description = normalizeFeatureDescriptionSentence(description)
+		if description == "" {
+			description = normalizeFeatureDescriptionSentence(title + " with practical implementation and measurable impact for people and systems")
+		}
+		items = append(items, models.PresentationTakeaway{
+			Title:       title,
+			Description: description,
+			Icon:        firstNonEmpty(icon, inferTakeawayIcon(title, description)),
+		})
+	}
+
+	for _, item := range slide.Takeaways {
+		appendItem(item.Title, item.Description, item.Icon)
+	}
+
+	if len(items) == 0 {
+		for _, raw := range slide.Bullets {
+			clean := sanitizePresentationText(stripNumericPrefixes(raw))
+			if clean == "" {
+				continue
+			}
+			if idx := strings.Index(clean, ":"); idx > 0 && idx < 32 {
+				appendItem(clean[:idx], clean[idx+1:], "")
+				continue
+			}
+			words := strings.Fields(clean)
+			if len(words) > 5 {
+				appendItem(strings.Join(words[:min(4, len(words))], " "), strings.Join(words[min(4, len(words)):], " "), "")
+			} else {
+				appendItem(clean, clean, "")
+			}
+		}
+	}
+
+	if len(items) > 4 {
+		items = items[:4]
+	}
+
+	return items
+}
+
+func enrichSummarySlide(slide *models.PresentationSlide) {
+	if slide == nil {
+		return
+	}
+	items := buildSummaryTakeaways(slide)
+	if len(items) == 0 {
+		return
+	}
+	slide.Takeaways = items
+	if pointerStringValue(slide.Variant) == "" {
+		slide.Variant = stringPtr("summary_icons")
+	}
+	if strings.TrimSpace(slide.Title) == "" {
+		slide.Title = "Key Takeaways"
+	}
+}
+
+func parseComparisonHeaderFromBullet(value string) []string {
+	value = normalizeComparisonHeaderBullet(value)
+	if value == "" {
+		return nil
+	}
+	body := regexp.MustCompile(`(?i)^header:\s*`).ReplaceAllString(value, "")
+	parts := strings.Split(body, "||")
+	headers := make([]string, 0, 3)
+	for _, part := range parts {
+		cell := sanitizePresentationText(part)
+		if cell != "" {
+			headers = append(headers, cell)
+		}
+		if len(headers) >= 3 {
+			break
+		}
+	}
+	if len(headers) < 2 {
+		return nil
+	}
+	return headers
+}
+
+func parseComparisonRowFromBullet(value string) []string {
+	value = normalizeComparisonRowBullet(value)
+	if value == "" {
+		return nil
+	}
+	body := regexp.MustCompile(`(?i)^row:\s*`).ReplaceAllString(value, "")
+	parts := strings.Split(body, "||")
+	row := make([]string, 0, 3)
+	for _, part := range parts {
+		cell := sanitizePresentationText(part)
+		if cell != "" {
+			row = append(row, cell)
+		}
+		if len(row) >= 3 {
+			break
+		}
+	}
+	if len(row) < 2 {
+		return nil
+	}
+	return row
+}
+
+func inferContentVariant(slide *models.PresentationSlide) string {
+	if slide == nil {
+		return "default"
+	}
+	for _, bullet := range slide.Bullets {
+		if isNumberedCardEncodedBullet(bullet) {
+			return "default"
+		}
+	}
+	for _, bullet := range slide.Bullets {
+		if isComparisonRowEncodedBullet(bullet) {
+			return "comparison_table"
+		}
+	}
+	featureCount := 0
+	cardCount := 0
+	for _, bullet := range slide.Bullets {
+		if isFeatureEncodedBullet(bullet) {
+			featureCount++
+			continue
+		}
+		if isCardEncodedBullet(bullet) {
+			cardCount++
+		}
+	}
+	if featureCount >= 3 {
+		return "feature_trio"
+	}
+	if cardCount >= 3 {
+		return "default"
+	}
+	return "default"
+}
+
+func cardGridCount(slide models.PresentationSlide) int {
+	count := 0
+	for _, bullet := range slide.Bullets {
+		if isCardEncodedBullet(bullet) {
+			count++
+		}
+	}
+	return count
+}
+
+func buildCardDescriptionFallback(label, title, subtitle string) string {
+	seed := strings.TrimSpace(strings.Join([]string{label, title, subtitle}, " "))
+	seed = trimDanglingPhrase(seed)
+	if seed == "" {
+		seed = "Key mechanism"
+	}
+	candidate := normalizeCardDescriptionSentence(seed + " with a concrete mechanism that improves implementation quality and measurable outcomes")
+	if candidate != "" {
+		return candidate
+	}
+	return "Explains a concrete mechanism with practical execution steps and measurable outcomes for the audience."
+}
+
+func enrichCardGridContentSlide(slide *models.PresentationSlide, transcript string) {
+	if slide == nil {
+		return
+	}
+
+	cards := make([]string, 0, 3)
+	for _, bullet := range slide.Bullets {
+		if !isCardEncodedBullet(bullet) {
+			continue
+		}
+		normalized := normalizeCardEncodedBullet(bullet)
+		if normalized != "" {
+			cards = append(cards, normalized)
+		}
+		if len(cards) >= 3 {
+			break
+		}
+	}
+
+	if len(cards) < 3 {
+		for _, bullet := range slide.Bullets {
+			if isCardEncodedBullet(bullet) || isNumberedCardEncodedBullet(bullet) || isFeatureEncodedBullet(bullet) {
+				continue
+			}
+			clean := sanitizePresentationText(stripNumericPrefixes(bullet))
+			if clean == "" {
+				continue
+			}
+			words := strings.Fields(clean)
+			if len(words) < 4 {
+				continue
+			}
+			label := strings.Join(words[:min(3, len(words))], " ")
+			desc := clean
+			if len(words) > 3 {
+				desc = strings.Join(words[3:], " ")
+			}
+			desc = normalizeCardDescriptionSentence(desc)
+			if desc == "" {
+				desc = buildCardDescriptionFallback(label, slide.Title, pointerStringValue(slide.Subtitle))
+			}
+			normalized := normalizeCardEncodedBullet("CARD: " + label + " || " + desc)
+			if normalized != "" {
+				cards = append(cards, normalized)
+			}
+			if len(cards) >= 3 {
+				break
+			}
+		}
+	}
+
+	if len(cards) < 3 {
+		source := strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), pointerStringValue(slide.Body), slide.SpeakerNotes, transcript}, " ")
+		extra := buildCompactBulletsFromText(source, 6, 16)
+		for _, item := range extra {
+			if item == "" {
+				continue
+			}
+			words := strings.Fields(item)
+			if len(words) < 4 {
+				continue
+			}
+			label := strings.Join(words[:min(3, len(words))], " ")
+			desc := strings.Join(words[min(3, len(words)):], " ")
+			desc = normalizeCardDescriptionSentence(desc)
+			if desc == "" {
+				desc = buildCardDescriptionFallback(label, slide.Title, pointerStringValue(slide.Subtitle))
+			}
+			normalized := normalizeCardEncodedBullet("CARD: " + label + " || " + desc)
+			if normalized != "" {
+				cards = append(cards, normalized)
+			}
+			if len(cards) >= 3 {
+				break
+			}
+		}
+	}
+
+	if len(cards) == 0 {
+		cards = []string{
+			normalizeCardEncodedBullet("CARD: Resource Shift || Replacing disposable habits with reusable routines lowers waste flow across common daily touchpoints"),
+			normalizeCardEncodedBullet("CARD: Process Upgrade || Aligning collection and sorting behavior improves recovery quality and reduces contamination in disposal streams"),
+			normalizeCardEncodedBullet("CARD: System Outcome || Coordinated individual and community actions deliver measurable environmental gains and long term operational efficiency"),
+		}
+	}
+
+	if len(cards) > 3 {
+		cards = cards[:3]
+	}
+
+	cleanCards := make([]string, 0, 3)
+	for _, card := range cards {
+		if card != "" {
+			cleanCards = append(cleanCards, card)
+		}
+	}
+	if len(cleanCards) < 3 {
+		return
+	}
+
+	slide.Type = "content"
+	slide.Variant = stringPtr("default")
+	slide.Bullets = cleanCards
+	if strings.TrimSpace(pointerStringValue(slide.ImageQuery)) == "" {
+		seed := fallbackSlideImageQuery(strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), strings.Join(cleanCards, " ")}, " "))
+		if seed != "" {
+			slide.ImageQuery = stringPtr(seed)
+		}
+	}
+}
+
+func normalizeFeatureDescriptionSentence(value string) string {
+	text := sanitizePresentationText(value)
+	if text == "" {
+		return ""
+	}
+
+	sentences := splitPresentationSentences(text)
+	if len(sentences) > 0 {
+		text = sanitizePresentationText(sentences[0])
+	}
+
+	words := strings.Fields(text)
+	if len(words) > 17 {
+		words = words[:17]
+	}
+
+	dangling := map[string]struct{}{
+		"to": {}, "and": {}, "or": {}, "with": {}, "of": {}, "for": {}, "in": {}, "on": {}, "at": {},
+		"by": {}, "from": {}, "as": {}, "than": {}, "that": {}, "which": {}, "while": {}, "because": {},
+	}
+	if len(words) > 0 {
+		last := strings.ToLower(strings.Trim(words[len(words)-1], " .;:!?"))
+		if _, exists := dangling[last]; exists {
+			words = append(words, "practical", "results")
+		}
+	}
+
+	if len(words) < 13 {
+		pad := []string{"through", "practical", "implementation", "and", "measurable", "everyday", "impact"}
+		for _, token := range pad {
+			if len(words) >= 13 {
+				break
+			}
+			words = append(words, token)
+		}
+	}
+
+	if len(words) > 17 {
+		words = words[:17]
+	}
+
+	text = strings.TrimRight(strings.TrimSpace(strings.Join(words, " ")), " .;:!?")
+	if text == "" {
+		return ""
+	}
+	return text + "."
+}
+
+func parseFeatureBullet(value string) (icon, title, description string, ok bool) {
+	value = normalizeFeatureEncodedBullet(value)
+	if value == "" {
+		return "", "", "", false
+	}
+	body := regexp.MustCompile(`(?i)^feature:\s*`).ReplaceAllString(value, "")
+	parts := strings.SplitN(body, "||", 3)
+	if len(parts) < 3 {
+		return "", "", "", false
+	}
+	icon = sanitizePresentationText(parts[0])
+	title = sanitizePresentationText(parts[1])
+	description = sanitizePresentationText(parts[2])
+	if title == "" || description == "" {
+		return "", "", "", false
+	}
+	return icon, title, description, true
+}
+
+func enrichFeatureTrioSlide(slide *models.PresentationSlide, transcript string) {
+	if slide == nil {
+		return
+	}
+
+	out := make([]string, 0, 3)
+	for _, bullet := range slide.Bullets {
+		if isFeatureEncodedBullet(bullet) {
+			normalized := normalizeFeatureEncodedBullet(bullet)
+			if normalized != "" {
+				out = append(out, normalized)
+			}
+		} else if isCardEncodedBullet(bullet) {
+			normalized := normalizeCardEncodedBullet(bullet)
+			if normalized != "" {
+				out = append(out, normalized)
+			}
+		}
+		if len(out) >= 3 {
+			break
+		}
+	}
+
+	if len(out) == 0 {
+		for _, bullet := range slide.Bullets {
+			clean := sanitizePresentationText(stripNumericPrefixes(bullet))
+			if clean == "" {
+				continue
+			}
+			titleWords := strings.Fields(clean)
+			title := strings.Join(titleWords[:min(4, len(titleWords))], " ")
+			desc := clean
+			if len(titleWords) > 4 {
+				desc = strings.Join(titleWords[min(4, len(titleWords)):], " ")
+			}
+			if desc == "" {
+				desc = clean
+			}
+			icon := inferTakeawayIcon(title, desc)
+			out = append(out, "FEATURE: "+icon+" || "+title+" || "+desc)
+			if len(out) >= 3 {
+				break
+			}
+		}
+	}
+
+	if len(out) == 0 {
+		return
+	}
+
+	if len(out) < 3 {
+		extraSource := strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), slide.SpeakerNotes, transcript}, " ")
+		extra := buildCompactBulletsFromText(extraSource, 3-len(out), 14)
+		for _, item := range extra {
+			if item == "" {
+				continue
+			}
+			titleWords := strings.Fields(item)
+			title := strings.Join(titleWords[:min(4, len(titleWords))], " ")
+			desc := item
+			if len(titleWords) > 4 {
+				desc = strings.Join(titleWords[min(4, len(titleWords)):], " ")
+			}
+			if desc == "" {
+				desc = item
+			}
+			out = append(out, normalizeFeatureEncodedBullet("FEATURE: "+inferTakeawayIcon(title, desc)+" || "+title+" || "+desc))
+			if len(out) >= 3 {
+				break
+			}
+		}
+	}
+
+	for i := range out {
+		icon, title, desc, ok := parseFeatureBullet(out[i])
+		if !ok {
+			continue
+		}
+		desc = normalizeFeatureDescriptionSentence(desc)
+		if desc == "" {
+			desc = "Delivers consistent outcomes through practical implementation and measurable everyday impact."
+		}
+		out[i] = normalizeFeatureEncodedBullet("FEATURE: " + firstNonEmpty(icon, inferTakeawayIcon(title, desc)) + " || " + title + " || " + desc)
+	}
+
+	slide.Bullets = out
+	slide.Variant = stringPtr("feature_trio")
+	slide.ImageQuery = nil
+}
+
+func enrichMediaSplitSlide(slide *models.PresentationSlide, transcript string) {
+	if slide == nil {
+		return
+	}
+
+	subtitle := pointerStringValue(slide.Subtitle)
+	built := normalizePresentationBullets(slide.Bullets, slide.Title, subtitle, 4, 10)
+	if len(built) < 3 {
+		source := strings.Join([]string{slide.Title, subtitle, pointerStringValue(slide.Body), slide.SpeakerNotes, transcript}, " ")
+		extra := buildCompactBulletsFromText(source, 4-len(built), 10)
+		built = append(built, extra...)
+		built = normalizePresentationBullets(built, slide.Title, subtitle, 4, 10)
+	}
+
+	if len(built) == 0 {
+		seed := firstNonEmpty(slide.Title, "Key insight")
+		built = []string{
+			firstNWords(seed+" baseline context and setup for evaluation", 10),
+			firstNWords(seed+" practical mechanism and implementation pathway", 10),
+			firstNWords(seed+" measurable impact on outcomes and consistency", 10),
+		}
+	}
+
+	if len(built) < 3 {
+		for len(built) < 3 {
+			built = append(built, firstNWords(firstNonEmpty(slide.Title, "Core factor")+" supporting evidence and practical implication", 10))
+		}
+	}
+
+	slide.Bullets = built[:min(4, len(built))]
+	slide.Variant = stringPtr("media_split")
+	if strings.TrimSpace(pointerStringValue(slide.ImageQuery)) == "" {
+		seed := fallbackSlideImageQuery(strings.Join([]string{slide.Title, subtitle, strings.Join(slide.Bullets, " ")}, " "))
+		if seed != "" {
+			slide.ImageQuery = stringPtr(seed)
+		}
+	}
+	if strings.TrimSpace(subtitle) == "" {
+		autoSubtitle := firstNWords(strings.Join(slide.Bullets, " "), 14)
+		if autoSubtitle != "" {
+			slide.Subtitle = stringPtr(autoSubtitle)
+		}
+	}
+}
+
+func enrichComparisonTableSlide(slide *models.PresentationSlide) {
+	if slide == nil {
+		return
+	}
+
+	headers := append([]string{}, slide.TableHeaders...)
+	rows := make([][]string, 0, len(slide.TableRows)+len(slide.Bullets))
+	for _, row := range slide.TableRows {
+		clean := make([]string, 0, 3)
+		for _, cell := range row {
+			text := sanitizePresentationText(cell)
+			if text != "" {
+				clean = append(clean, text)
+			}
+			if len(clean) >= 3 {
+				break
+			}
+		}
+		if len(clean) >= 2 {
+			rows = append(rows, clean)
+		}
+	}
+
+	for _, bullet := range slide.Bullets {
+		if len(headers) == 0 {
+			if parsedHeaders := parseComparisonHeaderFromBullet(bullet); len(parsedHeaders) >= 2 {
+				headers = parsedHeaders
+				continue
+			}
+		}
+		if parsedRow := parseComparisonRowFromBullet(bullet); len(parsedRow) >= 2 {
+			rows = append(rows, parsedRow)
+		}
+	}
+
+	if len(rows) == 0 && len(slide.Columns) >= 2 {
+		leftItems := slide.Columns[0].Items
+		rightItems := slide.Columns[1].Items
+		maxRows := min(8, max(len(leftItems), len(rightItems)))
+		if maxRows > 0 {
+			if len(headers) == 0 {
+				headers = []string{firstNonEmpty(slide.Columns[0].Label, pointerStringValue(slide.LeftLabel), "Left"), firstNonEmpty(slide.Columns[1].Label, pointerStringValue(slide.RightLabel), "Right")}
+			}
+			for i := 0; i < maxRows; i++ {
+				rows = append(rows, []string{firstNonEmpty(getSliceItem(leftItems, i), "-"), firstNonEmpty(getSliceItem(rightItems, i), "-")})
+			}
+		}
+	}
+
+	if len(rows) == 0 {
+		return
+	}
+
+	columnCount := 2
+	for _, row := range rows {
+		if len(row) > columnCount {
+			columnCount = min(3, len(row))
+		}
+	}
+	if len(headers) > columnCount {
+		columnCount = min(3, len(headers))
+	}
+
+	if len(headers) == 0 {
+		if columnCount == 3 {
+			headers = []string{"Category", "Strength", "Gap"}
+		} else {
+			headers = []string{"Option", "Details"}
+		}
+	}
+	for len(headers) < columnCount {
+		headers = append(headers, fmt.Sprintf("Column %d", len(headers)+1))
+	}
+	headers = headers[:columnCount]
+
+	normalizedRows := make([][]string, 0, min(8, len(rows)))
+	for _, row := range rows {
+		cells := append([]string{}, row...)
+		if len(cells) > columnCount {
+			cells = cells[:columnCount]
+		}
+		for len(cells) < columnCount {
+			cells = append(cells, "-")
+		}
+		normalizedRows = append(normalizedRows, cells)
+		if len(normalizedRows) >= 8 {
+			break
+		}
+	}
+
+	seenRows := map[string]struct{}{}
+	for _, row := range normalizedRows {
+		key := normalizeCompareText(strings.Join(row, "|"))
+		if key != "" {
+			seenRows[key] = struct{}{}
+		}
+	}
+
+	minRows := 4
+	targetRows := 5
+	if len(normalizedRows) < targetRows {
+		seed := strings.Join([]string{
+			pointerStringValue(slide.Subtitle),
+			pointerStringValue(slide.Body),
+			slide.SpeakerNotes,
+			strings.Join(slide.LeftColumn, " "),
+			strings.Join(slide.RightColumn, " "),
+			strings.Join(slide.Bullets, " "),
+		}, " ")
+		candidates := buildCompactBulletsFromText(seed, targetRows*2, 18)
+		for _, candidate := range candidates {
+			row := synthesizeComparisonRow(candidate, columnCount)
+			if len(row) == 0 {
+				continue
+			}
+			if len(row) > columnCount {
+				row = row[:columnCount]
+			}
+			for len(row) < columnCount {
+				row = append(row, "-")
+			}
+			key := normalizeCompareText(strings.Join(row, "|"))
+			if key == "" {
+				continue
+			}
+			if _, exists := seenRows[key]; exists {
+				continue
+			}
+			seenRows[key] = struct{}{}
+			normalizedRows = append(normalizedRows, row)
+			if len(normalizedRows) >= targetRows {
+				break
+			}
+		}
+	}
+
+	if len(normalizedRows) < minRows {
+		for attempt := 0; len(normalizedRows) < minRows && attempt < 10; attempt++ {
+			idx := len(normalizedRows) + 1
+			var row []string
+			if columnCount == 3 {
+				row = []string{fmt.Sprintf("Comparison %d", idx), "Operational difference", "Context dependent outcome"}
+			} else {
+				row = []string{fmt.Sprintf("Comparison %d", idx), "Operational difference with context dependent outcome"}
+			}
+			key := normalizeCompareText(strings.Join(row, "|"))
+			if _, exists := seenRows[key]; exists {
+				continue
+			}
+			seenRows[key] = struct{}{}
+			normalizedRows = append(normalizedRows, row)
+		}
+	}
+
+	slide.TableHeaders = headers
+	slide.TableRows = normalizedRows
+	slide.Variant = stringPtr("comparison_table")
+	slide.Bullets = []string{}
+	if pointerStringValue(slide.ImageQuery) != "" {
+		slide.ImageQuery = nil
+	}
+}
+
+func getSliceItem(values []string, index int) string {
+	if index < 0 || index >= len(values) {
+		return ""
+	}
+	return sanitizePresentationText(values[index])
+}
+
+func synthesizeComparisonRow(candidate string, columnCount int) []string {
+	clean := sanitizePresentationText(stripNumericPrefixes(candidate))
+	if clean == "" {
+		return nil
+	}
+
+	words := strings.Fields(clean)
+	if len(words) < 4 {
+		return nil
+	}
+
+	trim := func(value string) string {
+		return strings.TrimRight(strings.TrimSpace(value), " .;:!?")
+	}
+
+	if columnCount <= 2 {
+		split := min(3, len(words)-1)
+		left := trim(strings.Join(words[:split], " "))
+		right := trim(strings.Join(words[split:], " "))
+		if left == "" || right == "" {
+			return nil
+		}
+		right = firstNWords(right, 12)
+		return []string{left, right}
+	}
+
+	leftEnd := min(3, len(words)-2)
+	middleEnd := min(leftEnd+5, len(words)-1)
+	left := trim(strings.Join(words[:leftEnd], " "))
+	middle := trim(strings.Join(words[leftEnd:middleEnd], " "))
+	right := trim(strings.Join(words[middleEnd:], " "))
+	if left == "" || middle == "" {
+		return nil
+	}
+	if right == "" {
+		right = middle
+	}
+	middle = firstNWords(middle, 6)
+	right = firstNWords(right, 10)
+	return []string{left, middle, right}
+}
+
+func normalizePresentationStats(stats []models.PresentationStat, maxItems int) []models.PresentationStat {
+	if maxItems <= 0 {
+		return []models.PresentationStat{}
+	}
+	if len(stats) == 0 {
+		return []models.PresentationStat{}
+	}
+
+	seen := map[string]struct{}{}
+	out := make([]models.PresentationStat, 0, min(len(stats), maxItems))
+	for _, stat := range stats {
+		value := sanitizePresentationText(stat.Value)
+		label := sanitizePresentationText(stat.Label)
+		description := sanitizePresentationText(stat.Description)
+		if value == "" || label == "" {
+			continue
+		}
+		if description == "" {
+			description = firstNWords(label, 12)
+		}
+
+		key := normalizeCompareText(value + "|" + label)
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		out = append(out, models.PresentationStat{
+			Value:       value,
+			Label:       label,
+			Description: strings.TrimRight(description, " .;:!?") + ".",
+		})
+		if len(out) >= maxItems {
+			break
+		}
+	}
+
+	return out
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func stripNumericPrefixes(value string) string {
+	value = sanitizePresentationText(value)
+	value = regexp.MustCompile(`(?i)^\s*(?:(?:key\s*)?(?:point|takeaway|insight|step|item)\s*\d+\s*[:.)-]?\s*)`).ReplaceAllString(value, "")
+	value = regexp.MustCompile(`(?i)^\s*(?:(?:\(?\d{1,2}\)?|[ivxlcdm]{1,5})\s*(?:[).:-]|-\s)\s*|[-*•]+\s*)`).ReplaceAllString(value, "")
+	return strings.TrimSpace(value)
+}
+
+func sanitizePresentationText(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = strings.Join(strings.Fields(value), " ")
+	value = regexp.MustCompile(`([A-Za-z]{2,})-\s+([A-Za-z]{2,})`).ReplaceAllString(value, "$1-$2")
+	return value
+}
+
+func trimDanglingEndingWords(words []string) []string {
+	if len(words) == 0 {
+		return words
+	}
+	dangling := map[string]struct{}{
+		"a": {}, "an": {}, "the": {},
+		"to": {}, "and": {}, "or": {}, "with": {}, "of": {}, "for": {}, "in": {}, "on": {}, "at": {},
+		"by": {}, "from": {}, "as": {}, "than": {}, "that": {}, "which": {}, "while": {}, "because": {},
+		"into": {}, "onto": {}, "over": {}, "under": {}, "about": {},
+	}
+
+	out := append([]string{}, words...)
+	for len(out) > 0 {
+		last := strings.ToLower(strings.Trim(out[len(out)-1], " .;:!?"))
+		if _, exists := dangling[last]; !exists {
+			break
+		}
+		out = out[:len(out)-1]
+	}
+
+	return out
+}
+
+func trimDanglingPhrase(value string) string {
+	clean := sanitizePresentationText(value)
+	if clean == "" {
+		return ""
+	}
+	words := trimDanglingEndingWords(strings.Fields(clean))
+	if len(words) == 0 {
+		return ""
+	}
+	return strings.Join(words, " ")
+}
+
+func stripSlideIndexArtifact(value string, index int) string {
+	value = sanitizePresentationText(value)
+	if value == "" || index <= 0 {
+		return value
+	}
+
+	suffix := fmt.Sprintf("%d", index)
+	if !strings.HasSuffix(value, suffix) || len(value) <= len(suffix) {
+		return value
+	}
+
+	prevByte := value[len(value)-len(suffix)-1]
+	trimmedPrefix := strings.TrimSpace(strings.TrimRight(strings.TrimSuffix(value, suffix), "-–: "))
+	if trimmedPrefix == "" {
+		return value
+	}
+
+	if unicode.IsLetter(rune(prevByte)) {
+		return trimmedPrefix
+	}
+
+	if (prevByte == ' ' || prevByte == '-' || prevByte == ':') && len(trimmedPrefix) >= 20 {
+		return trimmedPrefix
+	}
+
+	return value
+}
+
+func normalizeCompareText(value string) string {
+	clean := strings.ToLower(strings.TrimSpace(value))
+	if clean == "" {
+		return ""
+	}
+	re := regexp.MustCompile(`[^a-z0-9\s]+`)
+	clean = re.ReplaceAllString(clean, " ")
+	return strings.Join(strings.Fields(clean), " ")
+}
+
+func isSubtitleRedundant(title, subtitle string) bool {
+	normalizedTitle := normalizeCompareText(title)
+	normalizedSubtitle := normalizeCompareText(subtitle)
+	if normalizedTitle == "" || normalizedSubtitle == "" {
+		return false
+	}
+	if normalizedTitle == normalizedSubtitle {
+		return true
+	}
+	if strings.Contains(normalizedSubtitle, normalizedTitle) || strings.Contains(normalizedTitle, normalizedSubtitle) {
+		return true
+	}
+	return false
+}
+
+func truncateBullet(bullet string, maxWords int) string {
+	bullet = strings.Join(strings.Fields(strings.TrimSpace(bullet)), " ")
+	if bullet == "" {
+		return ""
+	}
+
+	words := strings.Fields(bullet)
+
+	// Floor guard: never truncate a bullet that's already short enough
+	if len(words) <= maxWords {
+		return bullet
+	}
+
+	// Safety floor: if truncation would produce fewer than 6 words, keep original
+	if maxWords < 6 {
+		return bullet
+	}
+
+	return strings.Join(words[:maxWords], " ")
+}
+
+func isCardEncodedBullet(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	if !strings.HasPrefix(strings.ToLower(value), "card:") {
+		return false
+	}
+	return strings.Contains(value, "||")
+}
+
+func isNumberedCardEncodedBullet(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	if !strings.HasPrefix(strings.ToLower(value), "num:") {
+		return false
+	}
+	parts := strings.Split(value, "||")
+	return len(parts) >= 3
+}
+
+func isComparisonHeaderEncodedBullet(value string) bool {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return false
+	}
+	if !(strings.HasPrefix(value, "header:") || strings.HasPrefix(value, "table_header:")) {
+		return false
+	}
+	return strings.Contains(value, "||")
+}
+
+func isComparisonRowEncodedBullet(value string) bool {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return false
+	}
+	if !(strings.HasPrefix(value, "row:") || strings.HasPrefix(value, "table_row:")) {
+		return false
+	}
+	return strings.Contains(value, "||")
+}
+
+func isFeatureEncodedBullet(value string) bool {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return false
+	}
+	if !strings.HasPrefix(value, "feature:") {
+		return false
+	}
+	parts := strings.Split(value, "||")
+	return len(parts) >= 3
+}
+
+func normalizeComparisonHeaderBullet(value string) string {
+	value = sanitizePresentationText(value)
+	if value == "" {
+		return ""
+	}
+	if !isComparisonHeaderEncodedBullet(value) {
+		return value
+	}
+
+	value = regexp.MustCompile(`(?i)^(?:header|table_header):\s*`).ReplaceAllString(value, "")
+	parts := strings.Split(value, "||")
+	clean := make([]string, 0, 3)
+	for _, part := range parts {
+		cell := strings.TrimRight(sanitizePresentationText(part), " .;:!?")
+		if cell != "" {
+			clean = append(clean, cell)
+		}
+		if len(clean) >= 3 {
+			break
+		}
+	}
+	if len(clean) < 2 {
+		return ""
+	}
+	return "HEADER: " + strings.Join(clean, " || ")
+}
+
+func normalizeComparisonRowBullet(value string) string {
+	value = sanitizePresentationText(value)
+	if value == "" {
+		return ""
+	}
+	if !isComparisonRowEncodedBullet(value) {
+		return value
+	}
+
+	value = regexp.MustCompile(`(?i)^(?:row|table_row):\s*`).ReplaceAllString(value, "")
+	parts := strings.Split(value, "||")
+	clean := make([]string, 0, 3)
+	for _, part := range parts {
+		cell := strings.TrimRight(sanitizePresentationText(part), " .;:!?")
+		if cell != "" {
+			words := strings.Fields(cell)
+			if len(words) > 16 {
+				cell = strings.Join(words[:16], " ")
+			}
+			clean = append(clean, cell)
+		}
+		if len(clean) >= 3 {
+			break
+		}
+	}
+	if len(clean) < 2 {
+		return ""
+	}
+	return "ROW: " + strings.Join(clean, " || ")
+}
+
+func normalizeFeatureEncodedBullet(value string) string {
+	value = sanitizePresentationText(value)
+	if value == "" {
+		return ""
+	}
+	if !isFeatureEncodedBullet(value) {
+		return value
+	}
+
+	body := regexp.MustCompile(`(?i)^feature:\s*`).ReplaceAllString(value, "")
+	parts := strings.SplitN(body, "||", 3)
+	if len(parts) < 3 {
+		return ""
+	}
+	icon := sanitizePresentationText(parts[0])
+	title := strings.TrimRight(sanitizePresentationText(parts[1]), " .;:!?")
+	description := strings.TrimRight(sanitizePresentationText(parts[2]), " .;:!?")
+	title = trimDanglingPhrase(title)
+	titleWords := strings.Fields(title)
+	if len(titleWords) > 4 {
+		titleWords = titleWords[:4]
+		titleWords = trimDanglingEndingWords(titleWords)
+		title = strings.Join(titleWords, " ")
+	}
+	if len(strings.Fields(title)) < 2 {
+		descWords := trimDanglingEndingWords(strings.Fields(description))
+		if len(descWords) >= 3 {
+			title = strings.Join(descWords[:3], " ")
+		}
+	}
+	if title == "" || description == "" {
+		return ""
+	}
+	if icon == "" {
+		icon = inferTakeawayIcon(title, description)
+	}
+	return "FEATURE: " + icon + " || " + title + " || " + description
+}
+
+func normalizeNumberedCardBullet(value string) string {
+	value = sanitizePresentationText(value)
+	if value == "" {
+		return ""
+	}
+	if !isNumberedCardEncodedBullet(value) {
+		return value
+	}
+
+	re := regexp.MustCompile(`(?i)^num:\s*`)
+	body := re.ReplaceAllString(value, "")
+	parts := strings.SplitN(body, "||", 3)
+	if len(parts) < 3 {
+		return ""
+	}
+
+	number := regexp.MustCompile(`\D+`).ReplaceAllString(strings.TrimSpace(parts[0]), "")
+	if number == "" {
+		number = "1"
+	}
+	title := sanitizePresentationText(parts[1])
+	description := sanitizePresentationText(parts[2])
+	title = strings.TrimRight(title, " .;:!?")
+	description = strings.TrimSpace(description)
+	if title == "" || description == "" {
+		return ""
+	}
+
+	if len(strings.Fields(title)) > 7 {
+		title = strings.Join(strings.Fields(title)[:7], " ")
+	}
+
+	descWords := strings.Fields(description)
+	if len(descWords) > 34 {
+		description = strings.Join(descWords[:34], " ")
+	}
+	description = strings.TrimRight(strings.TrimSpace(description), " .;:!?")
+	if description != "" && !strings.HasSuffix(description, ".") && !strings.HasSuffix(description, "!") && !strings.HasSuffix(description, "?") {
+		description += "."
+	}
+
+	return "NUM: " + number + " || " + title + " || " + description
+}
+
+func normalizeCardDescriptionSentence(value string) string {
+	text := sanitizePresentationText(value)
+	if text == "" {
+		return ""
+	}
+
+	sentences := splitPresentationSentences(text)
+	if len(sentences) > 0 {
+		text = sanitizePresentationText(sentences[0])
+	}
+
+	words := strings.Fields(text)
+	words = trimDanglingEndingWords(words)
+	if len(words) > 20 {
+		words = words[:20]
+		words = trimDanglingEndingWords(words)
+	}
+	if len(words) < 10 {
+		return ""
+	}
+
+	text = strings.TrimRight(strings.TrimSpace(strings.Join(words, " ")), " .;:!?")
+	if text == "" {
+		return ""
+	}
+	return text + "."
+}
+
+func normalizeCardEncodedBullet(value string) string {
+	value = sanitizePresentationText(value)
+	if value == "" {
+		return ""
+	}
+
+	if !isCardEncodedBullet(value) {
+		return value
+	}
+
+	re := regexp.MustCompile(`(?i)^card:\s*`)
+	body := re.ReplaceAllString(value, "")
+	parts := strings.SplitN(body, "||", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+
+	label := sanitizePresentationText(parts[0])
+	desc := sanitizePresentationText(parts[1])
+	label = strings.TrimRight(label, " .;:!?")
+	desc = normalizeCardDescriptionSentence(desc)
+	if label == "" || desc == "" {
+		return ""
+	}
+
+	labelWords := strings.Fields(label)
+	if len(labelWords) > 4 {
+		label = strings.Join(labelWords[:4], " ")
+	}
+
+	return "CARD: " + label + " || " + desc
+}
+
+func isPlaceholderText(s string) bool {
+	lower := strings.ToLower(strings.TrimSpace(s))
+	if lower == "" {
+		return true
+	}
+	if isCardEncodedBullet(lower) {
+		return false
+	}
+	if isNumberedCardEncodedBullet(lower) {
+		return false
+	}
+	if isComparisonHeaderEncodedBullet(lower) || isComparisonRowEncodedBullet(lower) {
+		return false
+	}
+	if isFeatureEncodedBullet(lower) {
+		return false
+	}
+
+	patterns := []string{
+		"point ", "takeaway ", "item ", "slide ", "label ",
+		"tbd", "lorem ipsum", "placeholder", "todo",
+	}
+
+	for _, p := range patterns {
+		if strings.HasPrefix(lower, p) || lower == strings.TrimSpace(p) {
+			if (strings.HasPrefix(lower, "slide ") || strings.HasPrefix(lower, "label ")) && len(strings.Fields(lower)) > 2 {
+				continue
+			}
+			return true
+		}
+	}
+
+	return false
+}
+
+func normalizePresentationBullet(value string, maxWords int) string {
+	value = sanitizePresentationText(value)
+	if value == "" {
+		return ""
+	}
+
+	if isNumberedCardEncodedBullet(value) {
+		return normalizeNumberedCardBullet(value)
+	}
+
+	if isCardEncodedBullet(value) {
+		return normalizeCardEncodedBullet(value)
+	}
+
+	if isComparisonHeaderEncodedBullet(value) {
+		return normalizeComparisonHeaderBullet(value)
+	}
+
+	if isComparisonRowEncodedBullet(value) {
+		return normalizeComparisonRowBullet(value)
+	}
+
+	if isFeatureEncodedBullet(value) {
+		return normalizeFeatureEncodedBullet(value)
+	}
+
+	value = regexp.MustCompile(`(?i)^\s*(?:(?:key\s*)?(?:point|takeaway|insight|step|item)\s*\d+\s*[:.)-]?\s*)`).ReplaceAllString(value, "")
+	value = regexp.MustCompile(`(?i)^\s*(?:(?:\(?\d{1,2}\)?|[ivxlcdm]{1,5})\s*(?:[).:-]|-\s)\s*|[-*•]+\s*)`).ReplaceAllString(value, "")
+	value = sanitizePresentationText(value)
+	value = strings.TrimRight(value, " .;:!?")
+	if value == "" {
+		return ""
+	}
+	if isPlaceholderText(value) {
+		return ""
+	}
+
+	truncated := truncateBullet(value, maxWords)
+	if truncated == "" {
+		return ""
+	}
+	truncated = trimDanglingPhrase(truncated)
+	if truncated == "" {
+		return ""
+	}
+	if len(strings.Fields(truncated)) < 5 {
+		return ""
+	}
+	return truncated
+}
+
+func transcriptHasQuantifiableClaim(transcript string) bool {
+	text := strings.TrimSpace(strings.ToLower(transcript))
+	if text == "" {
+		return false
+	}
+
+	if regexp.MustCompile(`\b\d+(?:[.,]\d+)?\s*%\b`).MatchString(text) {
+		return true
+	}
+	if regexp.MustCompile(`\b\d{1,4}(?:[.,]\d+)?\b`).MatchString(text) {
+		return true
+	}
+	keywords := []string{"percent", "percentage", "count", "duration", "minutes", "hours", "days", "weeks", "months", "years", "cost", "price", "rank", "ranking", "threshold", "accuracy", "latency", "fps"}
+	for _, keyword := range keywords {
+		if strings.Contains(text, keyword) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func enforceStatsSlideWhenQuantifiable(slides []models.PresentationSlide, transcript string) {
+	if len(slides) == 0 || !transcriptHasQuantifiableClaim(transcript) {
+		return
+	}
+
+	for _, slide := range slides {
+		if strings.EqualFold(strings.TrimSpace(slide.Type), "stats") && len(slide.Stats) >= 3 {
+			return
+		}
+	}
+
+	for i := 1; i < len(slides)-1; i++ {
+		if !strings.EqualFold(strings.TrimSpace(slides[i].Type), "content") {
+			continue
+		}
+
+		stats := extractStatsFromBullets(slides[i].Bullets)
+		if len(stats) == 0 {
+			continue
+		}
+
+		slides[i].Type = "stats"
+		slides[i].Stats = stats
+		slides[i].Bullets = []string{}
+		return
+	}
+}
+
+func extractStatsFromBullets(bullets []string) []models.PresentationStat {
+	stats := make([]models.PresentationStat, 0, 6)
+	numberPattern := regexp.MustCompile(`\b\d+(?:[.,]\d+)?%?\b`)
+
+	for _, bullet := range bullets {
+		if len(stats) >= 6 {
+			break
+		}
+		clean := strings.TrimSpace(bullet)
+		if clean == "" {
+			continue
+		}
+		match := numberPattern.FindString(clean)
+		if match == "" {
+			continue
+		}
+
+		label := strings.TrimSpace(numberPattern.ReplaceAllString(clean, ""))
+		label = strings.Trim(label, "-,:; ")
+		if label == "" {
+			label = "Measured metric"
+		}
+		description := strings.TrimSpace(clean)
+		description = strings.TrimRight(description, " .;:!?")
+		if description != "" {
+			description += "."
+		}
+
+		labelWords := strings.Fields(label)
+		if len(labelWords) > 5 {
+			label = strings.Join(labelWords[:5], " ")
+		}
+
+		stats = append(stats, models.PresentationStat{
+			Value:       match,
+			Label:       label,
+			Description: description,
+		})
+	}
+
+	return stats
+}
+
+func normalizePresentationBullets(bullets []string, title, subtitle string, maxItems, maxWords int) []string {
+	if maxItems <= 0 {
+		return []string{}
+	}
+
+	titleNorm := normalizeCompareText(title)
+	subtitleNorm := normalizeCompareText(subtitle)
+	seen := map[string]struct{}{}
+	out := make([]string, 0, min(maxItems, len(bullets)))
+
+	for _, bullet := range bullets {
+		normalized := normalizePresentationBullet(bullet, maxWords)
+		if normalized == "" {
+			continue
+		}
+
+		wordCount := len(strings.Fields(normalized))
+		if wordCount < 6 {
+			// only drop if it's a known placeholder pattern; otherwise keep as-is
+			if isPlaceholderText(normalized) {
+				continue
+			}
+		}
+
+		compare := normalizeCompareText(normalized)
+		if compare == "" || compare == titleNorm || compare == subtitleNorm {
+			continue
+		}
+		if _, exists := seen[compare]; exists {
+			continue
+		}
+
+		seen[compare] = struct{}{}
+		out = append(out, normalized)
+		if len(out) >= maxItems {
+			break
+		}
+	}
+
+	return out
+}
+
+func normalizePresentationPhrases(items []string, maxItems, maxWords int) []string {
+	if maxItems <= 0 {
+		return []string{}
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, min(maxItems, len(items)))
+	for _, item := range items {
+		normalized := normalizePresentationBullet(item, maxWords)
+		if normalized == "" {
+			continue
+		}
+		key := normalizeCompareText(normalized)
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, normalized)
+		if len(out) >= maxItems {
+			break
+		}
+	}
+	return out
+}
+
+func buildCompactBulletsFromText(source string, maxItems, maxWords int) []string {
+	if maxItems <= 0 {
+		return []string{}
+	}
+	sentences := splitPresentationSentences(source)
+	if len(sentences) == 0 {
+		return []string{}
+	}
+
+	seen := map[string]struct{}{}
+	out := make([]string, 0, maxItems)
+	for _, sentence := range sentences {
+		phrase := normalizePresentationBullet(sentence, maxWords)
+		if phrase == "" {
+			continue
+		}
+		key := normalizeCompareText(phrase)
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, phrase)
+		if len(out) >= maxItems {
+			break
+		}
+	}
+
+	return out
+}
+
+func buildSpeakerNotesFromSlide(slide models.PresentationSlide) string {
+	parts := make([]string, 0, 4)
+	if strings.TrimSpace(slide.Title) != "" {
+		parts = append(parts, slide.Title)
+	}
+	if body := pointerStringValue(slide.Body); body != "" {
+		parts = append(parts, firstNWords(body, 24))
+	}
+	for _, bullet := range slide.Bullets {
+		if len(parts) >= 4 {
+			break
+		}
+		if strings.TrimSpace(bullet) != "" {
+			parts = append(parts, bullet)
+		}
+	}
+	for _, stat := range slide.Stats {
+		if len(parts) >= 4 {
+			break
+		}
+		if strings.TrimSpace(stat.Value) == "" || strings.TrimSpace(stat.Label) == "" {
+			continue
+		}
+		parts = append(parts, strings.TrimSpace(stat.Value+" "+stat.Label))
+	}
+	for _, row := range slide.TableRows {
+		if len(parts) >= 4 {
+			break
+		}
+		if len(row) == 0 {
+			continue
+		}
+		joined := strings.TrimSpace(strings.Join(row, " - "))
+		if joined != "" {
+			parts = append(parts, joined)
+		}
+	}
+	if len(parts) == 0 {
+		return "Briefly introduce the key idea, then explain the most important implication for the audience."
+	}
+	return strings.Join(parts, ". ") + "."
+}
+
+func enforcePresentationTypeVariety(slides []models.PresentationSlide) {
+	if len(slides) < 4 {
+		return
+	}
+
+	hasTwoColumn := false
+	hasProse := false
+	for i := range slides {
+		t := strings.ToLower(strings.TrimSpace(slides[i].Type))
+		if t == "two_column" {
+			hasTwoColumn = true
+		}
+		if t == "prose" {
+			hasProse = true
+		}
+	}
+
+	if !hasTwoColumn && len(slides) >= 8 {
+		for i := 2; i < len(slides)-1; i++ {
+			if !strings.EqualFold(strings.TrimSpace(slides[i].Type), "content") || len(slides[i].Bullets) < 5 {
+				continue
+			}
+
+			slides[i].Type = "two_column"
+			left := make([]string, 0, 5)
+			right := make([]string, 0, 5)
+			for j, bullet := range slides[i].Bullets {
+				if j%2 == 0 {
+					left = append(left, bullet)
+				} else {
+					right = append(right, bullet)
+				}
+			}
+			slides[i].LeftColumn = normalizePresentationPhrases(left, 5, 18)
+			slides[i].RightColumn = normalizePresentationPhrases(right, 5, 18)
+			if slides[i].LeftLabel == nil {
+				leftLabel := "Key Drivers"
+				slides[i].LeftLabel = &leftLabel
+			}
+			if slides[i].RightLabel == nil {
+				rightLabel := "Implications"
+				slides[i].RightLabel = &rightLabel
+			}
+			slides[i].Bullets = []string{}
+			break
+		}
+	}
+
+	if !hasProse && len(slides) >= 8 {
+		for i := 2; i < len(slides)-1; i++ {
+			if !strings.EqualFold(strings.TrimSpace(slides[i].Type), "content") && !strings.EqualFold(strings.TrimSpace(slides[i].Type), "prose") {
+				continue
+			}
+			slides[i].Type = "prose"
+			body := buildProseBodyFromSlide(slides[i], "")
+			slides[i].Body = stringPtr(body)
+			slides[i].Bullets = []string{}
+			break
+		}
+	}
+
+}
+
+func enforcePresentationVariantCoverage(slides []models.PresentationSlide, transcript string) {
+	if len(slides) < 7 {
+		return
+	}
+
+	contentIndices := make([]int, 0, len(slides))
+	proseIndices := make([]int, 0, len(slides))
+	twoColumnIndices := make([]int, 0, len(slides))
+	featureIndices := make([]int, 0, 3)
+	comparisonIndices := make([]int, 0, 3)
+	featureIndex := -1
+	comparisonIndex := -1
+	cardGridIndex := -1
+
+	for i := range slides {
+		typeName := strings.ToLower(strings.TrimSpace(slides[i].Type))
+		variant := strings.ToLower(strings.TrimSpace(pointerStringValue(slides[i].Variant)))
+		if typeName == "content" {
+			contentIndices = append(contentIndices, i)
+			if variant == "feature_trio" {
+				featureIndices = append(featureIndices, i)
+			}
+			if cardGridCount(slides[i]) >= 3 && variant != "feature_trio" && variant != "comparison_table" {
+				cardGridIndex = i
+			}
+		}
+		if typeName == "prose" {
+			proseIndices = append(proseIndices, i)
+		}
+		if typeName == "two_column" {
+			twoColumnIndices = append(twoColumnIndices, i)
+		}
+		if variant == "comparison_table" {
+			comparisonIndices = append(comparisonIndices, i)
+		}
+	}
+
+	if len(featureIndices) > 0 {
+		featureIndex = featureIndices[0]
+	}
+	if len(comparisonIndices) > 0 {
+		comparisonIndex = comparisonIndices[0]
+	}
+
+	if len(featureIndices) > 1 {
+		for _, idx := range featureIndices[1:] {
+			enrichCardGridContentSlide(&slides[idx], transcript)
+			if cardGridIndex == -1 && cardGridCount(slides[idx]) >= 3 {
+				cardGridIndex = idx
+			}
+		}
+	}
+
+	if len(comparisonIndices) > 1 {
+		for _, idx := range comparisonIndices[1:] {
+			typeName := strings.ToLower(strings.TrimSpace(slides[idx].Type))
+			slides[idx].Variant = stringPtr("default")
+			if typeName == "content" && cardGridIndex == -1 {
+				enrichCardGridContentSlide(&slides[idx], transcript)
+				if cardGridCount(slides[idx]) >= 3 {
+					cardGridIndex = idx
+				}
+			}
+			if typeName == "two_column" {
+				enrichTwoColumnSlide(&slides[idx], transcript)
+			}
+		}
+	}
+
+	if featureIndex == -1 {
+		for _, idx := range contentIndices {
+			if idx == comparisonIndex {
+				continue
+			}
+			slides[idx].Variant = stringPtr("feature_trio")
+			enrichFeatureTrioSlide(&slides[idx], transcript)
+			featureIndex = idx
+			break
+		}
+	}
+
+	if featureIndex == -1 && len(proseIndices) > 0 {
+		idx := proseIndices[0]
+		slides[idx].Type = "content"
+		if len(slides[idx].Bullets) == 0 {
+			source := strings.Join([]string{slides[idx].Title, pointerStringValue(slides[idx].Subtitle), pointerStringValue(slides[idx].Body), slides[idx].SpeakerNotes, transcript}, " ")
+			slides[idx].Bullets = buildCompactBulletsFromText(source, 3, 16)
+			if len(slides[idx].Bullets) == 0 {
+				slides[idx].Bullets = []string{
+					firstNWords(slides[idx].Title+" practical mechanism and concrete impact", 14),
+					firstNWords(slides[idx].Title+" user experience and implementation detail", 14),
+					firstNWords(slides[idx].Title+" measurable results and strategic value", 14),
+				}
+			}
+		}
+		slides[idx].Variant = stringPtr("feature_trio")
+		enrichFeatureTrioSlide(&slides[idx], transcript)
+		featureIndex = idx
+		contentIndices = append(contentIndices, idx)
+	}
+
+	if cardGridIndex == -1 {
+		for _, idx := range contentIndices {
+			if idx == featureIndex || idx == comparisonIndex {
+				continue
+			}
+			enrichCardGridContentSlide(&slides[idx], transcript)
+			if cardGridCount(slides[idx]) >= 3 {
+				cardGridIndex = idx
+				break
+			}
+		}
+	}
+
+	if cardGridIndex == -1 && len(proseIndices) > 1 {
+		for _, idx := range proseIndices {
+			if idx == featureIndex || idx == comparisonIndex {
+				continue
+			}
+			enrichCardGridContentSlide(&slides[idx], transcript)
+			if cardGridCount(slides[idx]) >= 3 {
+				cardGridIndex = idx
+				contentIndices = append(contentIndices, idx)
+				break
+			}
+		}
+	}
+
+	if comparisonIndex == -1 {
+		if len(twoColumnIndices) > 0 {
+			idx := twoColumnIndices[0]
+			slides[idx].Variant = stringPtr("comparison_table")
+			enrichComparisonTableSlide(&slides[idx])
+			if len(slides[idx].TableRows) > 0 {
+				comparisonIndex = idx
+			}
+		}
+	}
+
+	if comparisonIndex == -1 {
+		for _, idx := range contentIndices {
+			if idx == featureIndex {
+				continue
+			}
+			slides[idx].Variant = stringPtr("comparison_table")
+			enrichComparisonTableSlide(&slides[idx])
+			if len(slides[idx].TableRows) > 0 {
+				comparisonIndex = idx
+				break
+			}
+		}
+	}
+
+	featureUsed := featureIndex != -1
+	comparisonUsed := comparisonIndex != -1
+
+	for _, idx := range contentIndices {
+		variant := strings.ToLower(strings.TrimSpace(pointerStringValue(slides[idx].Variant)))
+		if variant == "" || variant == "default" {
+			variant = inferContentVariant(&slides[idx])
+			slides[idx].Variant = stringPtr(variant)
+		}
+
+		if variant == "feature_trio" && idx != featureIndex {
+			if featureUsed {
+				slides[idx].Variant = stringPtr("default")
+				variant = "default"
+				if cardGridIndex == -1 {
+					enrichCardGridContentSlide(&slides[idx], transcript)
+					if cardGridCount(slides[idx]) >= 3 {
+						cardGridIndex = idx
+					}
+				}
+			} else {
+				featureUsed = true
+				featureIndex = idx
+			}
+		}
+
+		if variant == "comparison_table" && idx != comparisonIndex {
+			if comparisonUsed {
+				slides[idx].Variant = stringPtr("default")
+				variant = "default"
+			} else {
+				comparisonUsed = true
+				comparisonIndex = idx
+			}
+		}
+
+		switch variant {
+		case "feature_trio":
+			enrichFeatureTrioSlide(&slides[idx], transcript)
+		case "comparison_table":
+			enrichComparisonTableSlide(&slides[idx])
+		default:
+			if idx == cardGridIndex {
+				enrichCardGridContentSlide(&slides[idx], transcript)
+			}
 		}
 	}
 }
@@ -2456,6 +4628,17 @@ func enforcePresentationImageQueries(slides []models.PresentationSlide, transcri
 	titleIndex := findTitleSlideIndex(slides)
 
 	for i := range slides {
+		slideType := strings.ToLower(strings.TrimSpace(slides[i].Type))
+		variant := strings.ToLower(strings.TrimSpace(pointerStringValue(slides[i].Variant)))
+		if slideType == "stats" || slideType == "two_column" || slideType == "summary" {
+			slides[i].ImageQuery = nil
+			continue
+		}
+		if variant == "comparison_table" || variant == "feature_trio" {
+			slides[i].ImageQuery = nil
+			continue
+		}
+
 		existing := pointerStringValue(slides[i].ImageQuery)
 		if existing != "" {
 			normalized := normalizeImageQuery(existing)
@@ -2483,6 +4666,8 @@ func enforcePresentationImageQueries(slides []models.PresentationSlide, transcri
 		}
 		slides[titleIndex].ImageQuery = stringPtr(titleSeed)
 	}
+
+	enforceImagePositionRhythm(slides)
 }
 
 func findTitleSlideIndex(slides []models.PresentationSlide) int {
@@ -2524,6 +4709,35 @@ func detectPresentationPrimaryTopic(slides []models.PresentationSlide, transcrip
 	return ""
 }
 
+func enforceImagePositionRhythm(slides []models.PresentationSlide) {
+	lastSide := "right"
+	for i := range slides {
+		t := strings.ToLower(strings.TrimSpace(slides[i].Type))
+		if t != "title" && t != "content" && t != "prose" {
+			slides[i].ImagePosition = stringPtr("right")
+			continue
+		}
+
+		if pointerStringValue(slides[i].ImageQuery) == "" {
+			slides[i].ImagePosition = stringPtr(normalizeImagePosition(pointerStringValue(slides[i].ImagePosition), t))
+			continue
+		}
+
+		desired := normalizeImagePosition(pointerStringValue(slides[i].ImagePosition), t)
+
+		if pointerStringValue(slides[i].ImagePosition) == "" {
+			if lastSide == "right" {
+				desired = "left"
+			} else {
+				desired = "right"
+			}
+		}
+
+		slides[i].ImagePosition = stringPtr(desired)
+		lastSide = desired
+	}
+}
+
 func fallbackSlideImageQuery(text string) string {
 	normalized := normalizeImageQuery(text)
 	if normalized == "" {
@@ -2534,6 +4748,79 @@ func fallbackSlideImageQuery(text string) string {
 		words = words[:6]
 	}
 	return strings.Join(words, " ")
+}
+
+func sanitizeImageQuery(query string) string {
+	lower := strings.ToLower(strings.TrimSpace(query))
+	if lower == "" {
+		return ""
+	}
+
+	replacements := map[string]string{
+		"rabbitmq":        "server room cable management",
+		"mongodb":         "database server rack",
+		"postgresql":      "data center hardware",
+		"kubernetes":      "data center server racks",
+		"docker":          "software developer workspace",
+		"redis":           "server memory hardware",
+		"resnet50":        "deep learning gpu server",
+		"resnet":          "neural network visualization",
+		"yolov":           "computer vision camera",
+		"faster r-cnn":    "object detection camera lens",
+		"jwt":             "cybersecurity lock screen",
+		"rbac":            "security access control panel",
+		"llm":             "artificial intelligence brain chip",
+		"microservice":    "modular architecture blueprint",
+		"api gateway":     "network traffic routing",
+		"pytorch":         "deep learning research workstation",
+		"tensorflow":      "gpu training workstation",
+		"transformer":     "artificial intelligence model diagram",
+		"nlp":             "language processing workstation",
+		"computer vision": "smart camera monitoring",
+		"kafka":           "streaming data center servers",
+		"etl":             "data pipeline dashboard",
+		"data warehouse":  "enterprise analytics dashboard",
+		"graphql":         "api architecture flow diagram",
+		"oauth":           "secure login verification",
+		"sso":             "enterprise identity login",
+		"ci/cd":           "software deployment pipeline",
+		"devops":          "cloud operations team",
+		"blockchain":      "distributed ledger network",
+		"encryption":      "digital security lock",
+		"zero trust":      "cybersecurity access checkpoint",
+		"phishing":        "email security warning",
+		"lms":             "online classroom interface",
+		"curriculum":      "classroom learning materials",
+		"assessment":      "student exam evaluation",
+	}
+
+	for term, visual := range replacements {
+		if strings.Contains(lower, term) {
+			return visual
+		}
+	}
+
+	abstractOnlySet := map[string]struct{}{
+		"technology": {}, "innovation": {}, "solution": {}, "learning": {},
+		"education": {}, "platform": {}, "system": {}, "process": {}, "concept": {},
+	}
+	words := strings.Fields(lower)
+	if len(words) == 0 {
+		return query
+	}
+
+	allAbstract := true
+	for _, word := range words {
+		if _, ok := abstractOnlySet[word]; !ok {
+			allAbstract = false
+			break
+		}
+	}
+	if allAbstract {
+		return strings.TrimSpace(query) + " workspace"
+	}
+
+	return strings.TrimSpace(query)
 }
 
 func normalizeImageQuery(raw string) string {
@@ -2580,9 +4867,14 @@ func isGenericImageWord(word string) bool {
 }
 
 func buildSlideImageQueryCandidates(slide models.PresentationSlide, primaryTopic string, isTitle bool) []string {
+	slideType := strings.ToLower(strings.TrimSpace(slide.Type))
+	if slideType == "stats" || slideType == "two_column" || slideType == "summary" {
+		return nil
+	}
+
 	candidates := make([]string, 0, 8)
 	seen := make(map[string]struct{}, 8)
-	add := func(query string) {
+	addNormalized := func(query string) {
 		query = normalizeImageQuery(query)
 		if query == "" {
 			return
@@ -2593,24 +4885,38 @@ func buildSlideImageQueryCandidates(slide models.PresentationSlide, primaryTopic
 		seen[query] = struct{}{}
 		candidates = append(candidates, query)
 	}
+	addSanitized := func(query string) {
+		if strings.TrimSpace(query) == "" {
+			return
+		}
+		addNormalized(sanitizeImageQuery(query))
+	}
 
-	add(pointerStringValue(slide.ImageQuery))
-	if primaryTopic != "" {
-		if isTitle {
-			add(primaryTopic + " cinematic poster")
-			add(primaryTopic + " character portrait")
-			add(primaryTopic + " movie scene")
-		} else {
-			add(primaryTopic + " " + slide.Title)
-			add(primaryTopic + " " + firstNWords(strings.Join(slide.Bullets, " "), 4))
+	rawImageQuery := pointerStringValue(slide.ImageQuery)
+	if rawImageQuery != "" {
+		sanitized := sanitizeImageQuery(rawImageQuery)
+		addNormalized(sanitized)
+		if normalizeImageQuery(sanitized) != normalizeImageQuery(rawImageQuery) {
+			addNormalized(rawImageQuery)
 		}
 	}
-	add(slide.Title)
-	add(pointerStringValue(slide.Subtitle))
-	add(firstNWords(strings.Join(slide.Bullets, " "), 6))
+
+	if primaryTopic != "" {
+		if isTitle {
+			addSanitized(primaryTopic + " cinematic poster")
+			addSanitized(primaryTopic + " character portrait")
+			addSanitized(primaryTopic + " movie scene")
+		} else {
+			addSanitized(primaryTopic + " " + slide.Title)
+			addSanitized(primaryTopic + " " + firstNWords(strings.Join(slide.Bullets, " "), 4))
+		}
+	}
+	addSanitized(slide.Title)
+	addSanitized(pointerStringValue(slide.Subtitle))
+	addSanitized(firstNWords(strings.Join(slide.Bullets, " "), 6))
 
 	if isTitle && len(candidates) == 0 {
-		add("presentation hero background")
+		addSanitized("presentation hero background")
 	}
 
 	return candidates
@@ -2655,6 +4961,13 @@ func (s *GeminiService) attachPresentationImages(ctx context.Context, slides []m
 	sem := make(chan struct{}, 5)
 
 	for i := range slides {
+		slideType := strings.ToLower(strings.TrimSpace(slides[i].Type))
+		if slideType == "stats" || slideType == "two_column" || slideType == "summary" {
+			slides[i].ImageURL = nil
+			slides[i].ImageQuery = nil
+			continue
+		}
+
 		candidates := buildSlideImageQueryCandidates(slides[i], primaryTopic, i == titleIndex)
 		if len(candidates) == 0 {
 			continue

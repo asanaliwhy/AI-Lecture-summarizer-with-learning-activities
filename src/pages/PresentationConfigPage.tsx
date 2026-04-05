@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Presentation, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import { AppLayout } from '../components/layout/AppLayout'
@@ -24,6 +24,7 @@ import { api } from '../lib/api'
 import { useToast } from '../components/ui/Toast'
 import { cn } from '../lib/utils'
 import type { GeneratePresentationConfig, SlideTheme } from '../lib/presentationTypes'
+import { THEME_PRESETS } from '../lib/presentationThemes'
 import defaultVideoThumbnail from '../assets/default-video-thumbnail.svg'
 
 type VideoMetadata = {
@@ -56,12 +57,41 @@ const TEXT_STYLE_OPTIONS = [
   { value: 'conversational', label: 'Conversational', description: 'Plain language, audience-friendly' },
 ] as const
 
-const THEME_OPTIONS: Array<{ value: SlideTheme; label: string; dotClass: string }> = [
-  { value: 'navy', label: 'Navy', dotClass: 'bg-blue-700' },
-  { value: 'minimal', label: 'Minimal', dotClass: 'bg-slate-300 border border-slate-400' },
-  { value: 'academic', label: 'Academic', dotClass: 'bg-amber-700' },
-  { value: 'dark', label: 'Dark', dotClass: 'bg-zinc-900 border border-zinc-700' },
-]
+type ThemeOption = {
+  value: SlideTheme
+  label: string
+  category: string
+  mood: string
+  preview: string
+  accent: string
+  accentSoft: string
+  surface: string
+  text: string
+  border: string
+}
+
+function randomThemeOptions(count = 4): ThemeOption[] {
+  const pool = [...THEME_PRESETS]
+  for (let i = pool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const tmp = pool[i]
+    pool[i] = pool[j]
+    pool[j] = tmp
+  }
+
+  return pool.slice(0, count).map((theme) => ({
+    value: theme.id,
+    label: theme.name,
+    category: theme.category,
+    mood: theme.mood,
+    preview: theme.backgroundGradient,
+    accent: theme.accent,
+    accentSoft: theme.accentSoft,
+    surface: theme.surface,
+    text: theme.text,
+    border: theme.border,
+  }))
+}
 
 const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
@@ -88,8 +118,16 @@ export function PresentationConfigPage() {
   const [slideCount, setSlideCount] = useState<number>(7)
   const [textStyle, setTextStyle] = useState<GeneratePresentationConfig['text_style']>('formal')
   const [language, setLanguage] = useState('en')
-  const [theme, setTheme] = useState<SlideTheme>('navy')
+  const themeOptions = useMemo(() => randomThemeOptions(4), [])
+  const [theme, setTheme] = useState<SlideTheme>(themeOptions[0]?.value || 'navy')
   const [focusAreasInput, setFocusAreasInput] = useState('')
+
+  useEffect(() => {
+    if (themeOptions.length === 0) return
+    if (!themeOptions.some((option) => option.value === theme)) {
+      setTheme(themeOptions[0].value)
+    }
+  }, [theme, themeOptions])
 
   const handleValidate = async () => {
     const requestId = ++validationRequestIdRef.current
@@ -326,20 +364,40 @@ export function PresentationConfigPage() {
                 <div className="space-y-3 border-t pt-6">
                   <Label>Theme</Label>
                   <div className="grid grid-cols-2 gap-3">
-                    {THEME_OPTIONS.map((option) => (
+                    {themeOptions.map((option) => (
                       <button
                         key={option.value}
                         type="button"
                         onClick={() => setTheme(option.value)}
                         className={cn(
-                          'flex items-center gap-2 rounded-xl border p-3 text-left transition-all',
+                          'rounded-2xl border bg-card p-3 text-left transition-all',
                           theme === option.value
-                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                            : 'hover:bg-secondary/50',
+                            ? 'border-slate-900 ring-1 ring-slate-900'
+                            : 'border-slate-200 hover:border-slate-300',
                         )}
                       >
-                        <span className={cn('h-3 w-3 rounded-full shrink-0', option.dotClass)} />
-                        <span className="font-medium text-sm">{option.label}</span>
+                        <div
+                          className="mb-2 h-12 w-full rounded-lg border border-black/5"
+                          style={{ background: option.preview }}
+                        />
+
+                        <p className="truncate text-sm font-semibold text-slate-800">{option.label}</p>
+                        <p className="truncate text-xs text-slate-500">
+                          {option.category} - {option.mood}
+                        </p>
+
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: option.accent }} />
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: option.accentSoft }} />
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: option.surface }} />
+                          <span
+                            className="h-2.5 w-2.5 rounded-full border"
+                            style={{
+                              backgroundColor: option.text,
+                              borderColor: option.border,
+                            }}
+                          />
+                        </div>
                       </button>
                     ))}
                   </div>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -15,6 +16,8 @@ import (
 	"lectura-backend/internal/models"
 	"lectura-backend/internal/repository"
 )
+
+var themeIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,63}$`)
 
 type PresentationHandler struct {
 	presentationRepo presentationRepository
@@ -81,8 +84,8 @@ func (h *PresentationHandler) CreatePresentation(w http.ResponseWriter, r *http.
 	if req.Theme == "" {
 		req.Theme = "navy"
 	}
-	if req.Theme != "navy" && req.Theme != "minimal" && req.Theme != "academic" && req.Theme != "dark" {
-		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "theme must be navy, minimal, academic, or dark", r))
+	if !themeIDPattern.MatchString(req.Theme) {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "theme must be a valid theme id", r))
 		return
 	}
 	if req.FocusAreas == nil {

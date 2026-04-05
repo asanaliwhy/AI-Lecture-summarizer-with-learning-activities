@@ -77,6 +77,126 @@ function toThemePreset(spec: ThemeSpec): ThemePreset {
   }
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function hashString(value: string): number {
+  let hash = 0
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0
+  }
+  return Math.abs(hash)
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hue = ((h % 360) + 360) % 360
+  const sat = clamp(s, 0, 100) / 100
+  const light = clamp(l, 0, 100) / 100
+
+  const c = (1 - Math.abs(2 * light - 1)) * sat
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1))
+  const m = light - c / 2
+
+  let r = 0
+  let g = 0
+  let b = 0
+
+  if (hue < 60) {
+    r = c; g = x; b = 0
+  } else if (hue < 120) {
+    r = x; g = c; b = 0
+  } else if (hue < 180) {
+    r = 0; g = c; b = x
+  } else if (hue < 240) {
+    r = 0; g = x; b = c
+  } else if (hue < 300) {
+    r = x; g = 0; b = c
+  } else {
+    r = c; g = 0; b = x
+  }
+
+  const toHex = (channel: number) => {
+    const value = Math.round((channel + m) * 255)
+    return value.toString(16).padStart(2, '0')
+  }
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
+function slugifyThemeId(name: string): SlideTheme {
+  const base = name
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return (base || `theme-${hashString(name) % 10000}`) as SlideTheme
+}
+
+function generatedThemeCategory(name: string, index: number): ThemeCategory {
+  const lower = name.toLowerCase()
+
+  const darkKeywords = [
+    'dark', 'night', 'onyx', 'coal', 'shadow', 'orbit', 'indigo', 'electric', 'alien', 'cigar',
+    'marine', 'mystique', 'borealis', 'aurora', 'velvet', 'nebula', 'lunaria', 'blues', 'petrol', 'wine',
+  ]
+  if (darkKeywords.some((keyword) => lower.includes(keyword))) {
+    return 'Dark'
+  }
+
+  const corporateKeywords = ['consultant', 'founder', 'dialogue', 'wireframe', 'commons', 'basic']
+  if (corporateKeywords.some((keyword) => lower.includes(keyword))) {
+    return 'Corporate'
+  }
+
+  const editorialKeywords = ['peach', 'flamingo', 'malibu', 'bubble', 'sanguine', 'cornflower', 'lavender']
+  if (editorialKeywords.some((keyword) => lower.includes(keyword))) {
+    return 'Editorial'
+  }
+
+  const academicKeywords = ['kraft', 'linen', 'terracotta', 'piano', 'iris', 'gold leaf', 'daktilo']
+  if (academicKeywords.some((keyword) => lower.includes(keyword))) {
+    return 'Academic'
+  }
+
+  const cinematicKeywords = ['atacama', 'canaveral', 'rush', 'gleam', 'aurum']
+  if (cinematicKeywords.some((keyword) => lower.includes(keyword))) {
+    return 'Cinematic'
+  }
+
+  const rotation: ThemeCategory[] = ['Minimal', 'Editorial', 'Corporate', 'Academic', 'Cinematic']
+  return rotation[index % rotation.length]
+}
+
+function generatedThemeSpec(name: string, index: number): ThemeSpec {
+  const category = generatedThemeCategory(name, index)
+  const hash = hashString(`${name}-${category}`)
+  const hue = hash % 360
+
+  const dark = category === 'Dark'
+  const cinematic = category === 'Cinematic'
+
+  const satBump = cinematic ? 8 : 0
+
+  return {
+    id: slugifyThemeId(name),
+    name,
+    category,
+    mood: `${name} preset`,
+    background: dark ? hslToHex(hue, 34 + satBump, 9) : hslToHex(hue, 22 + satBump, 94),
+    backgroundAlt: dark ? hslToHex(hue + 20, 42 + satBump, 18) : hslToHex(hue + 14, 30 + satBump, 98),
+    card: dark ? hslToHex(hue + 8, 30 + satBump, 15) : hslToHex(hue + 2, 24 + satBump, 97),
+    surface: dark ? hslToHex(hue + 10, 32 + satBump, 19) : hslToHex(hue + 4, 18 + satBump, 90),
+    surfaceStrong: dark ? hslToHex(hue + 14, 32 + satBump, 12) : hslToHex(hue + 6, 16 + satBump, 84),
+    text: dark ? hslToHex(hue + 8, 24, 94) : hslToHex(hue + 8, 24, 16),
+    subtext: dark ? hslToHex(hue + 8, 18, 78) : hslToHex(hue + 8, 16, 34),
+    accent: dark ? hslToHex(hue + 48, 82, 60) : hslToHex(hue + 40, 62, 40),
+    accentSoft: dark ? hslToHex(hue + 48, 72, 76) : hslToHex(hue + 40, 58, 64),
+    border: dark ? hslToHex(hue + 8, 20, 30) : hslToHex(hue + 8, 18, 78),
+  }
+}
+
 const THEME_SPECS: ThemeSpec[] = [
   { id: 'navy', name: 'Navy', category: 'Corporate', mood: 'Polished blue deck', background: '#0d1b2a', backgroundAlt: '#273b63', card: '#1e2b42', surface: '#243349', surfaceStrong: '#1b2639', text: '#f3f6fb', subtext: '#bac6da', accent: '#4ea8ff', accentSoft: '#97cfff', border: '#3e5273' },
   { id: 'slate-board', name: 'Slate Board', category: 'Corporate', mood: 'Executive neutral', background: '#1a242f', backgroundAlt: '#314050', card: '#25313e', surface: '#2f3d4c', surfaceStrong: '#1f2a36', text: '#edf2f7', subtext: '#b8c4cf', accent: '#66b0ff', accentSoft: '#9fd0ff', border: '#425363' },
@@ -110,7 +230,38 @@ const THEME_SPECS: ThemeSpec[] = [
   { id: 'rose-studio', name: 'Rose Studio', category: 'Cinematic', mood: 'Creative showcase', background: '#241a24', backgroundAlt: '#4d2f50', card: '#322333', surface: '#472f49', surfaceStrong: '#241725', text: '#fff1fa', subtext: '#dfbfd6', accent: '#ff72b4', accentSoft: '#ffb2d8', border: '#66486a' },
 ]
 
-export const THEME_PRESETS: ThemePreset[] = THEME_SPECS.map(toThemePreset)
+const REQUESTED_THEME_NAMES = [
+  'Nebulae', 'Creme', 'Lux', 'Consultant', 'Marine', 'Elysia', 'Prism', 'Lunaria', 'Night Sky', 'Commons',
+  'Bonan Hale', 'Gamma', 'Gamma Dark', 'Dialogue', 'Founder', 'Lavender', 'Indigo', 'Howlite', 'Onyx', 'Atmosphere',
+  'Blueberry', 'Kraft', 'Mystique', 'Petrol', 'Blues', 'Peach', 'Incandescent', 'Oatmeal', 'Sanguine', 'Sage',
+  'Verdigris', 'Ash', 'Coal', 'Flamingo', 'Canaveral', 'Oasis', 'Fluo', 'Finesse', 'Electric', 'Zephyr',
+  'Chimney Smoke', 'Chimney Dust', 'Icebreaker', 'Blue Steel', 'Daydream', 'Orbit', 'Dune', 'Mocha', 'Serene', 'Cornflower',
+  'Vanilla', 'Alien', 'Breeze', 'Aurora', 'Velvet Tides', 'Tranquil', 'Borealis', 'Terracotta', 'Bubble Gum', 'Snowball',
+  'Pistachio', 'Piano', 'Atacama', 'Wireframe', 'Aurum', 'Bee Happy', 'Chocolate', 'Cigar', 'Cornfield', 'Daktilo',
+  'Dawn', 'Editoria', 'Flax', 'Gleam', 'Gold Leaf', 'Iris', 'Keepsake', 'Leimoon', 'Linen', 'Malibu',
+  'Moss & Mist', 'Plant Shop', 'Rush', 'Shadow', 'Slate', 'Sprout', 'Wine', 'Basic Light', 'Basic Dark',
+] as const
+
+const existingNameSet = new Set(THEME_SPECS.map((theme) => theme.name.toLowerCase()))
+const existingIdSet = new Set(THEME_SPECS.map((theme) => theme.id))
+
+const GENERATED_THEME_SPECS: ThemeSpec[] = REQUESTED_THEME_NAMES
+  .filter((name) => !existingNameSet.has(name.toLowerCase()))
+  .map((name, index) => generatedThemeSpec(name, index))
+  .map((spec) => {
+    let id = spec.id
+    let i = 2
+    while (existingIdSet.has(id)) {
+      id = `${spec.id}-${i}` as SlideTheme
+      i += 1
+    }
+    existingIdSet.add(id)
+    return { ...spec, id }
+  })
+
+const ALL_THEME_SPECS: ThemeSpec[] = [...THEME_SPECS, ...GENERATED_THEME_SPECS]
+
+export const THEME_PRESETS: ThemePreset[] = ALL_THEME_SPECS.map(toThemePreset)
 
 export const PRESENTATION_THEMES: Record<SlideTheme, ThemeConfig> = Object.fromEntries(
   THEME_PRESETS.map((preset) => [preset.id, preset as ThemeConfig]),

@@ -5,6 +5,7 @@ export type SlideType =
   | 'two_column'
   | 'quote'
   | 'stats'
+  | 'prose'
   | 'summary'
 
 export type SlideTheme = string
@@ -19,11 +20,13 @@ export interface SlideColumn {
 export interface SlideStat {
   value: string
   label: string
+  description?: string
 }
 
 export interface SlideTakeaway {
   title: string
   description: string
+  icon?: string
 }
 
 export interface Slide {
@@ -37,6 +40,8 @@ export interface Slide {
   imageUrl?: string | null
   imageAlt?: string | null
   imageQuery?: string | null
+  imagePosition?: 'left' | 'right' | 'top' | null
+  body?: string | null
   columns?: SlideColumn[]
   leftColumn?: string[]
   rightColumn?: string[]
@@ -46,9 +51,12 @@ export interface Slide {
   quoteAuthor?: string | null
   stats?: SlideStat[]
   takeaways?: SlideTakeaway[]
+  tableHeaders?: string[]
+  tableRows?: string[][]
   sectionLabel?: string | null
   notes?: string | null
   speakerNotes?: string | null
+  variant?: string | null
 }
 
 export interface Presentation {
@@ -101,6 +109,7 @@ function normalizeTakeawaysFromBullets(bullets: string[]): SlideTakeaway[] {
   return bullets.map((bullet, index) => ({
     title: `Takeaway ${index + 1}`,
     description: bullet,
+    icon: '',
   }))
 }
 
@@ -149,7 +158,11 @@ export function normalizePresentation(raw: Partial<Presentation> & { id: string 
     slides: slides.map((slide, index) => {
       const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
       const takeaways = Array.isArray(slide.takeaways) && slide.takeaways.length > 0
-        ? slide.takeaways
+        ? slide.takeaways.map((item) => ({
+          title: item.title || '',
+          description: item.description || '',
+          icon: item.icon || '',
+        }))
         : slide.type === 'summary' && bullets.length > 0
           ? normalizeTakeawaysFromBullets(bullets)
           : slide.takeaways
@@ -161,11 +174,24 @@ export function normalizePresentation(raw: Partial<Presentation> & { id: string 
         bullets,
         leftColumn: Array.isArray(slide.leftColumn) ? slide.leftColumn : [],
         rightColumn: Array.isArray(slide.rightColumn) ? slide.rightColumn : [],
+        imagePosition: slide.imagePosition === 'left' || slide.imagePosition === 'top' ? slide.imagePosition : 'right',
+        body: typeof slide.body === 'string' ? slide.body : null,
         columns: normalizeColumns(slide) || [],
         stats: Array.isArray(slide.stats) ? slide.stats : [],
         takeaways: Array.isArray(takeaways) ? takeaways : [],
+        tableHeaders: Array.isArray(slide.tableHeaders) ? slide.tableHeaders.filter((h) => typeof h === 'string') : [],
+        tableRows: Array.isArray(slide.tableRows)
+          ? slide.tableRows
+            .filter((row) => Array.isArray(row))
+            .map((row) => row.filter((cell) => typeof cell === 'string'))
+          : [],
         notes: slide.notes || slide.speakerNotes || null,
         speakerNotes: slide.speakerNotes || slide.notes || null,
+        variant: typeof slide.variant === 'string'
+          ? slide.variant
+          : slide.type === 'summary'
+            ? 'summary_icons'
+            : null,
       }
     }),
   }
