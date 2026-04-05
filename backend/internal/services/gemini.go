@@ -4284,6 +4284,63 @@ func hasImmediateLeadPhraseRepetition(value string) bool {
 	return false
 }
 
+func isLikelyTranscriptFragment(value string) bool {
+	clean := strings.ToLower(strings.TrimSpace(value))
+	if clean == "" {
+		return false
+	}
+
+	if hasImmediateLeadPhraseRepetition(clean) {
+		return true
+	}
+
+	if regexp.MustCompile(`\d`).MatchString(clean) {
+		return false
+	}
+
+	words := strings.Fields(clean)
+	if len(words) == 0 {
+		return false
+	}
+
+	if len(words) <= 8 {
+		leadingFragments := map[string]struct{}{
+			"from": {}, "to": {}, "and": {}, "but": {}, "or": {}, "so": {}, "because": {},
+			"then": {}, "maybe": {}, "with": {}, "for": {}, "in": {}, "on": {}, "at": {},
+		}
+		if _, exists := leadingFragments[words[0]]; exists {
+			return true
+		}
+	}
+
+	trailingFragments := map[string]struct{}{
+		"to": {}, "and": {}, "or": {}, "of": {}, "with": {}, "for": {}, "the": {},
+		"our": {}, "your": {}, "my": {}, "a": {}, "an": {}, "are": {}, "is": {},
+		"me": {}, "us": {}, "him": {}, "her": {}, "them": {},
+	}
+	last := strings.Trim(words[len(words)-1], " ,.;:!?")
+	if _, exists := trailingFragments[last]; exists {
+		return true
+	}
+
+	if strings.Count(clean, ",") >= 2 {
+		hasVerbLikeToken := false
+		verbLike := []string{" is ", " are ", " was ", " were ", " be ", " have ", " has ", " do ", " does ", " did ", " can ", " will ", " should ", " need ", " helps ", " reduces ", " improves ", " protects "}
+		padded := " " + clean + " "
+		for _, token := range verbLike {
+			if strings.Contains(padded, token) {
+				hasVerbLikeToken = true
+				break
+			}
+		}
+		if !hasVerbLikeToken {
+			return true
+		}
+	}
+
+	return false
+}
+
 // isConversationalTranscriptLine detects raw YouTube-style transcript speech
 // that should never appear as structured slide content.
 func isConversationalTranscriptLine(value string) bool {
@@ -4293,6 +4350,9 @@ func isConversationalTranscriptLine(value string) bool {
 	}
 
 	if hasImmediateLeadPhraseRepetition(clean) {
+		return true
+	}
+	if isLikelyTranscriptFragment(clean) {
 		return true
 	}
 
@@ -4357,6 +4417,25 @@ func isConversationalTranscriptLine(value string) bool {
 		"it's easy, and now",
 		"it is easy, and now",
 		"thanks, ben and nadia",
+		"today's focus will be",
+		"todays focus will be",
+		"in today's episode",
+		"in todays episode",
+		"what do you think",
+		"when it comes to",
+		"our lovely planet earth",
+		"to everything in the world that you care",
+		"i appreciate all your",
+		"oh, guys",
+		"yeah,",
+		"pollutions are everywhere",
+		"the first word is",
+		"the second question is",
+		"now, let's talk about",
+		"now let's talk about",
+		"now, let's look at",
+		"now let's look at",
+		"last word",
 	}
 	for _, phrase := range casualPhrases {
 		if strings.Contains(clean, phrase) {
@@ -4365,8 +4444,13 @@ func isConversationalTranscriptLine(value string) bool {
 	}
 
 	// Detect first-person casual address patterns.
-	casualPatterns := regexp.MustCompile(`(?i)^(?:if everyone|before we|we have chad|we're finally|the long[- ]awaited|in this series|for this episode|in the next part|do any of you|all opinions are welcome|[a-z]+\s+(?:emphasized|said|noted|mentioned|explained|stated)\s+that)`)
+	casualPatterns := regexp.MustCompile(`(?i)^(?:if everyone|before we|we have chad|we're finally|the long[- ]awaited|in this series|for this episode|in the next part|do any of you|all opinions are welcome|today'?s focus will be|when it comes to|oh,?\s+guys|yeah\b|[a-z]+\s+(?:emphasized|said|noted|mentioned|explained|stated)\s+that)`)
 	if casualPatterns.MatchString(clean) {
+		return true
+	}
+
+	firstPersonDialogue := regexp.MustCompile(`(?i)^(?:i\s+(?:also\s+)?(?:am|was|have|had|do|did|use|used|started|watched|appreciate|think|want|need|carry|try)|i'?m\b|i'?ve\b|we\s+(?:can|should|need|must|will|have|used|use)|let'?s\b|you\s+(?:can|should|need|just\s+need))`)
+	if firstPersonDialogue.MatchString(clean) {
 		return true
 	}
 
