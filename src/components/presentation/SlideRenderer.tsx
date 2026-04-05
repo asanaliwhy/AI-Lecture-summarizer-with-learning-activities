@@ -464,9 +464,18 @@ function statsGridColumns(count: number): string {
 }
 
 function withMinimumStatsCards(stats: SlideStat[]): SlideStat[] {
+  const isNoisyStatText = (value: string) => {
+    const clean = String(value || '').toLowerCase().trim()
+    if (!clean) return true
+    if (/https?:\/\/|www\.|watch\?v=|youtube/.test(clean)) return true
+    if (/(^|\b)(translator|reviewer|caption|subtitle|key point|key takeaway|source url|source:|title:)\b/.test(clean)) return true
+    return false
+  }
+
   const clean = (Array.isArray(stats) ? stats : [])
     .filter((item) => item && String(item.value || '').trim() && String(item.label || '').trim())
-    .slice(0, 6)
+    .filter((item) => !isNoisyStatText(String(item.label || '')) && !isNoisyStatText(String(item.description || '')))
+    .slice(0, 4)
 
   if (clean.length !== 3) return clean
 
@@ -1661,8 +1670,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         : denseContent
           ? `${s(22)}px ${s(24)}px ${s(20)}px`
           : `${s(28)}px ${s(28)}px`
-      const numTitleSize = ultraDenseContent ? 24 : denseContent ? 25 : 27
-      const numDescSize = ultraDenseContent ? 21 : denseContent ? 22 : 23
+      const numTitleSize = ultraDenseContent ? 21 : denseContent ? 22 : 24
+      const numDescSize = ultraDenseContent ? 18 : denseContent ? 19 : 20
       const numPaddingY = ultraDenseContent ? 8 : denseContent ? 11 : 14
       const numPaddingX = ultraDenseContent ? 12 : denseContent ? 14 : 16
       const cardTitleSize = ultraDenseContent ? 18 : denseContent ? 20 : 22
@@ -1760,7 +1769,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                           background: `linear-gradient(135deg, ${theme.accentSoft}, ${theme.accent})`,
                           color: theme.surfaceStrong,
                           fontFamily: theme.displayFont,
-                          fontSize: fs(24),
+                          fontSize: fs(20),
                           fontWeight: 700,
                           position: 'relative',
                         }}

@@ -2628,7 +2628,11 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 			ensureDefaultContentPayload(&slides[i], transcript)
 		}
 
-		slides[i].Stats = normalizePresentationStats(slides[i].Stats, 6)
+		maxStatsItems := 6
+		if slideType == "stats" {
+			maxStatsItems = 4
+		}
+		slides[i].Stats = normalizePresentationStats(slides[i].Stats, maxStatsItems)
 		if slideType == "stats" {
 			ensureMinimumStatsCount(&slides[i], transcript, 4)
 		}
@@ -2675,7 +2679,11 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 		if slideType == "content" {
 			ensureDefaultContentPayload(&slides[i], transcript)
 		}
-		slides[i].Stats = normalizePresentationStats(slides[i].Stats, 6)
+		maxStatsItems := 6
+		if slideType == "stats" {
+			maxStatsItems = 4
+		}
+		slides[i].Stats = normalizePresentationStats(slides[i].Stats, maxStatsItems)
 		if slideType == "stats" {
 			ensureMinimumStatsCount(&slides[i], transcript, 4)
 		}
@@ -4112,11 +4120,34 @@ func isConversationalTranscriptLine(value string) bool {
 	return false
 }
 
+func isStatMetadataText(value string) bool {
+	clean := strings.ToLower(strings.TrimSpace(value))
+	if clean == "" {
+		return true
+	}
+
+	if strings.Contains(clean, "http://") || strings.Contains(clean, "https://") || strings.Contains(clean, "www.") {
+		return true
+	}
+
+	badTokens := []string{
+		"source url", "source:", "title:", "youtube", "watch?v", "translator", "reviewer", "caption", "subtitle",
+		"key point", "key takeaway", "speaker:",
+	}
+	for _, token := range badTokens {
+		if strings.Contains(clean, token) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func normalizeStatLabel(value string) string {
 	label := regexp.MustCompile(`\[[^\]]*\]`).ReplaceAllString(value, " ")
 	label = sanitizePresentationText(label)
 	label = strings.Trim(label, "-,:; ")
-	if label == "" {
+	if label == "" || isStatMetadataText(label) || isConversationalTranscriptLine(label) {
 		return ""
 	}
 	words := trimDanglingEndingWords(strings.Fields(label))
@@ -4127,7 +4158,11 @@ func normalizeStatLabel(value string) string {
 	if len(words) == 0 {
 		return ""
 	}
-	return strings.Join(words, " ")
+	label = strings.Join(words, " ")
+	if isStatMetadataText(label) {
+		return ""
+	}
+	return label
 }
 
 func normalizeStatDescription(value string) string {
@@ -4136,8 +4171,14 @@ func normalizeStatDescription(value string) string {
 	if description == "" {
 		return ""
 	}
+	if isStatMetadataText(description) {
+		return ""
+	}
 	lowerDescription := strings.ToLower(description)
-	if strings.Contains(lowerDescription, "highlights a critical benchmark that shapes implementation priorities") || strings.Contains(lowerDescription, "anchors a key benchmark, connecting this milestone") {
+	if strings.Contains(lowerDescription, "highlights a critical benchmark that shapes implementation priorities") ||
+		strings.Contains(lowerDescription, "anchors a key benchmark, connecting this milestone") ||
+		strings.Contains(lowerDescription, "anchors decision context, connecting this metric") ||
+		strings.Contains(lowerDescription, "tied to") && strings.Contains(lowerDescription, "provides a concrete benchmark") {
 		return ""
 	}
 	if containsTranscriptNoiseTag(description) || isConversationalTranscriptLine(description) {
@@ -4257,8 +4298,8 @@ func buildStatDescriptionFallback(label, value string) string {
 
 	if cleanValue != "" {
 		genericValueOptions := []string{
-			fmt.Sprintf("%s tied to %s provides a concrete benchmark for comparing alternatives, prioritizing interventions, and tracking measurable performance changes.", cleanLabel, cleanValue),
-			fmt.Sprintf("%s at %s anchors decision context, connecting this metric to execution priorities, risk exposure, and expected impact across stakeholders.", cleanLabel, cleanValue),
+			fmt.Sprintf("%s tied to %s provides concrete evidence for comparing alternatives and prioritizing interventions with measurable performance impact.", cleanLabel, cleanValue),
+			fmt.Sprintf("%s at %s clarifies decision context by linking this metric to execution priorities, risk exposure, and expected outcomes.", cleanLabel, cleanValue),
 		}
 		candidates = append(candidates, chooseBySeed(genericValueOptions, cleanLabel+"|generic-value"))
 	}
@@ -4294,7 +4335,7 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 		label := normalizeStatLabel(stat.Label)
 		description := normalizeStatDescription(stat.Description)
 
-		if containsTranscriptNoiseTag(stat.Label) || containsTranscriptNoiseTag(stat.Description) || isConversationalTranscriptLine(stat.Label) || isConversationalTranscriptLine(stat.Description) {
+		if containsTranscriptNoiseTag(stat.Label) || containsTranscriptNoiseTag(stat.Description) || isConversationalTranscriptLine(stat.Label) || isConversationalTranscriptLine(stat.Description) || isStatMetadataText(stat.Label) || isStatMetadataText(stat.Description) {
 			continue
 		}
 		if value == "" || label == "" {
@@ -4426,7 +4467,7 @@ func ensureMinimumStatsCount(slide *models.PresentationSlide, transcript string,
 		return
 	}
 
-	stats := normalizePresentationStats(slide.Stats, 6)
+	stats := normalizePresentationStats(slide.Stats, 4)
 	if len(stats) >= minItems {
 		slide.Stats = stats
 		return
@@ -4436,7 +4477,7 @@ func ensureMinimumStatsCount(slide *models.PresentationSlide, transcript string,
 	seed := strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), pointerStringValue(slide.Body), slide.SpeakerNotes, transcript}, " ")
 	source = append(source, splitPresentationSentences(seed)...)
 	extra := extractStatsFromBullets(source)
-	stats = normalizePresentationStats(append(stats, extra...), 6)
+	stats = normalizePresentationStats(append(stats, extra...), 4)
 
 	for len(stats) < minItems {
 		candidate, ok := synthesizeSupplementalStat(stats, slide.Title, pointerStringValue(slide.Subtitle))
@@ -4444,7 +4485,7 @@ func ensureMinimumStatsCount(slide *models.PresentationSlide, transcript string,
 			break
 		}
 		before := len(stats)
-		stats = normalizePresentationStats(append(stats, candidate), 6)
+		stats = normalizePresentationStats(append(stats, candidate), 4)
 		if len(stats) <= before {
 			break
 		}
@@ -5161,7 +5202,7 @@ func extractStatsFromBullets(bullets []string) []models.PresentationStat {
 		if clean == "" {
 			continue
 		}
-		if containsTranscriptNoiseTag(clean) || isConversationalTranscriptLine(clean) {
+		if containsTranscriptNoiseTag(clean) || isConversationalTranscriptLine(clean) || isStatMetadataText(clean) {
 			continue
 		}
 		match := numberPattern.FindString(clean)
@@ -5170,8 +5211,8 @@ func extractStatsFromBullets(bullets []string) []models.PresentationStat {
 		}
 
 		label := normalizeStatLabel(numberPattern.ReplaceAllString(clean, ""))
-		if label == "" {
-			label = "Measured metric"
+		if label == "" || isStatMetadataText(label) {
+			continue
 		}
 		description := normalizeStatDescription(clean)
 		if description == "" {
