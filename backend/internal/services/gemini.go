@@ -2585,8 +2585,8 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 			}
 		}
 
-		slides[i].LeftColumn = normalizePresentationPhrases(slides[i].LeftColumn, 4, 24)
-		slides[i].RightColumn = normalizePresentationPhrases(slides[i].RightColumn, 4, 24)
+		slides[i].LeftColumn = normalizePresentationPhrases(slides[i].LeftColumn, 4, 20)
+		slides[i].RightColumn = normalizePresentationPhrases(slides[i].RightColumn, 4, 20)
 		for c := range slides[i].Columns {
 			slides[i].Columns[c].Label = sanitizePresentationText(slides[i].Columns[c].Label)
 			slides[i].Columns[c].Items = normalizePresentationPhrases(slides[i].Columns[c].Items, 5, 18)
@@ -2801,11 +2801,11 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 		}
 	}
 
-	left = normalizePresentationPhrases(left, 4, 24)
-	right = normalizePresentationPhrases(right, 4, 24)
+	left = normalizePresentationPhrases(left, 4, 20)
+	right = normalizePresentationPhrases(right, 4, 20)
 
 	seed := strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), slide.SpeakerNotes, transcript}, " ")
-	extra := buildCompactBulletsFromText(seed, 8, 24)
+	extra := buildCompactBulletsFromText(seed, 8, 20)
 	extraIdx := 0
 	targetMin := 4
 	for (len(left) < targetMin || len(right) < targetMin) && extraIdx < len(extra) {
@@ -2821,8 +2821,8 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 		}
 	}
 
-	left = normalizePresentationPhrases(left, 4, 24)
-	right = normalizePresentationPhrases(right, 4, 24)
+	left = normalizePresentationPhrases(left, 4, 20)
+	right = normalizePresentationPhrases(right, 4, 20)
 
 	leftFallback := []string{
 		"Operational constraints and baseline conditions shape implementation choices",
@@ -2843,8 +2843,8 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 		right = append(right, rightFallback[i])
 	}
 
-	left = normalizePresentationPhrases(left, 4, 24)
-	right = normalizePresentationPhrases(right, 4, 24)
+	left = normalizePresentationPhrases(left, 4, 20)
+	right = normalizePresentationPhrases(right, 4, 20)
 
 	if len(left) == 0 {
 		left = []string{"Core mechanisms and enabling factors are outlined for this side of the comparison"}
@@ -4915,7 +4915,7 @@ func normalizePresentationPhrases(items []string, maxItems, maxWords int) []stri
 	seen := map[string]struct{}{}
 	out := make([]string, 0, min(maxItems, len(items)))
 	for _, item := range items {
-		normalized := normalizePresentationBullet(item, maxWords)
+		normalized := normalizePhraseSentence(item, maxWords)
 		if normalized == "" {
 			continue
 		}
@@ -4933,6 +4933,34 @@ func normalizePresentationPhrases(items []string, maxItems, maxWords int) []stri
 		}
 	}
 	return out
+}
+
+func ensureTrailingDot(value string) string {
+	value = sanitizePresentationText(value)
+	value = strings.TrimRight(value, " .;:!?")
+	if value == "" {
+		return ""
+	}
+	return value + "."
+}
+
+func normalizePhraseSentence(value string, maxWords int) string {
+	clean := sanitizePresentationText(value)
+	if clean == "" || containsTranscriptNoiseTag(clean) {
+		return ""
+	}
+
+	sentences := splitPresentationSentences(clean)
+	if len(sentences) > 0 {
+		clean = sanitizePresentationText(sentences[0])
+	}
+
+	normalized := normalizePresentationBullet(clean, maxWords)
+	if normalized == "" {
+		return ""
+	}
+
+	return ensureTrailingDot(normalized)
 }
 
 func buildCompactBulletsFromText(source string, maxItems, maxWords int) []string {
@@ -5101,8 +5129,8 @@ func enforcePresentationTypeVariety(slides []models.PresentationSlide) {
 					right = append(right, bullet)
 				}
 			}
-			slides[i].LeftColumn = normalizePresentationPhrases(left, 4, 24)
-			slides[i].RightColumn = normalizePresentationPhrases(right, 4, 24)
+			slides[i].LeftColumn = normalizePresentationPhrases(left, 4, 20)
+			slides[i].RightColumn = normalizePresentationPhrases(right, 4, 20)
 			if slides[i].LeftLabel == nil {
 				leftLabel := "Key Drivers"
 				slides[i].LeftLabel = &leftLabel
