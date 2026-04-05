@@ -2804,14 +2804,26 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 	left = normalizePresentationPhrases(left, 4, 20)
 	right = normalizePresentationPhrases(right, 4, 20)
 
-	seed := strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), slide.SpeakerNotes, transcript}, " ")
+	// Use only speaker notes as fallback seed to avoid title/subtitle text
+	// leaking into column items, and to prevent raw transcript speech.
+	titleNorm := normalizeCompareText(slide.Title)
+	subtitleNorm := normalizeCompareText(pointerStringValue(slide.Subtitle))
+	seed := slide.SpeakerNotes
 	extra := buildCompactBulletsFromText(seed, 8, 20)
 	extraIdx := 0
 	targetMin := 4
 	for (len(left) < targetMin || len(right) < targetMin) && extraIdx < len(extra) {
 		candidate := extra[extraIdx]
 		extraIdx++
-		if candidate == "" {
+		if candidate == "" || isConversationalTranscriptLine(candidate) {
+			continue
+		}
+		// Reject candidates that overlap with the slide title or subtitle.
+		candidateNorm := normalizeCompareText(candidate)
+		if candidateNorm != "" && titleNorm != "" && (strings.Contains(candidateNorm, titleNorm) || strings.Contains(titleNorm, candidateNorm)) {
+			continue
+		}
+		if candidateNorm != "" && subtitleNorm != "" && (strings.Contains(candidateNorm, subtitleNorm) || strings.Contains(subtitleNorm, candidateNorm)) {
 			continue
 		}
 		if len(left) < len(right) {
@@ -3562,39 +3574,32 @@ func normalizeFeatureDescriptionSentence(value string) string {
 		return ""
 	}
 
+	// Take up to two sentences so we don't clip the description too aggressively.
 	sentences := splitPresentationSentences(text)
-	if len(sentences) > 0 {
+	if len(sentences) >= 2 {
+		text = sanitizePresentationText(sentences[0] + ". " + sentences[1])
+	} else if len(sentences) == 1 {
 		text = sanitizePresentationText(sentences[0])
 	}
 
 	words := strings.Fields(text)
-	if len(words) > 17 {
-		words = words[:17]
+	if len(words) > 20 {
+		words = words[:20]
+		words = trimDanglingEndingWords(words)
 	}
 
+	// Fix dangling prepositions/conjunctions at end without adding generic filler.
 	dangling := map[string]struct{}{
 		"to": {}, "and": {}, "or": {}, "with": {}, "of": {}, "for": {}, "in": {}, "on": {}, "at": {},
 		"by": {}, "from": {}, "as": {}, "than": {}, "that": {}, "which": {}, "while": {}, "because": {},
 	}
-	if len(words) > 0 {
+	for len(words) > 0 {
 		last := strings.ToLower(strings.Trim(words[len(words)-1], " .;:!?"))
 		if _, exists := dangling[last]; exists {
-			words = append(words, "practical", "results")
+			words = words[:len(words)-1]
+		} else {
+			break
 		}
-	}
-
-	if len(words) < 13 {
-		pad := []string{"through", "practical", "implementation", "and", "measurable", "everyday", "impact"}
-		for _, token := range pad {
-			if len(words) >= 13 {
-				break
-			}
-			words = append(words, token)
-		}
-	}
-
-	if len(words) > 17 {
-		words = words[:17]
 	}
 
 	text = strings.TrimRight(strings.TrimSpace(strings.Join(words, " ")), " .;:!?")
@@ -3790,34 +3795,15 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 			}
 		}
 
-		for i, cell := range cells {
-			cellClean := sanitizePresentationText(cell)
-			if cellClean == "" {
-				return true
-			}
-			words := strings.Fields(cellClean)
-			if len(words) == 0 {
-				return true
-			}
-			if len(words) > 10 {
-				return true
-			}
-			if i > 0 {
-				lead := strings.ToLower(strings.Trim(words[0], " .;:!?\"'`“”‘’"))
-				sentenceLeads := map[string]struct{}{
-					"that": {}, "which": {}, "where": {}, "when": {}, "while": {}, "because": {},
-					"if": {}, "and": {}, "or": {}, "but": {}, "to": {}, "for": {}, "with": {}, "from": {},
-				}
-				if _, bad := sentenceLeads[lead]; bad {
-					return true
-				}
-			}
-		}
-
 		if subtitleNorm != "" && (strings.Contains(joinedNorm, subtitleNorm) || strings.Contains(subtitleNorm, joinedNorm)) {
 			return true
 		}
 		if titleNorm != "" && strings.Contains(joinedNorm, titleNorm) {
+			return true
+		}
+
+		// Reject rows that look like raw transcript speech rather than structured data.
+		if isConversationalTranscriptLine(joined) {
 			return true
 		}
 
@@ -3921,7 +3907,7 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 	}
 
 	minRows := 4
-	targetRows := 4
+	targetRows := 5
 	if len(normalizedRows) < targetRows {
 		seed := strings.Join([]string{
 			slide.SpeakerNotes,
@@ -3931,6 +3917,9 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 		}, " ")
 		candidates := buildCompactBulletsFromText(seed, targetRows*2, 18)
 		for _, candidate := range candidates {
+			if isConversationalTranscriptLine(candidate) {
+				continue
+			}
 			row := synthesizeComparisonRow(candidate, columnCount)
 			if len(row) == 0 {
 				continue
@@ -4043,6 +4032,42 @@ func containsTranscriptNoiseTag(value string) bool {
 	return regexp.MustCompile(`(?i)(?:\[(?:music|applause|laugh(?:ter|s)?|inaudible|silence|noise|sfx)[^\]]*\]|\((?:music|applause|inaudible|silence|noise|sfx)[^\)]*\)|[♪♫])`).MatchString(clean)
 }
 
+// isConversationalTranscriptLine detects raw YouTube-style transcript speech
+// that should never appear as structured slide content.
+func isConversationalTranscriptLine(value string) bool {
+	clean := strings.ToLower(strings.TrimSpace(value))
+	if clean == "" {
+		return false
+	}
+	// Casual YouTuber phrases that indicate unprocessed transcript.
+	casualPhrases := []string{
+		"hit that subscribe", "smash that like", "subscribe button",
+		"hits that subscribe", "everyone hits that",
+		"the long-awaited video", "the long awaited video",
+		"finally here", "before we even start",
+		"going against each other", "going to get this",
+		"by the end", "let me know in the comments",
+		"comment asking me", "check out the link",
+		"make sure to", "don't forget to",
+		"which i have paid", "which i paid",
+		"we're finally going", "we are finally going",
+		"out the way before",
+	}
+	for _, phrase := range casualPhrases {
+		if strings.Contains(clean, phrase) {
+			return true
+		}
+	}
+
+	// Detect first-person casual address patterns.
+	casualPatterns := regexp.MustCompile(`(?i)^(?:if everyone|before we|we have chad|we're finally|the long[- ]awaited)`)
+	if casualPatterns.MatchString(clean) {
+		return true
+	}
+
+	return false
+}
+
 func normalizeStatLabel(value string) string {
 	label := regexp.MustCompile(`\[[^\]]*\]`).ReplaceAllString(value, " ")
 	label = sanitizePresentationText(label)
@@ -4067,30 +4092,34 @@ func normalizeStatDescription(value string) string {
 	if description == "" {
 		return ""
 	}
-
-	sentences := splitPresentationSentences(description)
-	if len(sentences) > 1 {
-		description = sanitizePresentationText(sentences[0] + " " + sentences[1])
-	} else if len(sentences) == 1 {
-		description = sanitizePresentationText(sentences[0])
+	if containsTranscriptNoiseTag(description) || isConversationalTranscriptLine(description) {
+		return ""
 	}
 
-	words := trimDanglingEndingWords(strings.Fields(description))
-	pad := []string{"with", "clear", "operational", "context", "practical", "tradeoffs", "and", "measurable", "impact", "for", "decision", "making"}
-	for len(words) < 23 {
-		for _, token := range pad {
-			if len(words) >= 23 {
+	sentences := splitPresentationSentences(description)
+	if len(sentences) > 0 {
+		chosen := make([]string, 0, 2)
+		for _, sentence := range sentences {
+			candidate := sanitizePresentationText(sentence)
+			if candidate == "" || containsTranscriptNoiseTag(candidate) || isConversationalTranscriptLine(candidate) {
+				continue
+			}
+			chosen = append(chosen, candidate)
+			if len(chosen) >= 2 {
 				break
 			}
-			words = append(words, token)
+		}
+		if len(chosen) > 0 {
+			description = sanitizePresentationText(strings.Join(chosen, " "))
 		}
 	}
 
+	words := trimDanglingEndingWords(strings.Fields(description))
 	if len(words) > 25 {
 		words = words[:25]
 		words = trimDanglingEndingWords(words)
 	}
-	if len(words) < 23 {
+	if len(words) < 12 {
 		return ""
 	}
 
@@ -4099,6 +4128,29 @@ func normalizeStatDescription(value string) string {
 		return ""
 	}
 	return description + "."
+}
+
+func buildStatDescriptionFallback(label, value string) string {
+	cleanLabel := sanitizePresentationText(label)
+	cleanValue := sanitizePresentationText(value)
+
+	if cleanLabel == "" {
+		cleanLabel = "This metric"
+	}
+
+	if cleanValue != "" {
+		candidate := fmt.Sprintf("%s at %s highlights a critical benchmark that shapes implementation priorities, risk tradeoffs, resource allocation, and measurable outcomes for stakeholders over time.", cleanLabel, cleanValue)
+		if normalized := normalizeStatDescription(candidate); normalized != "" {
+			return normalized
+		}
+	}
+
+	candidate := fmt.Sprintf("%s highlights a critical benchmark that shapes implementation priorities, risk tradeoffs, resource allocation, and measurable outcomes for stakeholders over time.", cleanLabel)
+	if normalized := normalizeStatDescription(candidate); normalized != "" {
+		return normalized
+	}
+
+	return ensureTrailingDot(firstNWords(cleanLabel+" reflects a key benchmark with measurable impact on execution quality and stakeholder outcomes", 24))
 }
 
 func normalizePresentationStats(stats []models.PresentationStat, maxItems int) []models.PresentationStat {
@@ -4123,7 +4175,7 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 			continue
 		}
 		if description == "" {
-			description = normalizeStatDescription(label + " with measurable impact on execution outcomes and stakeholder decisions")
+			description = buildStatDescriptionFallback(label, value)
 		}
 		if description == "" {
 			continue
@@ -4562,7 +4614,8 @@ func normalizeFeatureEncodedBullet(value string) string {
 	}
 	icon := sanitizePresentationText(parts[0])
 	title := strings.TrimRight(sanitizePresentationText(parts[1]), " .;:!?")
-	description := strings.TrimRight(sanitizePresentationText(parts[2]), " .;:!?")
+	// Preserve the description text including its trailing period for sentence integrity.
+	description := sanitizePresentationText(parts[2])
 	title = trimDanglingPhrase(title)
 	titleWords := strings.Fields(title)
 	if len(titleWords) > 4 {
@@ -4869,7 +4922,7 @@ func extractStatsFromBullets(bullets []string) []models.PresentationStat {
 		}
 		description := normalizeStatDescription(clean)
 		if description == "" {
-			description = normalizeStatDescription(label + " with measurable impact on outcomes")
+			description = buildStatDescriptionFallback(label, match)
 		}
 		if description == "" {
 			continue
@@ -4940,7 +4993,7 @@ func normalizePresentationPhrases(items []string, maxItems, maxWords int) []stri
 	out := make([]string, 0, min(maxItems, len(items)))
 	for _, item := range items {
 		normalized := normalizePhraseSentence(item, maxWords)
-		if normalized == "" {
+		if normalized == "" || isConversationalTranscriptLine(normalized) {
 			continue
 		}
 		key := normalizeCompareText(normalized)
