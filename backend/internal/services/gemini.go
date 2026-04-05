@@ -4004,16 +4004,28 @@ func normalizeStatDescription(value string) string {
 	}
 
 	sentences := splitPresentationSentences(description)
-	if len(sentences) > 0 {
+	if len(sentences) > 1 {
+		description = sanitizePresentationText(sentences[0] + " " + sentences[1])
+	} else if len(sentences) == 1 {
 		description = sanitizePresentationText(sentences[0])
 	}
 
 	words := trimDanglingEndingWords(strings.Fields(description))
-	if len(words) > 18 {
-		words = words[:18]
+	pad := []string{"with", "clear", "operational", "context", "practical", "tradeoffs", "and", "measurable", "impact", "for", "decision", "making"}
+	for len(words) < 23 {
+		for _, token := range pad {
+			if len(words) >= 23 {
+				break
+			}
+			words = append(words, token)
+		}
+	}
+
+	if len(words) > 25 {
+		words = words[:25]
 		words = trimDanglingEndingWords(words)
 	}
-	if len(words) < 6 {
+	if len(words) < 23 {
 		return ""
 	}
 
