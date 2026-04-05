@@ -2461,11 +2461,21 @@ func splitPresentationSentences(text string) []string {
 	}
 	parts := regexp.MustCompile(`[.!?]\s+`).Split(text, -1)
 	out := make([]string, 0, len(parts))
+	lastNorm := ""
 	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
-			out = append(out, trimmed)
+		trimmed := sanitizePresentationText(strings.TrimSpace(part))
+		if trimmed == "" {
+			continue
 		}
+		if containsTranscriptNoiseTag(trimmed) || isConversationalTranscriptLine(trimmed) {
+			continue
+		}
+		norm := normalizeCompareText(trimmed)
+		if norm == "" || norm == lastNorm {
+			continue
+		}
+		lastNorm = norm
+		out = append(out, trimmed)
 	}
 	if len(out) > 0 {
 		return out
@@ -3118,6 +3128,12 @@ func buildSummaryTakeaways(slide *models.PresentationSlide) []models.Presentatio
 		title = sanitizePresentationText(title)
 		description = sanitizePresentationText(description)
 		icon = sanitizePresentationText(icon)
+		if containsTranscriptNoiseTag(title) || containsTranscriptNoiseTag(description) {
+			return
+		}
+		if isConversationalTranscriptLine(title) || isConversationalTranscriptLine(description) || isConversationalTranscriptLine(strings.TrimSpace(title+" "+description)) {
+			return
+		}
 		if title == "" && description == "" {
 			return
 		}
@@ -3157,6 +3173,9 @@ func buildSummaryTakeaways(slide *models.PresentationSlide) []models.Presentatio
 		for _, raw := range slide.Bullets {
 			clean := sanitizePresentationText(stripNumericPrefixes(raw))
 			if clean == "" {
+				continue
+			}
+			if containsTranscriptNoiseTag(clean) || isConversationalTranscriptLine(clean) {
 				continue
 			}
 			if idx := strings.Index(clean, ":"); idx > 0 && idx < 32 {
@@ -4241,12 +4260,40 @@ func containsTranscriptNoiseTag(value string) bool {
 	return regexp.MustCompile(`(?i)(?:\[(?:music|applause|laugh(?:ter|s)?|inaudible|silence|noise|sfx)[^\]]*\]|\((?:music|applause|inaudible|silence|noise|sfx)[^\)]*\)|[♪♫])`).MatchString(clean)
 }
 
+func hasImmediateLeadPhraseRepetition(value string) bool {
+	clean := normalizeCompareText(value)
+	if clean == "" {
+		return false
+	}
+	words := strings.Fields(clean)
+	if len(words) < 4 {
+		return false
+	}
+
+	for n := 2; n <= 5; n++ {
+		if len(words) < n*2 {
+			continue
+		}
+		first := strings.Join(words[:n], " ")
+		second := strings.Join(words[n:2*n], " ")
+		if first == second {
+			return true
+		}
+	}
+
+	return false
+}
+
 // isConversationalTranscriptLine detects raw YouTube-style transcript speech
 // that should never appear as structured slide content.
 func isConversationalTranscriptLine(value string) bool {
 	clean := strings.ToLower(strings.TrimSpace(value))
 	if clean == "" {
 		return false
+	}
+
+	if hasImmediateLeadPhraseRepetition(clean) {
+		return true
 	}
 
 	if regexp.MustCompile(`(?i)\b(?:translator|reviewer|subtitle|caption|speaker)\s*:`).MatchString(clean) {
@@ -4289,6 +4336,27 @@ func isConversationalTranscriptLine(value string) bool {
 		"which i have paid", "which i paid",
 		"we're finally going", "we are finally going",
 		"out the way before",
+		"it feels good to be back",
+		"our lovely listeners",
+		"in this series",
+		"have fun learning english",
+		"for this episode",
+		"free pdf",
+		"vocabulary and helpful tips",
+		"in the next part",
+		"all opinions are welcome",
+		"and now, are",
+		"that's a great idea",
+		"do any of you",
+		"i do the same",
+		"let's also talk about",
+		"and let's not forget",
+		"these small actions really",
+		"you just need to",
+		"let's try to buy",
+		"it's easy, and now",
+		"it is easy, and now",
+		"thanks, ben and nadia",
 	}
 	for _, phrase := range casualPhrases {
 		if strings.Contains(clean, phrase) {
@@ -4297,7 +4365,7 @@ func isConversationalTranscriptLine(value string) bool {
 	}
 
 	// Detect first-person casual address patterns.
-	casualPatterns := regexp.MustCompile(`(?i)^(?:if everyone|before we|we have chad|we're finally|the long[- ]awaited|[a-z]+\s+(?:emphasized|said|noted|mentioned|explained|stated)\s+that)`)
+	casualPatterns := regexp.MustCompile(`(?i)^(?:if everyone|before we|we have chad|we're finally|the long[- ]awaited|in this series|for this episode|in the next part|do any of you|all opinions are welcome|[a-z]+\s+(?:emphasized|said|noted|mentioned|explained|stated)\s+that)`)
 	if casualPatterns.MatchString(clean) {
 		return true
 	}
@@ -5455,6 +5523,9 @@ func normalizePresentationBullet(value string, maxWords int) string {
 	value = regexp.MustCompile(`(?i)^\s*(?:(?:key\s*)?(?:point|takeaway|insight|step|item)\s*\d+\s*[:.)-]?\s*)`).ReplaceAllString(value, "")
 	value = regexp.MustCompile(`(?i)^\s*(?:(?:\(?\d{1,2}\)?|[ivxlcdm]{1,5})\s*(?:[).:-]|-\s)\s*|[-*•]+\s*)`).ReplaceAllString(value, "")
 	value = sanitizePresentationText(value)
+	if value != "" && isConversationalTranscriptLine(value) {
+		return ""
+	}
 	value = strings.TrimRight(value, " .;:!?")
 	if value == "" {
 		return ""
