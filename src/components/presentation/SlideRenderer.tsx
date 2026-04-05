@@ -1253,6 +1253,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       if ((variant === 'flow_arrows' || flowArrowBullets.length >= 3) && flowArrowItems.length >= 3) {
         const arrowCount = Math.min(3, flowArrowItems.length)
         const arrows = flowArrowItems.slice(0, arrowCount)
+        const flowStartOffset = slide.subtitle ? s(118) : s(138)
 
         return (
           <div style={baseStyle}>
@@ -1295,7 +1296,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
 
               <div
                 style={{
-                  marginTop: s(42),
+                  marginTop: flowStartOffset,
                   display: 'grid',
                   gap: s(20),
                   alignContent: 'start',
