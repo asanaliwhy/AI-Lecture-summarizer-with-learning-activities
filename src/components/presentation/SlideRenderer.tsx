@@ -1038,7 +1038,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
 
               <div
                 style={{
-                  marginTop: s(18),
+                  marginTop: slide.subtitle ? s(62) : s(82),
                   minHeight: 0,
                   position: 'relative',
                   padding: `${s(6)}px 0 ${s(6)}px`,
