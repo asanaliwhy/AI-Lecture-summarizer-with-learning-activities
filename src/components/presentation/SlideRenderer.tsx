@@ -15,7 +15,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import type { Slide, SlideColumn, ThemeConfig } from '../../lib/presentationTypes'
+import type { Slide, SlideColumn, SlideStat, ThemeConfig } from '../../lib/presentationTypes'
 
 export const PRESENTATION_CANVAS_WIDTH = 1366
 export const PRESENTATION_CANVAS_HEIGHT = 768
@@ -461,6 +461,56 @@ function statsGridColumns(count: number): string {
   if (count === 3) return 'repeat(2, 1fr)'
   if (count === 4) return 'repeat(2, 1fr)'
   return 'repeat(3, 1fr)'
+}
+
+function withMinimumStatsCards(stats: SlideStat[]): SlideStat[] {
+  const clean = (Array.isArray(stats) ? stats : [])
+    .filter((item) => item && String(item.value || '').trim() && String(item.label || '').trim())
+    .slice(0, 6)
+
+  if (clean.length !== 3) return clean
+
+  const years = clean
+    .map((item) => String(item.value || '').trim().match(/\b(19|20)\d{2}\b/)?.[0])
+    .filter((value): value is string => Boolean(value))
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value))
+
+  if (years.length >= 2) {
+    const minYear = Math.min(...years)
+    const maxYear = Math.max(...years)
+    const span = maxYear - minYear
+    if (span > 0) {
+      return [
+        ...clean,
+        {
+          value: `${span} Years`,
+          label: 'TIMELINE SPAN',
+          description: 'Duration between earliest and latest milestone, showing pacing and escalation across the timeline.',
+        },
+      ]
+    }
+  }
+
+  if (clean.some((item) => String(item.value || '').includes('%'))) {
+    return [
+      ...clean,
+      {
+        value: '100%',
+        label: 'REFERENCE BASELINE',
+        description: 'Full-scale reference used to interpret percentage metrics and compare constrained resource proportions.',
+      },
+    ]
+  }
+
+  return [
+    ...clean,
+    {
+      value: `${clean.length + 1} Metrics`,
+      label: 'COVERAGE SCOPE',
+      description: 'Additional indicator keeps the panel balanced and improves comparative readability across metrics.',
+    },
+  ]
 }
 
 function summaryIconTone(token: string, theme: ThemeConfig): { background: string; border: string } {
@@ -2108,6 +2158,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
 
     case 'stats': {
       const imagePosition = getImagePosition(slide)
+      const displayStats = withMinimumStatsCards(stats)
       return (
         <div style={baseStyle}>
           {renderDecor()}
@@ -2152,12 +2203,12 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                 style={{
                   flex: 1,
                   display: 'grid',
-                  gridTemplateColumns: statsGridColumns(Math.min(stats.length, 6)),
+                  gridTemplateColumns: statsGridColumns(Math.min(displayStats.length, 6)),
                   gridAutoRows: '1fr',
                   gap: s(12),
                 }}
               >
-                {stats.slice(0, 6).map((stat, index) => (
+                {displayStats.slice(0, 6).map((stat, index) => (
                   <div
                     key={index}
                     style={{

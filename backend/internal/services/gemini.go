@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -2628,10 +2629,8 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 		}
 
 		slides[i].Stats = normalizePresentationStats(slides[i].Stats, 6)
-		if slideType == "stats" && len(slides[i].Stats) < 3 {
-			statsFromBullets := extractStatsFromBullets(append(append([]string{}, slides[i].Bullets...), splitPresentationSentences(transcript)...))
-			combined := append(slides[i].Stats, statsFromBullets...)
-			slides[i].Stats = normalizePresentationStats(combined, 6)
+		if slideType == "stats" {
+			ensureMinimumStatsCount(&slides[i], transcript, 4)
 		}
 
 		if strings.TrimSpace(slides[i].SpeakerNotes) == "" {
@@ -2677,6 +2676,9 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 			ensureDefaultContentPayload(&slides[i], transcript)
 		}
 		slides[i].Stats = normalizePresentationStats(slides[i].Stats, 6)
+		if slideType == "stats" {
+			ensureMinimumStatsCount(&slides[i], transcript, 4)
+		}
 	}
 }
 
@@ -4335,6 +4337,120 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 	}
 
 	return out
+}
+
+func statPairExists(stats []models.PresentationStat, value, label string) bool {
+	key := normalizeCompareText(sanitizePresentationText(value) + "|" + sanitizePresentationText(label))
+	if key == "" {
+		return false
+	}
+	for _, stat := range stats {
+		existing := normalizeCompareText(sanitizePresentationText(stat.Value) + "|" + sanitizePresentationText(stat.Label))
+		if existing == key {
+			return true
+		}
+	}
+	return false
+}
+
+func synthesizeSupplementalStat(existing []models.PresentationStat, title, subtitle string) (models.PresentationStat, bool) {
+	years := make([]int, 0, 4)
+	hasPercent := false
+	for _, stat := range existing {
+		value := strings.TrimSpace(strings.ToLower(stat.Value))
+		if m := regexp.MustCompile(`\b(19|20)\d{2}\b`).FindString(value); m != "" {
+			if year, err := strconv.Atoi(m); err == nil {
+				years = append(years, year)
+			}
+		}
+		if strings.Contains(value, "%") {
+			hasPercent = true
+		}
+	}
+
+	if len(years) >= 2 {
+		minYear, maxYear := years[0], years[0]
+		for _, y := range years[1:] {
+			if y < minYear {
+				minYear = y
+			}
+			if y > maxYear {
+				maxYear = y
+			}
+		}
+		span := maxYear - minYear
+		if span > 0 {
+			value := fmt.Sprintf("%d Years", span)
+			label := "Timeline Span"
+			if !statPairExists(existing, value, label) {
+				description := normalizeStatDescription(fmt.Sprintf("Timeline Span of %d years captures the duration between key events and helps compare pacing, escalation, and long horizon strategic impact.", span))
+				if description == "" {
+					description = ensureTrailingDot("This span captures event duration and supports comparison of pacing, escalation, and strategic impact over time")
+				}
+				return models.PresentationStat{Value: value, Label: label, Description: description}, true
+			}
+		}
+	}
+
+	if hasPercent {
+		value := "100%"
+		label := "Reference Baseline"
+		if !statPairExists(existing, value, label) {
+			description := normalizeStatDescription("Reference Baseline defines the full proportion used to interpret percentage metrics consistently and evaluate tradeoffs across constrained resource categories.")
+			if description == "" {
+				description = ensureTrailingDot("This baseline provides full-scale context for interpreting percentage metrics and comparing constrained resource tradeoffs")
+			}
+			return models.PresentationStat{Value: value, Label: label, Description: description}, true
+		}
+	}
+
+	value := fmt.Sprintf("%d Metrics", len(existing)+1)
+	label := "Coverage Scope"
+	if !statPairExists(existing, value, label) {
+		subject := firstNonEmpty(title, subtitle, "Topic")
+		description := normalizeStatDescription(fmt.Sprintf("Coverage Scope extends %s with an additional quantified indicator to complete the comparative metric panel for decision making.", subject))
+		if description == "" {
+			description = ensureTrailingDot("Additional indicator extends coverage to complete the comparative metric panel for reliable decision making")
+		}
+		return models.PresentationStat{Value: value, Label: label, Description: description}, true
+	}
+
+	return models.PresentationStat{}, false
+}
+
+func ensureMinimumStatsCount(slide *models.PresentationSlide, transcript string, minItems int) {
+	if slide == nil || minItems <= 0 {
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(slide.Type), "stats") {
+		return
+	}
+
+	stats := normalizePresentationStats(slide.Stats, 6)
+	if len(stats) >= minItems {
+		slide.Stats = stats
+		return
+	}
+
+	source := append([]string{}, slide.Bullets...)
+	seed := strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), pointerStringValue(slide.Body), slide.SpeakerNotes, transcript}, " ")
+	source = append(source, splitPresentationSentences(seed)...)
+	extra := extractStatsFromBullets(source)
+	stats = normalizePresentationStats(append(stats, extra...), 6)
+
+	for len(stats) < minItems {
+		candidate, ok := synthesizeSupplementalStat(stats, slide.Title, pointerStringValue(slide.Subtitle))
+		if !ok {
+			break
+		}
+		before := len(stats)
+		stats = normalizePresentationStats(append(stats, candidate), 6)
+		if len(stats) <= before {
+			break
+		}
+	}
+
+	slide.Stats = stats
 }
 
 func firstNonEmpty(values ...string) string {
