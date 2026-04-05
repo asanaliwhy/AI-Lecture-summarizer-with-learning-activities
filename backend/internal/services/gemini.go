@@ -2281,10 +2281,10 @@ func buildPresentationPrompt(config models.GeneratePresentationRequest, transcri
 	b.WriteString("  * variant='feature_trio': exactly 3 feature cards. Encode each bullet as 'FEATURE: icon || Title || Description' or 'CARD: Title || Description'. Description should be one complete sentence around 15 words (target 13-17), never clipped.\n")
 	b.WriteString("  * variant='comparison_table': use tabular comparisons. Provide tableHeaders and tableRows, or encode bullets as 'HEADER: Col1 || Col2 || Col3' and 'ROW: v1 || v2 || v3'. Include 4-5 data rows. Set imageQuery to null for this variant.\n")
 	b.WriteString("  * variant='flow_arrows': use exactly 3 sequential arrows. Encode each bullet as 'FLOW: N || Title || Description'. Title must be 2-4 words; description should be one complete sentence around 12-18 words. Set imageQuery to null for this variant.\n")
-	b.WriteString("- two_column slide: comparison only. Each column must have 3-5 items. Each item MUST be a full sentence of 12-25 words — not a short phrase or fragment. One sentence states the fact, optionally a second states the consequence. Column items are sentences, not bullets.\n")
-	b.WriteString("- stats slide: include 3-6 stats entries (value + label + description), values must come from transcript.\n")
+	b.WriteString("- two_column slide: comparison only. Each column must have 3-5 items. Each item MUST be a full sentence of 12-25 words — not a short phrase or fragment. One sentence states the fact, optionally a second states the consequence. Column items are sentences, not bullets. Never include self-referential lines about the slide itself.\n")
+	b.WriteString("- stats slide: include 3-6 stats entries (value + label + description), values must come from transcript. Description must directly explain what the value represents in plain factual language tied to the specific stat. Never use generic management/business wording. Example: for '78% Nitrogen', explain nitrogen specifically.\n")
 	b.WriteString("- prose slide: no bullets. body must contain 2-3 paragraphs of 25-45 words each separated by newlines. Paragraph 1: specific context or problem with a concrete claim. Paragraph 2: mechanism, solution, or key insight. Paragraph 3 (optional): implication or significance. Never one-sentence paragraphs. Never restate the slide title.\n")
-	b.WriteString("- summary slide: prefer variant='summary_icons'. Use exactly 4 takeaways for medium/large decks; 3-4 for short decks. Each takeaway needs a title (2-4 words), a concise description around 15 words (target 13-17), and an icon token. Make the summary feel like an icon-led takeaway grid, not a document paragraph.\n")
+	b.WriteString("- summary slide: prefer variant='summary_icons'. Use exactly 4 takeaways for medium/large decks; 3-4 for short decks. Each takeaway needs a title (2-4 words), a concise description around 15 words (target 13-17), and an icon token. Description must add new information and MUST NOT start with the same lead verb/word as the title. Make the summary feel like an icon-led takeaway grid, not a document paragraph.\n")
 	b.WriteString("- Keep title and subtitle concise: title <= 9 words, subtitle <= 14 words.\n")
 	b.WriteString("- Bullets must be 6-10 words and communicate a complete idea. Never under 5 words; never over 12 words.\n")
 	b.WriteString("- Do not end bullets with periods.\n")
@@ -2733,6 +2733,8 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 			ensureMinimumStatsCount(&slides[i], transcript, 4)
 		}
 	}
+
+	enforceStatsValueDedupAcrossDeck(slides, transcript)
 }
 
 func maxBulletsForSlideType(slideType string) int {
@@ -2905,16 +2907,16 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 	right = normalizePresentationPhrases(right, 4, 20)
 
 	leftFallback := []string{
-		"Operational constraints and baseline conditions shape implementation choices",
-		"Resource availability and infrastructure readiness influence expected outcomes",
-		"Stakeholder coordination requirements determine adoption speed and consistency",
-		"Monitoring and governance practices stabilize long term execution quality",
+		"Conventional practices often increase resource use and long term environmental pressure in daily operations.",
+		"Legacy systems can lock households into higher costs and lower efficiency over time.",
+		"Dependence on outdated habits tends to amplify waste, pollution, and avoidable maintenance burden.",
+		"Without targeted upgrades, performance remains stagnant and resilience to future demand stays weak.",
 	}
 	rightFallback := []string{
-		"Measured benefits include reduced waste and improved system efficiency over time",
-		"Observable impacts include cost stabilization and stronger service reliability",
-		"Adoption outcomes improve when training and communication remain continuous",
-		"Sustained optimization leads to resilient performance under changing conditions",
+		"Targeted upgrades reduce waste and improve efficiency while keeping daily usage practical for households.",
+		"Adopting cleaner alternatives lowers emissions and supports healthier local environmental conditions.",
+		"Sustainable actions improve reliability and reduce long term costs through better resource management.",
+		"Consistent conservation habits create measurable benefits that compound across communities over time.",
 	}
 	for i := 0; len(left) < targetMin && i < len(leftFallback); i++ {
 		left = append(left, leftFallback[i])
@@ -2980,6 +2982,39 @@ func inferTakeawayIcon(title, description string) string {
 	}
 }
 
+func leadingAlphaToken(value string) string {
+	clean := strings.ToLower(strings.TrimSpace(value))
+	clean = regexp.MustCompile(`^[^a-z0-9]+|[^a-z0-9]+$`).ReplaceAllString(clean, "")
+	words := strings.Fields(clean)
+	if len(words) == 0 {
+		return ""
+	}
+	return words[0]
+}
+
+func ensureSummaryDescriptionDistinct(title, description string) string {
+	description = sanitizePresentationText(description)
+	if description == "" {
+		return ""
+	}
+
+	titleLead := leadingAlphaToken(title)
+	descLead := leadingAlphaToken(description)
+	if titleLead != "" && descLead != "" && titleLead == descLead {
+		words := strings.Fields(description)
+		if len(words) > 1 {
+			description = strings.TrimSpace(strings.Join(words[1:], " "))
+			description = strings.TrimLeft(description, " ,;:.-")
+		}
+	}
+
+	description = strings.TrimSpace(description)
+	if description == "" {
+		return ""
+	}
+	return ensureTrailingDot(description)
+}
+
 func buildSummaryTakeaways(slide *models.PresentationSlide) []models.PresentationTakeaway {
 	if slide == nil {
 		return []models.PresentationTakeaway{}
@@ -3007,8 +3042,12 @@ func buildSummaryTakeaways(slide *models.PresentationSlide) []models.Presentatio
 			description = title
 		}
 		description = normalizeFeatureDescriptionSentence(description)
+		description = ensureSummaryDescriptionDistinct(title, description)
 		if description == "" {
-			description = normalizeFeatureDescriptionSentence(title + " with practical implementation and measurable impact for people and systems")
+			description = ensureSummaryDescriptionDistinct(title, normalizeFeatureDescriptionSentence(title+" with practical implementation and measurable impact for people and systems"))
+		}
+		if description == "" {
+			description = ensureTrailingDot("Use a concrete action that delivers practical benefits for people and systems")
 		}
 		items = append(items, models.PresentationTakeaway{
 			Title:       title,
@@ -4186,6 +4225,13 @@ func isTwoColumnMetaItem(value string) bool {
 		"as discussed",
 		"as mentioned",
 		"the problems discussed",
+		"simple ways to contribute",
+		"it starts with how",
+		"not just about large-scale",
+		"we can take",
+		"operational constraints",
+		"baseline conditions",
+		"implementation choices",
 	}
 	for _, phrase := range metaPhrases {
 		if strings.Contains(clean, phrase) {
@@ -4193,8 +4239,37 @@ func isTwoColumnMetaItem(value string) bool {
 		}
 	}
 
+	if regexp.MustCompile(`(?i)\b(?:a\s+profound|a\s+significant|a\s+major|a\s+critical)\s*$`).MatchString(strings.TrimSpace(value)) {
+		return true
+	}
+
 	if regexp.MustCompile(`(?i)^[A-Z][a-z]+\s+(?:emphasized|said|noted|mentioned|explained|stated)\s+that`).MatchString(strings.TrimSpace(value)) {
 		return true
+	}
+
+	return false
+}
+
+func isGenericBusinessFillerText(value string) bool {
+	clean := strings.ToLower(strings.TrimSpace(value))
+	if clean == "" {
+		return false
+	}
+
+	fillerPhrases := []string{
+		"evaluate tradeoffs",
+		"set realistic targets",
+		"monitor progress",
+		"operational safeguards",
+		"coordinated actions",
+		"implementation choices",
+		"operational constraints",
+		"baseline conditions",
+	}
+	for _, phrase := range fillerPhrases {
+		if strings.Contains(clean, phrase) {
+			return true
+		}
 	}
 
 	return false
@@ -4212,6 +4287,9 @@ func isStatFirstPersonLeak(value string) bool {
 		"join me",
 		"i am",
 		"i'm",
+		"i started",
+		"i have",
+		"i was",
 		"by me",
 	}
 	for _, phrase := range leakPhrases {
@@ -4282,6 +4360,9 @@ func normalizeStatDescription(value string) string {
 	if description == "" {
 		return ""
 	}
+	if isGenericBusinessFillerText(description) {
+		return ""
+	}
 	if isStatFirstPersonLeak(description) {
 		return ""
 	}
@@ -4304,7 +4385,7 @@ func normalizeStatDescription(value string) string {
 		chosen := make([]string, 0, 2)
 		for _, sentence := range sentences {
 			candidate := sanitizePresentationText(sentence)
-			if candidate == "" || containsTranscriptNoiseTag(candidate) || isConversationalTranscriptLine(candidate) || isStatFirstPersonLeak(candidate) {
+			if candidate == "" || containsTranscriptNoiseTag(candidate) || isConversationalTranscriptLine(candidate) || isStatFirstPersonLeak(candidate) || isGenericBusinessFillerText(candidate) {
 				continue
 			}
 			chosen = append(chosen, candidate)
@@ -4447,6 +4528,7 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 	for _, stat := range stats {
 		value := sanitizePresentationText(stat.Value)
 		label := normalizeStatLabel(stat.Label)
+		rawDescription := sanitizePresentationText(stat.Description)
 		description := normalizeStatDescription(stat.Description)
 
 		if containsTranscriptNoiseTag(stat.Label) || containsTranscriptNoiseTag(stat.Description) || isConversationalTranscriptLine(stat.Label) || isConversationalTranscriptLine(stat.Description) || isStatMetadataText(stat.Label) || isStatMetadataText(stat.Description) {
@@ -4455,11 +4537,11 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 		if value == "" || label == "" || !statValueLooksNumeric(value) {
 			continue
 		}
-		if description == "" {
+		if description == "" && !isGenericBusinessFillerText(rawDescription) {
 			description = buildStatDescriptionFallback(label, value)
 		}
-		if description == "" || isStatFirstPersonLeak(description) {
-			continue
+		if description != "" && (isStatFirstPersonLeak(description) || isGenericBusinessFillerText(description)) {
+			description = ""
 		}
 
 		descKey := normalizeCompareText(description)
@@ -4606,6 +4688,67 @@ func ensureMinimumStatsCount(slide *models.PresentationSlide, transcript string,
 	}
 
 	slide.Stats = stats
+}
+
+func enforceStatsValueDedupAcrossDeck(slides []models.PresentationSlide, transcript string) {
+	if len(slides) == 0 {
+		return
+	}
+
+	seenValues := map[string]struct{}{}
+
+	for i := range slides {
+		if !strings.EqualFold(strings.TrimSpace(slides[i].Type), "stats") {
+			continue
+		}
+
+		base := normalizePresentationStats(slides[i].Stats, 4)
+		filtered := make([]models.PresentationStat, 0, len(base))
+		localSeen := map[string]struct{}{}
+		for _, stat := range base {
+			key := normalizeCompareText(stat.Value)
+			if key == "" {
+				continue
+			}
+			if _, exists := seenValues[key]; exists {
+				continue
+			}
+			if _, exists := localSeen[key]; exists {
+				continue
+			}
+			localSeen[key] = struct{}{}
+			filtered = append(filtered, stat)
+		}
+
+		slides[i].Stats = filtered
+		ensureMinimumStatsCount(&slides[i], transcript, 4)
+
+		finalStats := normalizePresentationStats(slides[i].Stats, 4)
+		final := make([]models.PresentationStat, 0, len(finalStats))
+		localSeen = map[string]struct{}{}
+		for _, stat := range finalStats {
+			key := normalizeCompareText(stat.Value)
+			if key == "" {
+				continue
+			}
+			if _, exists := seenValues[key]; exists {
+				continue
+			}
+			if _, exists := localSeen[key]; exists {
+				continue
+			}
+			localSeen[key] = struct{}{}
+			final = append(final, stat)
+		}
+
+		slides[i].Stats = final
+		for _, stat := range final {
+			key := normalizeCompareText(stat.Value)
+			if key != "" {
+				seenValues[key] = struct{}{}
+			}
+		}
+	}
 }
 
 func firstNonEmpty(values ...string) string {
@@ -5330,10 +5473,13 @@ func extractStatsFromBullets(bullets []string) []models.PresentationStat {
 			continue
 		}
 		description := normalizeStatDescription(clean)
-		if description == "" {
+		if description == "" && !isGenericBusinessFillerText(clean) {
 			description = buildStatDescriptionFallback(label, match)
 		}
-		if description == "" || isStatFirstPersonLeak(description) || !statValueLooksNumeric(match) {
+		if description != "" && (isStatFirstPersonLeak(description) || isGenericBusinessFillerText(description)) {
+			description = ""
+		}
+		if !statValueLooksNumeric(match) {
 			continue
 		}
 

@@ -392,8 +392,17 @@ function isTwoColumnMetaItem(value: string): boolean {
     'as discussed',
     'as mentioned',
     'the problems discussed',
+    'simple ways to contribute',
+    'it starts with how',
+    'not just about large-scale',
+    'we can take',
+    'operational constraints',
+    'baseline conditions',
+    'implementation choices',
   ]
   if (phrases.some((phrase) => text.includes(phrase))) return true
+
+  if (/\b(?:a\s+profound|a\s+significant|a\s+major|a\s+critical)\s*$/i.test(raw)) return true
 
   if (/^[A-Z][a-z]+\s+(?:emphasized|said|noted|mentioned|explained|stated)\s+that/.test(raw)) return true
 
@@ -484,6 +493,24 @@ function statsGridColumns(count: number): string {
 }
 
 function withMinimumStatsCards(stats: SlideStat[]): SlideStat[] {
+  const isGenericBusinessFiller = (value: string) => {
+    const clean = String(value || '').toLowerCase().trim()
+    if (!clean) return false
+    const fillerPhrases = [
+      'evaluate tradeoffs',
+      'set realistic targets',
+      'monitor progress',
+      'operational safeguards',
+      'coordinated actions',
+      'implementation choices',
+      'operational constraints',
+      'baseline conditions',
+      'anchors decision context',
+      'provides a concrete benchmark',
+    ]
+    return fillerPhrases.some((phrase) => clean.includes(phrase))
+  }
+
   const isNoisyStatText = (value: string) => {
     const clean = String(value || '').toLowerCase().trim()
     if (!clean) return true
@@ -499,6 +526,10 @@ function withMinimumStatsCards(stats: SlideStat[]): SlideStat[] {
     .filter((item) => item && String(item.value || '').trim() && String(item.label || '').trim())
     .filter((item) => hasNumericValue(String(item.value || '')))
     .filter((item) => !isNoisyStatText(String(item.label || '')) && !isNoisyStatText(String(item.description || '')))
+    .map((item) => ({
+      ...item,
+      description: isGenericBusinessFiller(String(item.description || '')) ? '' : item.description,
+    }))
     .slice(0, 4)
 
   if (clean.length !== 3) return clean
