@@ -1966,7 +1966,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         overflow: 'hidden',
                       }}
                     >
-                      {col.items.slice(0, 6).map((item, itemIndex) => (
+                      {col.items.slice(0, 4).map((item, itemIndex) => (
                         <div
                           key={itemIndex}
                           style={{

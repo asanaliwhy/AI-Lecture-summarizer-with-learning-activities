@@ -2585,8 +2585,8 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 			}
 		}
 
-		slides[i].LeftColumn = normalizePresentationPhrases(slides[i].LeftColumn, 5, 18)
-		slides[i].RightColumn = normalizePresentationPhrases(slides[i].RightColumn, 5, 18)
+		slides[i].LeftColumn = normalizePresentationPhrases(slides[i].LeftColumn, 4, 24)
+		slides[i].RightColumn = normalizePresentationPhrases(slides[i].RightColumn, 4, 24)
 		for c := range slides[i].Columns {
 			slides[i].Columns[c].Label = sanitizePresentationText(slides[i].Columns[c].Label)
 			slides[i].Columns[c].Items = normalizePresentationPhrases(slides[i].Columns[c].Items, 5, 18)
@@ -2801,11 +2801,11 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 		}
 	}
 
-	left = normalizePresentationPhrases(left, 5, 18)
-	right = normalizePresentationPhrases(right, 5, 18)
+	left = normalizePresentationPhrases(left, 4, 24)
+	right = normalizePresentationPhrases(right, 4, 24)
 
 	seed := strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), slide.SpeakerNotes, transcript}, " ")
-	extra := buildCompactBulletsFromText(seed, 8, 18)
+	extra := buildCompactBulletsFromText(seed, 8, 24)
 	extraIdx := 0
 	targetMin := 4
 	for (len(left) < targetMin || len(right) < targetMin) && extraIdx < len(extra) {
@@ -2821,8 +2821,8 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 		}
 	}
 
-	left = normalizePresentationPhrases(left, 5, 18)
-	right = normalizePresentationPhrases(right, 5, 18)
+	left = normalizePresentationPhrases(left, 4, 24)
+	right = normalizePresentationPhrases(right, 4, 24)
 
 	leftFallback := []string{
 		"Operational constraints and baseline conditions shape implementation choices",
@@ -2843,8 +2843,8 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 		right = append(right, rightFallback[i])
 	}
 
-	left = normalizePresentationPhrases(left, 5, 18)
-	right = normalizePresentationPhrases(right, 5, 18)
+	left = normalizePresentationPhrases(left, 4, 24)
+	right = normalizePresentationPhrases(right, 4, 24)
 
 	if len(left) == 0 {
 		left = []string{"Core mechanisms and enabling factors are outlined for this side of the comparison"}
@@ -3975,7 +3975,7 @@ func containsTranscriptNoiseTag(value string) bool {
 	if clean == "" {
 		return false
 	}
-	return regexp.MustCompile(`(?i)\[(?:music|applause|laugh(?:ter|s)?|inaudible|silence|noise|sfx)[^\]]*\]`).MatchString(clean)
+	return regexp.MustCompile(`(?i)(?:\[(?:music|applause|laugh(?:ter|s)?|inaudible|silence|noise|sfx)[^\]]*\]|\((?:music|applause|inaudible|silence|noise|sfx)[^\)]*\)|[♪♫])`).MatchString(clean)
 }
 
 func normalizeStatLabel(value string) string {
@@ -4671,6 +4671,9 @@ func normalizePresentationBullet(value string, maxWords int) string {
 	if value == "" {
 		return ""
 	}
+	if containsTranscriptNoiseTag(value) {
+		return ""
+	}
 
 	if isNumberedCardEncodedBullet(value) {
 		return normalizeNumberedCardBullet(value)
@@ -5057,8 +5060,8 @@ func enforcePresentationTypeVariety(slides []models.PresentationSlide) {
 					right = append(right, bullet)
 				}
 			}
-			slides[i].LeftColumn = normalizePresentationPhrases(left, 5, 18)
-			slides[i].RightColumn = normalizePresentationPhrases(right, 5, 18)
+			slides[i].LeftColumn = normalizePresentationPhrases(left, 4, 24)
+			slides[i].RightColumn = normalizePresentationPhrases(right, 4, 24)
 			if slides[i].LeftLabel == nil {
 				leftLabel := "Key Drivers"
 				slides[i].LeftLabel = &leftLabel
