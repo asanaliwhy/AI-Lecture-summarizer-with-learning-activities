@@ -3763,6 +3763,43 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 		return
 	}
 
+	titleNorm := normalizeCompareText(slide.Title)
+	subtitleNorm := normalizeCompareText(pointerStringValue(slide.Subtitle))
+
+	isMetaOrLeakRow := func(cells []string) bool {
+		if len(cells) < 2 {
+			return true
+		}
+		joined := sanitizePresentationText(strings.Join(cells, " "))
+		if joined == "" || containsTranscriptNoiseTag(joined) {
+			return true
+		}
+
+		joinedNorm := normalizeCompareText(joined)
+		if joinedNorm == "" {
+			return true
+		}
+
+		metaPhrases := []string{
+			"this table", "table outlines", "table summar", "table presents", "table shows", "the following table",
+			"overview of", "evaluation of", "evaluating different methods",
+		}
+		for _, phrase := range metaPhrases {
+			if strings.Contains(joinedNorm, phrase) {
+				return true
+			}
+		}
+
+		if subtitleNorm != "" && (strings.Contains(joinedNorm, subtitleNorm) || strings.Contains(subtitleNorm, joinedNorm)) {
+			return true
+		}
+		if titleNorm != "" && strings.Contains(joinedNorm, titleNorm) {
+			return true
+		}
+
+		return false
+	}
+
 	headers := append([]string{}, slide.TableHeaders...)
 	rows := make([][]string, 0, len(slide.TableRows)+len(slide.Bullets))
 	for _, row := range slide.TableRows {
@@ -3776,7 +3813,7 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 				break
 			}
 		}
-		if len(clean) >= 2 {
+		if len(clean) >= 2 && !isMetaOrLeakRow(clean) {
 			rows = append(rows, clean)
 		}
 	}
@@ -3788,7 +3825,7 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 				continue
 			}
 		}
-		if parsedRow := parseComparisonRowFromBullet(bullet); len(parsedRow) >= 2 {
+		if parsedRow := parseComparisonRowFromBullet(bullet); len(parsedRow) >= 2 && !isMetaOrLeakRow(parsedRow) {
 			rows = append(rows, parsedRow)
 		}
 	}
@@ -3802,7 +3839,10 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 				headers = []string{firstNonEmpty(slide.Columns[0].Label, pointerStringValue(slide.LeftLabel), "Left"), firstNonEmpty(slide.Columns[1].Label, pointerStringValue(slide.RightLabel), "Right")}
 			}
 			for i := 0; i < maxRows; i++ {
-				rows = append(rows, []string{firstNonEmpty(getSliceItem(leftItems, i), "-"), firstNonEmpty(getSliceItem(rightItems, i), "-")})
+				candidate := []string{firstNonEmpty(getSliceItem(leftItems, i), "-"), firstNonEmpty(getSliceItem(rightItems, i), "-")}
+				if !isMetaOrLeakRow(candidate) {
+					rows = append(rows, candidate)
+				}
 			}
 		}
 	}
@@ -3860,8 +3900,6 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 	targetRows := 5
 	if len(normalizedRows) < targetRows {
 		seed := strings.Join([]string{
-			pointerStringValue(slide.Subtitle),
-			pointerStringValue(slide.Body),
 			slide.SpeakerNotes,
 			strings.Join(slide.LeftColumn, " "),
 			strings.Join(slide.RightColumn, " "),
@@ -3878,6 +3916,9 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 			}
 			for len(row) < columnCount {
 				row = append(row, "-")
+			}
+			if isMetaOrLeakRow(row) {
+				continue
 			}
 			key := normalizeCompareText(strings.Join(row, "|"))
 			if key == "" {
