@@ -2148,7 +2148,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     </div>
                     <div
                       style={{
-                        marginTop: s(14),
+                        marginTop: s(9),
                         fontSize: fs(20),
                         color: theme.subtext,
                         textTransform: 'uppercase',
@@ -2161,7 +2161,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     {stat.description && (
                       <div
                         style={{
-                          marginTop: s(24),
+                          marginTop: s(12),
                           fontSize: fs(19),
                           color: theme.subtext,
                           lineHeight: 1.4,
