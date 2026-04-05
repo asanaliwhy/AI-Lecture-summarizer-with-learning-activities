@@ -2524,11 +2524,24 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 
 		title := sanitizePresentationText(slides[i].Title)
 		title = stripSlideIndexArtifact(title, slides[i].Index)
+		if isConversationalTranscriptLine(title) {
+			title = ""
+		}
+		if title == "" {
+			title = firstNonEmpty(pointerStringValue(slides[i].Subtitle), "Key Insight")
+			title = sanitizePresentationText(title)
+			if isConversationalTranscriptLine(title) {
+				title = "Key Insight"
+			}
+		}
 		slides[i].Title = title
 
 		if slides[i].Subtitle != nil {
 			subtitle := sanitizePresentationText(*slides[i].Subtitle)
 			subtitle = stripSlideIndexArtifact(subtitle, slides[i].Index)
+			if subtitle != "" && isConversationalTranscriptLine(subtitle) {
+				subtitle = ""
+			}
 			if subtitle == "" || isSubtitleRedundant(title, subtitle) {
 				slides[i].Subtitle = nil
 			} else {
@@ -4048,6 +4061,26 @@ func isConversationalTranscriptLine(value string) bool {
 	if clean == "" {
 		return false
 	}
+
+	if regexp.MustCompile(`(?i)\b(?:translator|reviewer|subtitle|caption|speaker)\s*:`).MatchString(clean) {
+		return true
+	}
+	if regexp.MustCompile(`(?i)^key\s*(?:point|takeaway|insight|step|item)\s*\d+\b`).MatchString(clean) {
+		return true
+	}
+	if regexp.MustCompile(`(?i)^key\s*takeaways?$`).MatchString(clean) {
+		return true
+	}
+	if regexp.MustCompile(`^\d+$`).MatchString(clean) {
+		return true
+	}
+	if regexp.MustCompile(`(?i)^\(?\s*(?:laughter|applause|inaudible|silence|music|noise|sfx)\s*\)?$`).MatchString(clean) {
+		return true
+	}
+	if containsTranscriptNoiseTag(clean) {
+		return true
+	}
+
 	// Casual YouTuber phrases that indicate unprocessed transcript.
 	casualPhrases := []string{
 		"hit that subscribe", "smash that like", "subscribe button",
@@ -4101,7 +4134,8 @@ func normalizeStatDescription(value string) string {
 	if description == "" {
 		return ""
 	}
-	if strings.Contains(strings.ToLower(description), "highlights a critical benchmark that shapes implementation priorities") {
+	lowerDescription := strings.ToLower(description)
+	if strings.Contains(lowerDescription, "highlights a critical benchmark that shapes implementation priorities") || strings.Contains(lowerDescription, "anchors a key benchmark, connecting this milestone") {
 		return ""
 	}
 	if containsTranscriptNoiseTag(description) || isConversationalTranscriptLine(description) {
@@ -4258,7 +4292,7 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 		label := normalizeStatLabel(stat.Label)
 		description := normalizeStatDescription(stat.Description)
 
-		if containsTranscriptNoiseTag(stat.Label) || containsTranscriptNoiseTag(stat.Description) {
+		if containsTranscriptNoiseTag(stat.Label) || containsTranscriptNoiseTag(stat.Description) || isConversationalTranscriptLine(stat.Label) || isConversationalTranscriptLine(stat.Description) {
 			continue
 		}
 		if value == "" || label == "" {
@@ -4892,6 +4926,9 @@ func normalizePresentationBullet(value string, maxWords int) string {
 	if containsTranscriptNoiseTag(value) {
 		return ""
 	}
+	if isConversationalTranscriptLine(value) {
+		return ""
+	}
 
 	if isNumberedCardEncodedBullet(value) {
 		return normalizeNumberedCardBullet(value)
@@ -5008,7 +5045,7 @@ func extractStatsFromBullets(bullets []string) []models.PresentationStat {
 		if clean == "" {
 			continue
 		}
-		if containsTranscriptNoiseTag(clean) {
+		if containsTranscriptNoiseTag(clean) || isConversationalTranscriptLine(clean) {
 			continue
 		}
 		match := numberPattern.FindString(clean)

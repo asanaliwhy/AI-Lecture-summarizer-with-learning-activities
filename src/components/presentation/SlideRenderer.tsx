@@ -247,6 +247,37 @@ function parseComparisonRowBullet(value: string): string[] | null {
 }
 
 function buildComparisonTableData(slide: Slide, bullets: string[], columns: SlideColumn[]): ComparisonTableData | null {
+  const normalizeRowText = (value: string) => String(value || '').toLowerCase().replace(/[^a-z0-9\s]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const titleNorm = normalizeRowText(String(slide.title || ''))
+  const subtitleNorm = normalizeRowText(String(slide.subtitle || ''))
+
+  const isNarrativeLeakRow = (row: string[]) => {
+    if (!Array.isArray(row) || row.length < 2) return true
+    const joined = row.map((cell) => String(cell || '').trim()).filter(Boolean).join(' ').trim()
+    if (!joined) return true
+    const joinedNorm = normalizeRowText(joined)
+    if (!joinedNorm) return true
+
+    const metaPhrases = [
+      'this table',
+      'table outlines',
+      'table summarizes',
+      'table presents',
+      'evaluating different methods',
+      'each method plays',
+      'a unique role in',
+    ]
+    if (metaPhrases.some((phrase) => joinedNorm.includes(phrase))) return true
+    if (titleNorm && joinedNorm.includes(titleNorm)) return true
+    if (subtitleNorm && (joinedNorm.includes(subtitleNorm) || subtitleNorm.includes(joinedNorm))) return true
+
+    const firstCellNorm = normalizeRowText(String(row[0] || ''))
+    if (/^(?:each|this|these|those|our|their|the)\b/.test(firstCellNorm)) return true
+    if (joinedNorm.split(/\s+/).length >= 14 && firstCellNorm.split(/\s+/).length >= 3) return true
+
+    return false
+  }
+
   const directHeaders = Array.isArray(slide.tableHeaders)
     ? slide.tableHeaders.map((cell) => String(cell || '').trim()).filter(Boolean)
     : []
@@ -256,6 +287,7 @@ function buildComparisonTableData(slide: Slide, bullets: string[], columns: Slid
       .filter((row) => Array.isArray(row))
       .map((row) => row.map((cell) => String(cell || '').trim()).filter(Boolean))
       .filter((row) => row.length >= 2)
+      .filter((row) => !isNarrativeLeakRow(row))
     : []
 
   let headers = directHeaders.slice(0, 3)
@@ -270,7 +302,7 @@ function buildComparisonTableData(slide: Slide, bullets: string[], columns: Slid
       }
 
       const parsedRow = parseComparisonRowBullet(bullet)
-      if (parsedRow) rows.push(parsedRow)
+      if (parsedRow && !isNarrativeLeakRow(parsedRow)) rows.push(parsedRow)
     }
   }
 
@@ -280,7 +312,9 @@ function buildComparisonTableData(slide: Slide, bullets: string[], columns: Slid
     const maxRows = Math.min(8, Math.max(leftItems.length, rightItems.length))
     if (maxRows > 0) {
       headers = headers.length > 0 ? headers : [columns[0].label || 'Left', columns[1].label || 'Right']
-      rows = Array.from({ length: maxRows }).map((_, idx) => [leftItems[idx] || '', rightItems[idx] || ''])
+      rows = Array.from({ length: maxRows })
+        .map((_, idx) => [leftItems[idx] || '', rightItems[idx] || ''])
+        .filter((row) => !isNarrativeLeakRow(row))
     }
   }
 
@@ -307,6 +341,7 @@ function buildComparisonTableData(slide: Slide, bullets: string[], columns: Slid
       return normalized
     })
     .filter((row) => row.some((cell) => cell.trim() !== ''))
+    .filter((row) => !isNarrativeLeakRow(row))
     .slice(0, 8)
 
   if (rows.length === 0) return null
