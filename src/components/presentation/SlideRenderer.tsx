@@ -568,6 +568,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         borderBottom: rowIndex < data.rows.length - 1 ? `1px solid ${theme.border}` : undefined,
                         borderRight: colIndex < data.headers.length - 1 ? `1px solid ${theme.border}` : undefined,
                         background: rowIndex % 2 === 0 ? `${theme.surface}7d` : `${theme.surfaceStrong}4a`,
+                        borderBottomLeftRadius: rowIndex === data.rows.length-1 && colIndex === 0 ? s(18) : undefined,
+                        borderBottomRightRadius: rowIndex === data.rows.length-1 && colIndex === data.headers.length-1 ? s(18) : undefined,
                       }}
                     >
                       {cell}
