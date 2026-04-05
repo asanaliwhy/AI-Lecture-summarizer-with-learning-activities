@@ -2610,6 +2610,9 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 		if slideType == "summary" {
 			enrichSummarySlide(&slides[i])
 		}
+		if slideType == "content" {
+			ensureDefaultContentPayload(&slides[i], transcript)
+		}
 
 		slides[i].Stats = normalizePresentationStats(slides[i].Stats, 6)
 		if slideType == "stats" && len(slides[i].Stats) < 3 {
@@ -2656,6 +2659,9 @@ func enforcePresentationTextQuality(slides []models.PresentationSlide, transcrip
 		}
 		if slideType == "summary" {
 			enrichSummarySlide(&slides[i])
+		}
+		if slideType == "content" {
+			ensureDefaultContentPayload(&slides[i], transcript)
 		}
 		slides[i].Stats = normalizePresentationStats(slides[i].Stats, 6)
 	}
@@ -4904,6 +4910,63 @@ func buildCompactBulletsFromText(source string, maxItems, maxWords int) []string
 	}
 
 	return out
+}
+
+func buildDeterministicContentBullets(title, subtitle string) []string {
+	subject := firstNonEmpty(title, subtitle, "Core topic")
+	subject = sanitizePresentationText(subject)
+	subject = firstNWords(subject, 4)
+	if subject == "" {
+		subject = "Core topic"
+	}
+
+	return []string{
+		sanitizePresentationText(subject + " context and key challenge framing"),
+		sanitizePresentationText(subject + " implementation path with practical decisions"),
+		sanitizePresentationText("Expected outcomes and measurable impact for stakeholders"),
+	}
+}
+
+func ensureDefaultContentPayload(slide *models.PresentationSlide, transcript string) {
+	if slide == nil {
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(slide.Type), "content") {
+		return
+	}
+
+	variant := strings.ToLower(strings.TrimSpace(pointerStringValue(slide.Variant)))
+	if variant == "" {
+		variant = "default"
+	}
+	if variant == "feature_trio" || variant == "comparison_table" || variant == "timeline" || variant == "flow_arrows" {
+		return
+	}
+
+	title := sanitizePresentationText(slide.Title)
+	subtitle := pointerStringValue(slide.Subtitle)
+	built := normalizePresentationBullets(slide.Bullets, title, subtitle, 6, 14)
+
+	if len(built) < 2 {
+		source := strings.TrimSpace(strings.Join([]string{title, subtitle, pointerStringValue(slide.Body), slide.SpeakerNotes, transcript}, " "))
+		extra := buildCompactBulletsFromText(source, 4, 10)
+		built = normalizePresentationBullets(append(built, extra...), title, subtitle, 6, 14)
+	}
+
+	if len(built) < 2 {
+		fallback := buildDeterministicContentBullets(title, subtitle)
+		built = normalizePresentationBullets(append(built, fallback...), title, subtitle, 6, 14)
+	}
+
+	if len(built) == 0 {
+		built = []string{
+			"Key context and constraints shaping this topic",
+			"Practical implementation steps for reliable execution",
+			"Expected outcomes and measurable impact for stakeholders",
+		}
+	}
+
+	slide.Bullets = built
 }
 
 func buildSpeakerNotesFromSlide(slide models.PresentationSlide) string {
