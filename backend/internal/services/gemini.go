@@ -2847,6 +2847,84 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 		return
 	}
 
+	actionLeadRe := regexp.MustCompile(`(?i)^\s*(?:switching\s+to|by\s+adopting)\s+`)
+
+	collectEvidenceClaims := func(items []string) []string {
+		claims := make([]string, 0, len(items))
+		for _, item := range items {
+			clean := sanitizePresentationText(stripNumericPrefixes(item))
+			if clean == "" {
+				continue
+			}
+			if isNumberedCardEncodedBullet(clean) {
+				normalized := normalizeNumberedCardBullet(clean)
+				if normalized != "" {
+					body := regexp.MustCompile(`(?i)^num:\s*`).ReplaceAllString(normalized, "")
+					parts := strings.SplitN(body, "||", 3)
+					if len(parts) >= 3 {
+						claims = append(claims, normalizeCompareText(parts[1]), normalizeCompareText(parts[2]))
+						continue
+					}
+				}
+			}
+			if isFlowEncodedBullet(clean) {
+				title, description, ok := parseFlowBullet(clean)
+				if ok {
+					claims = append(claims, normalizeCompareText(title), normalizeCompareText(description))
+					continue
+				}
+			}
+			if isTimelineEncodedBullet(clean) {
+				title, description, ok := parseTimelineBullet(clean)
+				if ok {
+					claims = append(claims, normalizeCompareText(title), normalizeCompareText(description))
+					continue
+				}
+			}
+			claims = append(claims, normalizeCompareText(clean))
+		}
+		return claims
+	}
+
+	containsClaimOverlap := func(base string, claims []string) bool {
+		if base == "" {
+			return false
+		}
+		for _, claim := range claims {
+			if claim == "" {
+				continue
+			}
+			if claim == base || strings.Contains(claim, base) || strings.Contains(base, claim) {
+				return true
+			}
+		}
+		return false
+	}
+
+	filterActionPrefixDuplicates := func(items []string, evidence []string) []string {
+		filtered := make([]string, 0, len(items))
+		claims := append([]string{}, evidence...)
+		for _, item := range items {
+			clean := sanitizePresentationText(item)
+			if clean == "" {
+				continue
+			}
+			candidateNorm := normalizeCompareText(clean)
+			baseNorm := normalizeCompareText(actionLeadRe.ReplaceAllString(clean, ""))
+			if actionLeadRe.MatchString(clean) && (baseNorm == "" || containsClaimOverlap(baseNorm, claims)) {
+				continue
+			}
+			filtered = append(filtered, clean)
+			if candidateNorm != "" {
+				claims = append(claims, candidateNorm)
+			}
+			if baseNorm != "" {
+				claims = append(claims, baseNorm)
+			}
+		}
+		return filtered
+	}
+
 	left := append([]string{}, slide.LeftColumn...)
 	right := append([]string{}, slide.RightColumn...)
 
@@ -2873,6 +2951,11 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 
 	left = normalizePresentationPhrases(left, 4, 20)
 	right = normalizePresentationPhrases(right, 4, 20)
+	evidenceClaims := collectEvidenceClaims(slide.Bullets)
+	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(left)...)
+	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(right)...)
+	left = filterActionPrefixDuplicates(left, evidenceClaims)
+	right = filterActionPrefixDuplicates(right, append(evidenceClaims, collectEvidenceClaims(left)...))
 
 	// Use only speaker notes as fallback seed to avoid title/subtitle text
 	// leaking into column items, and to prevent raw transcript speech.
@@ -2905,6 +2988,11 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 
 	left = normalizePresentationPhrases(left, 4, 20)
 	right = normalizePresentationPhrases(right, 4, 20)
+	evidenceClaims = collectEvidenceClaims(slide.Bullets)
+	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(left)...)
+	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(right)...)
+	left = filterActionPrefixDuplicates(left, evidenceClaims)
+	right = filterActionPrefixDuplicates(right, append(evidenceClaims, collectEvidenceClaims(left)...))
 
 	leftFallback := []string{
 		"Conventional practices often increase resource use and long term environmental pressure in daily operations.",
@@ -2927,6 +3015,11 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 
 	left = normalizePresentationPhrases(left, 4, 20)
 	right = normalizePresentationPhrases(right, 4, 20)
+	evidenceClaims = collectEvidenceClaims(slide.Bullets)
+	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(left)...)
+	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(right)...)
+	left = filterActionPrefixDuplicates(left, evidenceClaims)
+	right = filterActionPrefixDuplicates(right, append(evidenceClaims, collectEvidenceClaims(left)...))
 
 	if len(left) == 0 {
 		left = []string{"Core mechanisms and enabling factors are outlined for this side of the comparison"}
@@ -3416,7 +3509,7 @@ func enrichTimelineSlide(slide *models.PresentationSlide, transcript string) {
 
 	if len(items) < 3 {
 		for _, bullet := range slide.Bullets {
-			if isTimelineEncodedBullet(bullet) || isNumberedCardEncodedBullet(bullet) || isCardEncodedBullet(bullet) || isFeatureEncodedBullet(bullet) || isComparisonHeaderEncodedBullet(bullet) || isComparisonRowEncodedBullet(bullet) {
+			if isTimelineEncodedBullet(bullet) || isFlowEncodedBullet(bullet) || isNumberedCardEncodedBullet(bullet) || isCardEncodedBullet(bullet) || isFeatureEncodedBullet(bullet) || isComparisonHeaderEncodedBullet(bullet) || isComparisonRowEncodedBullet(bullet) {
 				continue
 			}
 			clean := sanitizePresentationText(stripNumericPrefixes(bullet))
@@ -4265,6 +4358,12 @@ func isGenericBusinessFillerText(value string) bool {
 		"implementation choices",
 		"operational constraints",
 		"baseline conditions",
+		"constrained share",
+		"small shifts in efficiency",
+		"protection policy",
+		"overall system outcomes",
+		"anchors decision context",
+		"provides a concrete benchmark",
 	}
 	for _, phrase := range fillerPhrases {
 		if strings.Contains(clean, phrase) {
@@ -4307,6 +4406,45 @@ func statValueLooksNumeric(value string) bool {
 		return false
 	}
 	return regexp.MustCompile(`\d`).MatchString(clean)
+}
+
+func isAbstractPercentStatLabel(label string) bool {
+	clean := strings.ToLower(strings.TrimSpace(label))
+	if clean == "" {
+		return true
+	}
+
+	genericMetricTerms := []string{
+		"awareness", "importance", "impact", "benefit", "efficiency", "effectiveness", "progress",
+		"improvement", "success", "growth", "quality", "performance", "engagement", "readiness",
+		"adoption", "support", "confidence", "satisfaction",
+	}
+
+	concreteAnchors := []string{
+		"population", "people", "users", "students", "households", "respondents", "samples",
+		"co2", "water", "energy", "forest", "trees", "species", "cases", "incidents",
+		"hours", "minutes", "days", "weeks", "months", "years", "kg", "km", "mw", "kwh",
+		"usd", "dollar", "revenue", "cost", "budget", "price", "rate",
+	}
+
+	hasGeneric := false
+	for _, term := range genericMetricTerms {
+		if strings.Contains(clean, term) {
+			hasGeneric = true
+			break
+		}
+	}
+	if !hasGeneric {
+		return false
+	}
+
+	for _, anchor := range concreteAnchors {
+		if strings.Contains(clean, anchor) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func isStatMetadataText(value string) bool {
@@ -4451,67 +4589,16 @@ func chooseBySeed(options []string, seed string) string {
 func buildStatDescriptionFallback(label, value string) string {
 	cleanLabel := sanitizePresentationText(label)
 	cleanValue := sanitizePresentationText(value)
-
-	if cleanLabel == "" {
-		cleanLabel = "This metric"
-	}
-	lowerLabel := strings.ToLower(cleanLabel)
-
-	candidates := make([]string, 0, 8)
-
-	if cleanValue != "" && statValueLooksTemporal(cleanValue) {
-		temporalOptions := []string{
-			fmt.Sprintf("%s at %s marks a decisive point in the sequence, clarifying what shifted operationally and why later outcomes followed this specific timing.", cleanLabel, cleanValue),
-			fmt.Sprintf("%s linked to %s captures a critical timestamp where strategic intent turned into concrete action and measurable downstream consequences.", cleanLabel, cleanValue),
-		}
-		candidates = append(candidates, chooseBySeed(temporalOptions, cleanLabel+"|"+cleanValue))
+	if cleanLabel == "" || cleanValue == "" {
+		return ""
 	}
 
-	if strings.Contains(lowerLabel, "tree") || strings.Contains(lowerLabel, "forest") || strings.Contains(lowerLabel, "biodiversity") || strings.Contains(lowerLabel, "species") {
-		envScale := []string{
-			fmt.Sprintf("%s indicates ecological scale and carrying capacity, helping prioritize conservation decisions, long horizon planning, and risk controls for habitat stability.", cleanLabel),
-			fmt.Sprintf("%s quantifies biological capacity, showing where protection efforts should focus to preserve resilience, ecosystem services, and long term resource security.", cleanLabel),
-		}
-		candidates = append(candidates, chooseBySeed(envScale, cleanLabel+"|eco"))
+	factual := fmt.Sprintf("%s is reported as %s in the source and should be interpreted in that specific context.", cleanLabel, cleanValue)
+	if normalized := normalizeStatDescription(factual); normalized != "" {
+		return normalized
 	}
 
-	if strings.Contains(lowerLabel, "water") || strings.Contains(lowerLabel, "drinkable") || strings.Contains(lowerLabel, "fresh") || strings.Contains(lowerLabel, "resource") {
-		waterOptions := []string{
-			fmt.Sprintf("%s highlights scarcity pressure, guiding allocation priorities, infrastructure investments, and policy tradeoffs needed to secure reliable supply over time.", cleanLabel),
-			fmt.Sprintf("%s reveals availability constraints that influence planning choices, operational safeguards, and coordinated actions required for sustainable access.", cleanLabel),
-		}
-		candidates = append(candidates, chooseBySeed(waterOptions, cleanLabel+"|water"))
-	}
-
-	if strings.Contains(cleanValue, "%") {
-		percentOptions := []string{
-			fmt.Sprintf("%s expresses a constrained share, emphasizing how small shifts in efficiency or protection policy can materially change overall system outcomes.", cleanLabel),
-			fmt.Sprintf("%s frames a proportional limit that helps teams evaluate tradeoffs, set realistic targets, and monitor progress against scarce capacity.", cleanLabel),
-		}
-		candidates = append(candidates, chooseBySeed(percentOptions, cleanLabel+"|percent"))
-	}
-
-	if cleanValue != "" {
-		genericValueOptions := []string{
-			fmt.Sprintf("%s tied to %s provides concrete evidence for comparing alternatives and prioritizing interventions with measurable performance impact.", cleanLabel, cleanValue),
-			fmt.Sprintf("%s at %s clarifies decision context by linking this metric to execution priorities, risk exposure, and expected outcomes.", cleanLabel, cleanValue),
-		}
-		candidates = append(candidates, chooseBySeed(genericValueOptions, cleanLabel+"|generic-value"))
-	}
-
-	genericOptions := []string{
-		fmt.Sprintf("%s provides a clear benchmark that supports planning discipline, implementation focus, and measurable outcomes across the broader timeline.", cleanLabel),
-		fmt.Sprintf("%s captures a decision-critical signal used to prioritize actions, manage tradeoffs, and evaluate progress with objective evidence.", cleanLabel),
-	}
-	candidates = append(candidates, chooseBySeed(genericOptions, cleanLabel+"|generic"))
-
-	for _, candidate := range candidates {
-		if normalized := normalizeStatDescription(candidate); normalized != "" {
-			return normalized
-		}
-	}
-
-	return ensureTrailingDot(firstNWords(cleanLabel+" provides a concrete benchmark for planning, execution discipline, and measurable stakeholder outcomes across the timeline", 24))
+	return ""
 }
 
 func normalizePresentationStats(stats []models.PresentationStat, maxItems int) []models.PresentationStat {
@@ -4523,7 +4610,6 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 	}
 
 	seen := map[string]struct{}{}
-	descSeen := map[string]struct{}{}
 	out := make([]models.PresentationStat, 0, min(len(stats), maxItems))
 	for _, stat := range stats {
 		value := sanitizePresentationText(stat.Value)
@@ -4537,20 +4623,14 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 		if value == "" || label == "" || !statValueLooksNumeric(value) {
 			continue
 		}
-		if description == "" && !isGenericBusinessFillerText(rawDescription) {
-			description = buildStatDescriptionFallback(label, value)
+		if strings.Contains(value, "%") && isAbstractPercentStatLabel(label) {
+			continue
+		}
+		if rawDescription != "" && (isGenericBusinessFillerText(rawDescription) || isStatFirstPersonLeak(rawDescription)) {
+			description = ""
 		}
 		if description != "" && (isStatFirstPersonLeak(description) || isGenericBusinessFillerText(description)) {
 			description = ""
-		}
-
-		descKey := normalizeCompareText(description)
-		if _, exists := descSeen[descKey]; exists {
-			description = buildStatDescriptionFallback(label+" context", value)
-			descKey = normalizeCompareText(description)
-		}
-		if descKey == "" {
-			continue
 		}
 
 		key := normalizeCompareText(value + "|" + label)
@@ -4561,7 +4641,6 @@ func normalizePresentationStats(stats []models.PresentationStat, maxItems int) [
 			continue
 		}
 		seen[key] = struct{}{}
-		descSeen[descKey] = struct{}{}
 
 		out = append(out, models.PresentationStat{
 			Value:       value,
@@ -5472,10 +5551,10 @@ func extractStatsFromBullets(bullets []string) []models.PresentationStat {
 		if label == "" || isStatMetadataText(label) {
 			continue
 		}
-		description := normalizeStatDescription(clean)
-		if description == "" && !isGenericBusinessFillerText(clean) {
-			description = buildStatDescriptionFallback(label, match)
+		if strings.Contains(match, "%") && isAbstractPercentStatLabel(label) {
+			continue
 		}
+		description := normalizeStatDescription(clean)
 		if description != "" && (isStatFirstPersonLeak(description) || isGenericBusinessFillerText(description)) {
 			description = ""
 		}
