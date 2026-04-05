@@ -3790,6 +3790,30 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 			}
 		}
 
+		for i, cell := range cells {
+			cellClean := sanitizePresentationText(cell)
+			if cellClean == "" {
+				return true
+			}
+			words := strings.Fields(cellClean)
+			if len(words) == 0 {
+				return true
+			}
+			if len(words) > 10 {
+				return true
+			}
+			if i > 0 {
+				lead := strings.ToLower(strings.Trim(words[0], " .;:!?\"'`“”‘’"))
+				sentenceLeads := map[string]struct{}{
+					"that": {}, "which": {}, "where": {}, "when": {}, "while": {}, "because": {},
+					"if": {}, "and": {}, "or": {}, "but": {}, "to": {}, "for": {}, "with": {}, "from": {},
+				}
+				if _, bad := sentenceLeads[lead]; bad {
+					return true
+				}
+			}
+		}
+
 		if subtitleNorm != "" && (strings.Contains(joinedNorm, subtitleNorm) || strings.Contains(subtitleNorm, joinedNorm)) {
 			return true
 		}
@@ -3897,7 +3921,7 @@ func enrichComparisonTableSlide(slide *models.PresentationSlide) {
 	}
 
 	minRows := 4
-	targetRows := 5
+	targetRows := 4
 	if len(normalizedRows) < targetRows {
 		seed := strings.Join([]string{
 			slide.SpeakerNotes,
