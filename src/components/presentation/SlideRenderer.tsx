@@ -126,6 +126,22 @@ function parseCardBullet(value: string): CardBullet | null {
   return { label, description }
 }
 
+function parseLooseCardBullet(value: string): CardBullet | null {
+  const text = stripNumericPrefix(String(value || '').trim())
+  if (!text || /^CARD:\s*/i.test(text)) return null
+
+  const match = text.match(/^([A-Za-z][A-Za-z0-9/&\-\s]{2,40}):\s+(.+)$/)
+  if (!match) return null
+
+  const label = match[1].trim()
+  const description = match[2].trim()
+  if (!label || !description) return null
+  if (normalizedWords(label).length > 6) return null
+  if (normalizedWords(description).length < 8) return null
+
+  return { label, description }
+}
+
 function normalizedWords(value: string): string[] {
   return String(value || '')
     .toLowerCase()
@@ -175,6 +191,26 @@ function isValidCardGridSet(cards: CardBullet[]): boolean {
 
     titleSet.add(titleKey)
     bodySet.add(bodyKey)
+  }
+
+  return true
+}
+
+function isRelaxedCardGridSet(cards: CardBullet[]): boolean {
+  if (cards.length !== 3) return false
+
+  const labelSet = new Set<string>()
+  for (const card of cards) {
+    const label = String(card.label || '').trim()
+    const description = String(card.description || '').trim()
+    if (!label || !description) return false
+
+    const labelKey = normalizedWords(label).join(' ')
+    if (!labelKey || labelSet.has(labelKey)) return false
+    if (descriptionStartsWithLabel(label, description)) return false
+    if (normalizedWords(description).length < 10) return false
+
+    labelSet.add(labelKey)
   }
 
   return true
@@ -1126,20 +1162,27 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       const parsedFlowArrowBullets = bullets
         .map(parseFlowArrowBullet)
         .filter((item): item is NumberedBullet => item !== null)
-      const cardBullets = bullets.map(parseCardBullet).filter((item): item is CardBullet => item !== null)
+      const directCardBullets = bullets.map(parseCardBullet).filter((item): item is CardBullet => item !== null)
       const tags = bullets.flatMap(parseTagsBullet)
       const nonStructuredBullets = bullets.filter((bullet) => {
         const trimmed = bullet.trim()
         return !parseCardBullet(trimmed) && !parseNumberedBullet(trimmed) && !parseTimelineBullet(trimmed) && !parseFlowArrowBullet(trimmed) && !/^TAGS:\s*/i.test(trimmed)
       })
+      const looseCardBullets = nonStructuredBullets
+        .map(parseLooseCardBullet)
+        .filter((item): item is CardBullet => item !== null)
+      const cardBullets = directCardBullets.length >= 3 ? directCardBullets : looseCardBullets
+      const nonCardBullets = nonStructuredBullets.filter((bullet) => !parseLooseCardBullet(bullet))
       const inferredNumberedBullets = parsedNumberedBullets.length === 0
-        ? guessNumberedBulletsFromLongText(nonStructuredBullets)
+        ? guessNumberedBulletsFromLongText(nonCardBullets)
         : []
       const numberedBullets = (parsedNumberedBullets.length > 0 ? parsedNumberedBullets : inferredNumberedBullets).slice(0, 5)
-      const useNumberedStack = numberedBullets.length >= 3
-      const nonCardBullets = nonStructuredBullets
       const strictCardBullets = cardBullets.slice(0, 3)
-      const useCardGrid = !useNumberedStack && isValidCardGridSet(strictCardBullets)
+      const useStrictCardGrid = isValidCardGridSet(strictCardBullets)
+      const useRelaxedCardGrid = !useStrictCardGrid && isRelaxedCardGridSet(strictCardBullets)
+      const renderedCardBullets = useStrictCardGrid || useRelaxedCardGrid ? strictCardBullets : []
+      const useNumberedStack = numberedBullets.length >= 3 && !(useStrictCardGrid || useRelaxedCardGrid)
+      const useCardGrid = !useNumberedStack && renderedCardBullets.length === 3
       const cardGridFallbackBullets = (!useNumberedStack && !useCardGrid && nonCardBullets.length === 0 && cardBullets.length > 0)
         ? cardBullets
           .slice(0, 4)
@@ -1941,7 +1984,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                       alignContent: 'stretch',
                     }}
                   >
-                    {strictCardBullets.map((card, index) => (
+                    {renderedCardBullets.map((card, index) => (
                       <div
                         key={index}
                         style={{
