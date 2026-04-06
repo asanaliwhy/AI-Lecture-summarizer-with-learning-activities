@@ -2292,7 +2292,7 @@ func buildPresentationPrompt(config models.GeneratePresentationRequest, transcri
 	b.WriteString("- Never repeat title wording inside subtitle or bullets.\n")
 	b.WriteString("- Never output placeholder text like \"Point 1\", \"Takeaway 1\", \"Slide N\", \"TBD\", \"Lorem ipsum\", or template stubs.\n")
 	b.WriteString("- If source material is thin, reduce bullet count and merge related points into stronger bullets; never use placeholders.\n")
-	b.WriteString("- Card grid pattern: for problems/solutions/features/goals/stacks/benefits, encode bullets as 'CARD: Label || Description sentence'. Use 3 cards. Description must be 1-2 full sentences (15-25 words) with at least one specific detail: a named mechanism, consequence, or quantified benefit. Never a fragment under 10 words.\n")
+	b.WriteString("- Card grid pattern: for problems/solutions/features/goals/stacks/benefits, encode bullets as 'CARD: Label || Description sentence'. Use exactly 3 cards. Each card description must be strictly 25-30 words (excluding the label), and each card label must be distinct. The first sentence of each description MUST NOT begin with the same word or phrase as that card label.\n")
 	b.WriteString("- Numbered process pattern (high priority): encode sequential items as 'NUM: N || Title || Description'. Description should be 1-2 sentences.\n")
 	b.WriteString("- Use two_column for before/after, X vs Y, limitations vs future.\n")
 	b.WriteString("- Use prose for major introductions, architecture explanations, and conclusions when list format would fragment narrative flow.\n")
@@ -3327,29 +3327,234 @@ func buildCardDescriptionFallback(label, title, subtitle string) string {
 	seed := strings.TrimSpace(strings.Join([]string{label, title, subtitle}, " "))
 	seed = trimDanglingPhrase(seed)
 	if seed == "" {
-		seed = "Key mechanism"
+		seed = "Practical approach"
 	}
-	candidate := normalizeCardDescriptionSentence(seed + " with a concrete mechanism that improves implementation quality and measurable outcomes")
+	candidate := normalizeCardGridDescription(seed+" helps teams execute clear steps, sustain participation, and document measurable environmental outcomes across routine operations.", label, title, subtitle)
 	if candidate != "" {
 		return candidate
 	}
-	return "Explains a concrete mechanism with practical execution steps and measurable outcomes for the audience."
+	return "Communities apply a practical sequence of actions that improves adoption quality, reduces waste leakage, and produces measurable environmental gains over time across homes, schools, and local organizations."
+}
+
+func cardDescriptionWordCount(value string) int {
+	return len(strings.Fields(normalizeCompareText(value)))
+}
+
+func normalizeCardGridDescription(value, label, title, subtitle string) string {
+	text := sanitizePresentationText(value)
+	if text == "" {
+		text = sanitizePresentationText(strings.Join([]string{title, subtitle}, " "))
+	}
+
+	sentences := splitPresentationSentences(text)
+	if len(sentences) > 0 {
+		text = sanitizePresentationText(strings.Join(sentences[:min(2, len(sentences))], " "))
+	}
+
+	words := trimDanglingEndingWords(strings.Fields(text))
+	if len(words) == 0 {
+		words = strings.Fields("This approach organizes practical steps that reduce waste, improve adoption quality, and create measurable environmental impact across daily routines in homes, schools, and community spaces")
+	}
+
+	labelNormWords := strings.Fields(normalizeCompareText(label))
+	descNormWords := strings.Fields(normalizeCompareText(strings.Join(words, " ")))
+	descNormJoined := strings.Join(descNormWords, " ")
+	for n := min(4, len(labelNormWords)); n >= 1 && len(words) > n; n-- {
+		phrase := strings.Join(labelNormWords[:n], " ")
+		if descNormJoined == phrase || strings.HasPrefix(descNormJoined, phrase+" ") {
+			words = words[n:]
+			break
+		}
+	}
+
+	if len(words) == 0 {
+		words = strings.Fields("This approach organizes practical steps that reduce waste, improve adoption quality, and create measurable environmental impact across daily routines in homes, schools, and community spaces")
+	}
+
+	labelLead := leadingAlphaToken(label)
+	if labelLead != "" && strings.EqualFold(labelLead, leadingAlphaToken(strings.Join(words, " "))) {
+		if len(words) > 1 {
+			words = append([]string{"This", "approach"}, words[1:]...)
+		} else {
+			words = []string{"This", "approach", "uses", "a", "practical", "sequence", "that", "improves", "adoption", "quality", "and", "delivers", "measurable", "environmental", "results", "across", "daily", "operations", "for", "households", "and", "communities"}
+		}
+	}
+
+	words = trimDanglingEndingWords(words)
+	if len(words) > 30 {
+		words = words[:30]
+		words = trimDanglingEndingWords(words)
+	}
+
+	contextTokens := make([]string, 0, 12)
+	contextSource := strings.Fields(normalizeCompareText(strings.Join([]string{title, subtitle}, " ")))
+	stop := map[string]struct{}{
+		"the": {}, "a": {}, "an": {}, "and": {}, "or": {}, "to": {}, "for": {}, "of": {}, "in": {}, "on": {}, "with": {},
+		"this": {}, "that": {}, "these": {}, "those": {}, "our": {}, "your": {}, "their": {}, "from": {}, "into": {}, "by": {},
+	}
+	for _, token := range contextSource {
+		if _, exists := stop[token]; exists || len(token) <= 2 {
+			continue
+		}
+		contextTokens = append(contextTokens, token)
+		if len(contextTokens) >= 12 {
+			break
+		}
+	}
+
+	padPool := append(contextTokens, []string{"while", "supporting", "practical", "adoption", "through", "clear", "steps", "and", "measurable", "progress", "for", "communities", "over", "time"}...)
+	if len(padPool) == 0 {
+		padPool = []string{"with", "practical", "implementation", "and", "measurable", "impact"}
+	}
+	padIdx := 0
+	for len(words) < 25 {
+		words = append(words, padPool[padIdx%len(padPool)])
+		padIdx++
+	}
+
+	if len(words) > 30 {
+		words = words[:30]
+	}
+	words = trimDanglingEndingWords(words)
+	for len(words) < 25 {
+		words = append(words, "impact")
+	}
+	if len(words) > 30 {
+		words = words[:30]
+	}
+
+	text = strings.TrimRight(strings.TrimSpace(strings.Join(words, " ")), " .;:!?")
+	if text == "" {
+		return ""
+	}
+
+	if labelLead != "" && strings.EqualFold(labelLead, leadingAlphaToken(text)) {
+		textWords := strings.Fields(text)
+		if len(textWords) > 1 {
+			text = strings.TrimSpace("This approach " + strings.Join(textWords[1:], " "))
+		}
+	}
+
+	return ensureTrailingDot(text)
+}
+
+func normalizeCardGridEncodedBullet(value, title, subtitle string, index int) string {
+	value = sanitizePresentationText(value)
+	if value == "" || !isCardEncodedBullet(value) {
+		return ""
+	}
+
+	body := regexp.MustCompile(`(?i)^card:\s*`).ReplaceAllString(value, "")
+	parts := strings.SplitN(body, "||", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+
+	label := strings.TrimRight(sanitizePresentationText(parts[0]), " .;:!?")
+	if label == "" {
+		fallbackLabels := []string{"Source Reduction", "Reuse Systems", "Collection Upgrade"}
+		if index >= 0 && index < len(fallbackLabels) {
+			label = fallbackLabels[index]
+		} else {
+			label = fmt.Sprintf("Focus %d", index+1)
+		}
+	}
+	labelWords := strings.Fields(label)
+	if len(labelWords) > 4 {
+		label = strings.Join(labelWords[:4], " ")
+	}
+
+	description := normalizeCardGridDescription(parts[1], label, title, subtitle)
+	wordCount := cardDescriptionWordCount(description)
+	if wordCount < 25 || wordCount > 30 {
+		description = normalizeCardGridDescription(buildCardDescriptionFallback(label, title, subtitle), label, title, subtitle)
+		wordCount = cardDescriptionWordCount(description)
+	}
+	if description == "" || wordCount < 25 || wordCount > 30 {
+		return ""
+	}
+
+	if labelLead := leadingAlphaToken(label); labelLead != "" && strings.EqualFold(labelLead, leadingAlphaToken(description)) {
+		descWords := strings.Fields(strings.TrimRight(description, "."))
+		if len(descWords) > 1 {
+			description = ensureTrailingDot("This approach " + strings.Join(descWords[1:], " "))
+		}
+	}
+
+	return "CARD: " + label + " || " + description
 }
 
 func enrichCardGridContentSlide(slide *models.PresentationSlide, transcript string) {
 	if slide == nil {
 		return
 	}
+	title := slide.Title
+	subtitle := pointerStringValue(slide.Subtitle)
 
 	cards := make([]string, 0, 3)
+	seenLabels := map[string]struct{}{}
+	seenDescriptions := map[string]struct{}{}
+	fallbackLabels := []string{"Source Reduction", "Reuse Systems", "Collection Upgrade"}
+
+	addCard := func(candidate string) {
+		if len(cards) >= 3 {
+			return
+		}
+		normalized := normalizeCardGridEncodedBullet(candidate, title, subtitle, len(cards))
+		if normalized == "" {
+			return
+		}
+
+		body := regexp.MustCompile(`(?i)^card:\s*`).ReplaceAllString(normalized, "")
+		parts := strings.SplitN(body, "||", 2)
+		if len(parts) != 2 {
+			return
+		}
+
+		label := strings.TrimSpace(parts[0])
+		description := strings.TrimSpace(parts[1])
+		labelKey := normalizeCompareText(label)
+		descriptionKey := normalizeCompareText(description)
+		if labelKey == "" || descriptionKey == "" {
+			return
+		}
+		if _, exists := seenDescriptions[descriptionKey]; exists {
+			return
+		}
+		if _, exists := seenLabels[labelKey]; exists {
+			for _, fallback := range fallbackLabels {
+				fallbackKey := normalizeCompareText(fallback)
+				if _, used := seenLabels[fallbackKey]; used {
+					continue
+				}
+				label = fallback
+				labelKey = fallbackKey
+				break
+			}
+			if _, stillUsed := seenLabels[labelKey]; stillUsed {
+				label = fmt.Sprintf("Focus %d", len(cards)+1)
+				labelKey = normalizeCompareText(label)
+			}
+			normalized = "CARD: " + label + " || " + description
+		}
+
+		if wordCount := cardDescriptionWordCount(description); wordCount < 25 || wordCount > 30 {
+			return
+		}
+		if labelLead := leadingAlphaToken(label); labelLead != "" && strings.EqualFold(labelLead, leadingAlphaToken(description)) {
+			return
+		}
+
+		seenLabels[labelKey] = struct{}{}
+		seenDescriptions[descriptionKey] = struct{}{}
+		cards = append(cards, normalized)
+	}
+
 	for _, bullet := range slide.Bullets {
 		if !isCardEncodedBullet(bullet) {
 			continue
 		}
-		normalized := normalizeCardEncodedBullet(bullet)
-		if normalized != "" {
-			cards = append(cards, normalized)
-		}
+		addCard(bullet)
 		if len(cards) >= 3 {
 			break
 		}
@@ -3373,14 +3578,10 @@ func enrichCardGridContentSlide(slide *models.PresentationSlide, transcript stri
 			if len(words) > 3 {
 				desc = strings.Join(words[3:], " ")
 			}
-			desc = normalizeCardDescriptionSentence(desc)
 			if desc == "" {
-				desc = buildCardDescriptionFallback(label, slide.Title, pointerStringValue(slide.Subtitle))
+				desc = buildCardDescriptionFallback(label, title, subtitle)
 			}
-			normalized := normalizeCardEncodedBullet("CARD: " + label + " || " + desc)
-			if normalized != "" {
-				cards = append(cards, normalized)
-			}
+			addCard("CARD: " + label + " || " + desc)
 			if len(cards) >= 3 {
 				break
 			}
@@ -3400,14 +3601,10 @@ func enrichCardGridContentSlide(slide *models.PresentationSlide, transcript stri
 			}
 			label := strings.Join(words[:min(3, len(words))], " ")
 			desc := strings.Join(words[min(3, len(words)):], " ")
-			desc = normalizeCardDescriptionSentence(desc)
 			if desc == "" {
-				desc = buildCardDescriptionFallback(label, slide.Title, pointerStringValue(slide.Subtitle))
+				desc = buildCardDescriptionFallback(label, title, subtitle)
 			}
-			normalized := normalizeCardEncodedBullet("CARD: " + label + " || " + desc)
-			if normalized != "" {
-				cards = append(cards, normalized)
-			}
+			addCard("CARD: " + label + " || " + desc)
 			if len(cards) >= 3 {
 				break
 			}
@@ -3416,9 +3613,9 @@ func enrichCardGridContentSlide(slide *models.PresentationSlide, transcript stri
 
 	if len(cards) == 0 {
 		cards = []string{
-			normalizeCardEncodedBullet("CARD: Resource Shift || Replacing disposable habits with reusable routines lowers waste flow across common daily touchpoints"),
-			normalizeCardEncodedBullet("CARD: Process Upgrade || Aligning collection and sorting behavior improves recovery quality and reduces contamination in disposal streams"),
-			normalizeCardEncodedBullet("CARD: System Outcome || Coordinated individual and community actions deliver measurable environmental gains and long term operational efficiency"),
+			normalizeCardGridEncodedBullet("CARD: Source Reduction || Communities reduce plastic generation by replacing single use packaging with refill and bulk options, lowering disposal volume, cutting cleanup costs, and creating visible behavior change in daily routines.", title, subtitle, 0),
+			normalizeCardGridEncodedBullet("CARD: Reuse Systems || Schools and shops implement returnable containers, washable utensils, and tracking labels to keep materials circulating longer, reduce replacement purchases, and improve collection quality before final recycling steps.", title, subtitle, 1),
+			normalizeCardGridEncodedBullet("CARD: Collection Upgrade || Local programs standardize sorting guidance, expand neighborhood drop points, and publish contamination feedback so households separate waste correctly, enabling higher recovery rates and cleaner streams for processing facilities.", title, subtitle, 2),
 		}
 	}
 

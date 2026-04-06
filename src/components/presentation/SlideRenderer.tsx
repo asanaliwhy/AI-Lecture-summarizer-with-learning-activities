@@ -126,6 +126,60 @@ function parseCardBullet(value: string): CardBullet | null {
   return { label, description }
 }
 
+function normalizedWords(value: string): string[] {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
+function descriptionStartsWithLabel(label: string, description: string): boolean {
+  const labelWords = normalizedWords(label)
+  if (labelWords.length === 0) return false
+
+  const firstSentenceMatch = String(description || '').match(/^[^.!?]+/)
+  const firstSentence = (firstSentenceMatch ? firstSentenceMatch[0] : description).trim()
+  const sentenceWords = normalizedWords(firstSentence)
+  if (sentenceWords.length === 0) return false
+
+  const maxPhrase = Math.min(4, labelWords.length, sentenceWords.length)
+  for (let i = maxPhrase; i >= 1; i -= 1) {
+    const labelPhrase = labelWords.slice(0, i).join(' ')
+    const sentencePhrase = sentenceWords.slice(0, i).join(' ')
+    if (labelPhrase && labelPhrase === sentencePhrase) return true
+  }
+
+  return false
+}
+
+function isValidCardGridSet(cards: CardBullet[]): boolean {
+  if (cards.length !== 3) return false
+
+  const titleSet = new Set<string>()
+  const bodySet = new Set<string>()
+
+  for (const card of cards) {
+    const label = String(card.label || '').trim()
+    const description = String(card.description || '').trim()
+    if (!label || !description) return false
+
+    const descriptionWordCount = normalizedWords(description).length
+    if (descriptionWordCount < 25 || descriptionWordCount > 30) return false
+    if (descriptionStartsWithLabel(label, description)) return false
+
+    const titleKey = normalizedWords(label).join(' ')
+    const bodyKey = normalizedWords(description).join(' ')
+    if (!titleKey || !bodyKey) return false
+    if (titleSet.has(titleKey) || bodySet.has(bodyKey)) return false
+
+    titleSet.add(titleKey)
+    bodySet.add(bodyKey)
+  }
+
+  return true
+}
+
 function parseTagsBullet(value: string): string[] {
   const text = String(value || '').trim()
   const match = text.match(/^TAGS:\s*(.+)$/i)
@@ -1072,7 +1126,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       const parsedFlowArrowBullets = bullets
         .map(parseFlowArrowBullet)
         .filter((item): item is NumberedBullet => item !== null)
-      const cardBullets = bullets.map(parseCardBullet).filter((item): item is CardBullet => item !== null).slice(0, 3)
+      const cardBullets = bullets.map(parseCardBullet).filter((item): item is CardBullet => item !== null)
       const tags = bullets.flatMap(parseTagsBullet)
       const nonStructuredBullets = bullets.filter((bullet) => {
         const trimmed = bullet.trim()
@@ -1084,7 +1138,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       const numberedBullets = (parsedNumberedBullets.length > 0 ? parsedNumberedBullets : inferredNumberedBullets).slice(0, 5)
       const useNumberedStack = numberedBullets.length >= 3
       const nonCardBullets = nonStructuredBullets
-      const useCardGrid = !useNumberedStack && cardBullets.length >= 2
+      const strictCardBullets = cardBullets.slice(0, 3)
+      const useCardGrid = !useNumberedStack && isValidCardGridSet(strictCardBullets)
       const variant = String(slide.variant || '').toLowerCase()
       const timelineBullets = parsedTimelineBullets.length > 0
         ? (parsedTimelineBullets.every((item) => item.number > 0)
@@ -1879,7 +1934,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                       alignContent: 'stretch',
                     }}
                   >
-                    {cardBullets.map((card, index) => (
+                    {strictCardBullets.map((card, index) => (
                       <div
                         key={index}
                         style={{
