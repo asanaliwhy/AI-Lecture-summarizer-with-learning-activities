@@ -35,40 +35,21 @@ type VideoMetadata = {
 
 const SLIDE_COUNT_OPTIONS = [
   {
-    value: 'short',
+    value: 7,
     label: 'Short',
     description: '1-8 slides',
   },
   {
-    value: 'medium',
+    value: 12,
     label: 'Medium',
     description: '9-14 slides',
   },
   {
-    value: 'large',
+    value: 16,
     label: 'Large',
     description: '15+ slides',
   },
 ] as const
-
-type SlideLengthPreset = (typeof SLIDE_COUNT_OPTIONS)[number]['value']
-
-function randomInRange(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min
-}
-
-function resolveSlideCount(preset: SlideLengthPreset): number {
-  switch (preset) {
-    case 'short':
-      return randomInRange(6, 8)
-    case 'medium':
-      return randomInRange(9, 14)
-    case 'large':
-      return randomInRange(15, 20)
-    default:
-      return 9
-  }
-}
 
 const TEXT_STYLE_OPTIONS = [
   { value: 'formal', label: 'Formal', description: 'Professional, polished structure' },
@@ -134,7 +115,7 @@ export function PresentationConfigPage() {
   const [validationError, setValidationError] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
 
-  const [slideLengthPreset, setSlideLengthPreset] = useState<SlideLengthPreset>('short')
+  const [slideCount, setSlideCount] = useState<number>(7)
   const [textStyle, setTextStyle] = useState<GeneratePresentationConfig['text_style']>('formal')
   const [language, setLanguage] = useState('en')
   const themeOptions = useMemo(() => randomThemeOptions(4), [])
@@ -206,7 +187,6 @@ export function PresentationConfigPage() {
         .split(',')
         .map((item) => item.trim())
         .filter(Boolean)
-      const slideCount = resolveSlideCount(slideLengthPreset)
 
       const result = await api.presentations.create({
         content_id: contentId,
@@ -328,10 +308,10 @@ export function PresentationConfigPage() {
                       <button
                         key={option.value}
                         type="button"
-                        onClick={() => setSlideLengthPreset(option.value)}
+                        onClick={() => setSlideCount(option.value)}
                         className={cn(
                           'rounded-xl border p-3 text-left transition-all',
-                          slideLengthPreset === option.value
+                          slideCount === option.value
                             ? 'border-primary bg-primary/5 ring-1 ring-primary'
                             : 'hover:bg-secondary/50',
                         )}

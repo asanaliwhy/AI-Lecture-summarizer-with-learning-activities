@@ -14,7 +14,7 @@ interface GoogleOAuthConfigResponse {
 function normalizeConfiguredRedirectUri(raw: string | undefined): string {
     const value = (raw || '').trim()
     if (!value) {
-        return `${window.location.origin}/auth/callback`
+        return `${window.location.origin}/callback`
     }
 
     return value
@@ -40,7 +40,7 @@ export function getGoogleOAuthConfigFromEnv(): GoogleOAuthConfig | null {
     }
 
     const redirectUri = import.meta.env.DEV
-        ? `${window.location.origin}/auth/callback`
+        ? `${window.location.origin}/callback`
         : normalizeConfiguredRedirectUri(import.meta.env.VITE_GOOGLE_REDIRECT_URI)
 
     return { clientId, redirectUri }

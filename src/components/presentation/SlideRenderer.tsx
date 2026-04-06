@@ -181,7 +181,7 @@ function isValidCardGridSet(cards: CardBullet[]): boolean {
     if (!label || !description) return false
 
     const descriptionWordCount = normalizedWords(description).length
-    if (descriptionWordCount < 25 || descriptionWordCount > 30) return false
+    if (descriptionWordCount < 8 || descriptionWordCount > 30) return false
     if (descriptionStartsWithLabel(label, description)) return false
 
     const titleKey = normalizedWords(label).join(' ')
@@ -246,12 +246,32 @@ function parseTimelineBullet(value: string): NumberedBullet | null {
   const text = String(value || '').trim()
   if (!text) return null
 
-  const match = text.match(/^(?:TIMELINE|MILESTONE):\s*(?:(\d{1,2})\s*\|\|\s*)?(.+?)\s*\|\|\s*(.+)$/i)
-  if (!match) return null
+  const prefixed = text.match(/^(?:TIMELINE|MILESTONE|TIME):\s*(.+)$/i)
+  if (!prefixed) return null
 
-  const number = Number(match[1] || 0)
-  const title = match[2].trim()
-  const description = match[3].trim()
+  const parts = prefixed[1]
+    .split('||')
+    .map((part) => part.trim())
+    .filter(Boolean)
+
+  if (parts.length < 2) return null
+
+  let number = 0
+  let title = ''
+  let description = ''
+
+  if (parts.length >= 3 && /^\d{1,2}$/.test(parts[0])) {
+    number = Number(parts[0])
+    title = parts[1]
+    description = parts.slice(2).join(' || ')
+  } else if (parts.length >= 3 && /^\d{1,2}:\d{2}$/.test(parts[0])) {
+    title = parts[1]
+    description = parts.slice(2).join(' || ')
+  } else {
+    title = parts[0]
+    description = parts.slice(1).join(' || ')
+  }
+
   if (!title || !description) return null
 
   return {
@@ -574,6 +594,91 @@ function normalizeSummaryItems(slide: Slide, bullets: string[]): SummaryItem[] {
     })
 }
 
+function withMinimumSummaryItems(items: SummaryItem[], slide: Slide): SummaryItem[] {
+  const deduped: SummaryItem[] = []
+  const seen = new Set<string>()
+
+  for (const item of Array.isArray(items) ? items : []) {
+    const title = String(item?.title || '').trim()
+    const description = String(item?.description || '').trim()
+    if (!description) continue
+    const key = `${title.toLowerCase()}|${description.toLowerCase()}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push({ title, description, icon: inferSummaryIconToken(item?.icon, title, description) })
+    if (deduped.length >= 4) return deduped.slice(0, 4)
+  }
+
+  const topic = String(slide.title || slide.subtitle || 'the topic').trim()
+  const fallback: SummaryItem[] = [
+    {
+      title: 'Core Context',
+      description: `Defines why ${topic.toLowerCase()} matters and which constraints shape practical decisions.`,
+      icon: 'insight',
+    },
+    {
+      title: 'Key Mechanism',
+      description: 'Explains the central mechanism that converts intent into reliable, repeatable execution.',
+      icon: 'platform',
+    },
+    {
+      title: 'Execution Priority',
+      description: 'Identifies the highest-impact actions to implement first for measurable improvement.',
+      icon: 'impact',
+    },
+    {
+      title: 'Expected Outcome',
+      description: 'Highlights the concrete result stakeholders should observe after consistent implementation.',
+      icon: 'community',
+    },
+  ]
+
+  for (const item of fallback) {
+    if (deduped.length >= 4) break
+    const key = `${item.title.toLowerCase()}|${item.description.toLowerCase()}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(item)
+  }
+
+  return deduped.slice(0, 4)
+}
+
+function withMinimumContentBullets(values: string[], title: string, subtitle: string): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+
+  for (const value of values) {
+    const clean = stripNumericPrefix(String(value || '')).trim()
+    if (!clean) continue
+    const key = clean.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(clean)
+    if (out.length >= 6) break
+  }
+
+  const topic = String(title || subtitle || 'This topic').trim() || 'This topic'
+  const fallback = [
+    String(subtitle || '').trim(),
+    `${topic} context and primary objective for implementation.`,
+    `${topic} practical execution steps with clear ownership and sequencing.`,
+    `${topic} expected outcomes and measurable stakeholder impact over time.`,
+  ]
+
+  for (const value of fallback) {
+    if (out.length >= 3) break
+    const clean = stripNumericPrefix(String(value || '')).trim()
+    if (!clean) continue
+    const key = clean.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(clean)
+  }
+
+  return out.slice(0, 6)
+}
+
 function statsGridColumns(count: number): string {
   if (count <= 1) return '1fr'
   if (count === 2) return 'repeat(2, 1fr)'
@@ -685,7 +790,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
   const columns = toColumns(slide)
   const bullets = toArray(slide.bullets)
   const stats = Array.isArray(slide.stats) ? slide.stats : []
-  const summaryItems = normalizeSummaryItems(slide, bullets)
+  const summaryItems = withMinimumSummaryItems(normalizeSummaryItems(slide, bullets), slide)
 
   const hasImage = Boolean(slide.imageUrl)
   const hasImageURL = typeof slide.imageUrl === 'string' && /^https?:\/\//i.test(slide.imageUrl)
@@ -1173,10 +1278,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         .filter((item): item is CardBullet => item !== null)
       const cardBullets = directCardBullets.length >= 3 ? directCardBullets : looseCardBullets
       const nonCardBullets = nonStructuredBullets.filter((bullet) => !parseLooseCardBullet(bullet))
-      const inferredNumberedBullets = parsedNumberedBullets.length === 0
-        ? guessNumberedBulletsFromLongText(nonCardBullets)
-        : []
-      const numberedBullets = (parsedNumberedBullets.length > 0 ? parsedNumberedBullets : inferredNumberedBullets).slice(0, 5)
+      const numberedBullets = parsedNumberedBullets.slice(0, 3)
       const strictCardBullets = cardBullets.slice(0, 3)
       const useStrictCardGrid = isValidCardGridSet(strictCardBullets)
       const useRelaxedCardGrid = !useStrictCardGrid && isRelaxedCardGridSet(strictCardBullets)
@@ -1190,26 +1292,27 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
           .filter(Boolean)
         : []
       const bulletListSource = cardGridFallbackBullets.length > 0 ? cardGridFallbackBullets : nonCardBullets
+      const renderedBulletListSource = withMinimumContentBullets(
+        bulletListSource.length > 0
+          ? bulletListSource
+          : (slide.subtitle
+            ? [slide.subtitle]
+            : [String(slide.title || 'Key point')]),
+        String(slide.title || ''),
+        String(slide.subtitle || ''),
+      )
       const variant = String(slide.variant || '').toLowerCase()
       const timelineBullets = parsedTimelineBullets.length > 0
         ? (parsedTimelineBullets.every((item) => item.number > 0)
           ? [...parsedTimelineBullets].sort((a, b) => a.number - b.number)
           : parsedTimelineBullets)
         : []
-      const fallbackTimelineBullets = variant === 'timeline' && timelineBullets.length === 0
-        ? (numberedBullets.length > 0
-          ? numberedBullets
-          : nonStructuredBullets
-            .map((raw, index) => {
-              const cleaned = stripNumericPrefix(raw)
-              const words = cleaned.split(/\s+/).filter(Boolean)
-              if (words.length < 4) return null
-              const title = words.slice(0, Math.min(4, words.length)).join(' ')
-              const description = words.slice(4).join(' ') || cleaned
-              if (!title || !description) return null
-              return { number: index + 1, title, description }
-            })
-            .filter((item): item is NumberedBullet => item !== null))
+      const fallbackTimelineBullets = variant === 'timeline' && timelineBullets.length === 0 && numberedBullets.length >= 3
+        ? numberedBullets.map((item, index) => ({
+          number: item.number > 0 ? item.number : index + 1,
+          title: item.title,
+          description: item.description,
+        }))
         : []
       const timelineItems = (timelineBullets.length > 0 ? timelineBullets : fallbackTimelineBullets)
         .slice(0, 5)
@@ -1222,22 +1325,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
           ? [...parsedFlowArrowBullets].sort((a, b) => a.number - b.number)
           : parsedFlowArrowBullets)
         : []
-      const fallbackFlowArrowBullets = variant === 'flow_arrows' && flowArrowBullets.length === 0
-        ? (numberedBullets.length > 0
-          ? numberedBullets
-          : nonStructuredBullets
-            .map((raw, index) => {
-              const cleaned = stripNumericPrefix(raw)
-              const words = cleaned.split(/\s+/).filter(Boolean)
-              if (words.length < 4) return null
-              const title = words.slice(0, Math.min(4, words.length)).join(' ')
-              const description = words.slice(4).join(' ') || cleaned
-              if (!title || !description) return null
-              return { number: index + 1, title, description }
-            })
-            .filter((item): item is NumberedBullet => item !== null))
-        : []
-      const flowArrowItems = (flowArrowBullets.length > 0 ? flowArrowBullets : fallbackFlowArrowBullets)
+      const flowArrowItems = flowArrowBullets
         .slice(0, 4)
         .map((item, index) => ({
           ...item,
@@ -1396,7 +1484,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <div
                                 style={{
                                   fontFamily: theme.displayFont,
-                                  fontSize: fs(32),
+                                  fontSize: fs(28),
                                   lineHeight: 1.12,
                                   letterSpacing: '-0.02em',
                                   fontWeight: 650,
@@ -1408,7 +1496,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <p
                                 style={{
                                   margin: `${s(8)}px 0 0`,
-                                  fontSize: fs(19),
+                                  fontSize: fs(17),
                                   lineHeight: 1.38,
                                   color: theme.subtext,
                                 }}
@@ -1472,7 +1560,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <div
                                 style={{
                                   fontFamily: theme.displayFont,
-                                  fontSize: fs(32),
+                                  fontSize: fs(28),
                                   lineHeight: 1.12,
                                   letterSpacing: '-0.02em',
                                   fontWeight: 650,
@@ -1484,7 +1572,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <p
                                 style={{
                                   margin: `${s(8)}px 0 0`,
-                                  fontSize: fs(19),
+                                  fontSize: fs(17),
                                   lineHeight: 1.38,
                                   color: theme.subtext,
                                 }}
@@ -1816,8 +1904,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       const numDescriptionWords = numberedBullets.reduce(
         (sum, item) => sum + item.description.split(/\s+/).length, 0
       )
-      const denseContent = bulletListSource.length >= 5 || numberedBullets.length >= 4 || numDescriptionWords >= 45 || titleWordCount >= 8 || subtitleWordCount >= 16
-      const ultraDenseContent = bulletListSource.length >= 6 || numberedBullets.length >= 5 || numDescriptionWords >= 65 || titleWordCount >= 11 || subtitleWordCount >= 22
+      const denseContent = renderedBulletListSource.length >= 5 || numberedBullets.length >= 4 || numDescriptionWords >= 45 || titleWordCount >= 8 || subtitleWordCount >= 16
+      const ultraDenseContent = renderedBulletListSource.length >= 6 || numberedBullets.length >= 5 || numDescriptionWords >= 65 || titleWordCount >= 11 || subtitleWordCount >= 22
       const headingSize = ultraDenseContent ? 40 : denseContent ? 48 : 52
       const subtitleSize = ultraDenseContent ? 16 : denseContent ? 17 : 18
       const bulletFontSize = 13
@@ -2051,8 +2139,19 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   )}
                 </>
               ) : (
-                <div style={{ display: 'grid', gap: s(bulletGap), marginTop: contentTopGap, flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                  {bulletListSource.slice(0, 6).map((bullet, index) => (
+                <div
+                  style={{
+                    display: 'grid',
+                    gap: s(bulletGap),
+                    marginTop: contentTopGap,
+                    flex: 1,
+                    minHeight: 0,
+                    overflow: 'hidden',
+                    alignContent: 'start',
+                    gridAutoRows: 'min-content',
+                  }}
+                >
+                  {renderedBulletListSource.slice(0, 6).map((bullet, index) => (
                     <div
                       key={index}
                       style={{

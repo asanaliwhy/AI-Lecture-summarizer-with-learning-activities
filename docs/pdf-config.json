@@ -1,0 +1,26 @@
+{
+  "stylesheet": [
+    "docs/thesis_style.css"
+  ],
+  "pdf_options": {
+    "format": "A4",
+    "margin": {
+      "top": "18mm",
+      "bottom": "20mm",
+      "left": "18mm",
+      "right": "18mm"
+    },
+    "printBackground": true,
+    "displayHeaderFooter": true,
+    "footerTemplate": "<div style='width:100%; font-size:9pt; font-family:Georgia, Times New Roman, serif; color:#4e5668; padding:0 18mm 8mm; box-sizing:border-box; display:flex; justify-content:space-between; align-items:center;'><span>Lectura — AI-Powered Study Assistant</span><span><span class='pageNumber'></span></span></div>",
+    "headerTemplate": "<div style='width:100%; font-size:8.5pt; font-family:Georgia, Times New Roman, serif; color:#8f98ab; padding:6mm 18mm 0; box-sizing:border-box; text-align:right; letter-spacing:0.08em; text-transform:uppercase;'>Bachelor Diploma Thesis</div>"
+  },
+  "script": [
+    {
+      "url": "https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"
+    },
+    {
+      "content": "mermaid.initialize({ startOnLoad: false, theme: 'neutral' }); (async () => { const els = document.querySelectorAll('code.language-mermaid'); for (const el of els) { const div = document.createElement('div'); div.className = 'mermaid'; div.textContent = el.textContent; const pre = el.parentElement; pre.parentElement.replaceChild(div, pre); } await mermaid.run(); })();"
+    }
+  ]
+}
