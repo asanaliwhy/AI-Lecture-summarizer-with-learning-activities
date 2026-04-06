@@ -1140,6 +1140,13 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       const nonCardBullets = nonStructuredBullets
       const strictCardBullets = cardBullets.slice(0, 3)
       const useCardGrid = !useNumberedStack && isValidCardGridSet(strictCardBullets)
+      const cardGridFallbackBullets = (!useNumberedStack && !useCardGrid && nonCardBullets.length === 0 && cardBullets.length > 0)
+        ? cardBullets
+          .slice(0, 4)
+          .map((card) => `${card.label}: ${card.description}`.trim())
+          .filter(Boolean)
+        : []
+      const bulletListSource = cardGridFallbackBullets.length > 0 ? cardGridFallbackBullets : nonCardBullets
       const variant = String(slide.variant || '').toLowerCase()
       const timelineBullets = parsedTimelineBullets.length > 0
         ? (parsedTimelineBullets.every((item) => item.number > 0)
@@ -1766,8 +1773,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       const numDescriptionWords = numberedBullets.reduce(
         (sum, item) => sum + item.description.split(/\s+/).length, 0
       )
-      const denseContent = nonCardBullets.length >= 5 || numberedBullets.length >= 4 || numDescriptionWords >= 45 || titleWordCount >= 8 || subtitleWordCount >= 16
-      const ultraDenseContent = nonCardBullets.length >= 6 || numberedBullets.length >= 5 || numDescriptionWords >= 65 || titleWordCount >= 11 || subtitleWordCount >= 22
+      const denseContent = bulletListSource.length >= 5 || numberedBullets.length >= 4 || numDescriptionWords >= 45 || titleWordCount >= 8 || subtitleWordCount >= 16
+      const ultraDenseContent = bulletListSource.length >= 6 || numberedBullets.length >= 5 || numDescriptionWords >= 65 || titleWordCount >= 11 || subtitleWordCount >= 22
       const headingSize = ultraDenseContent ? 40 : denseContent ? 48 : 52
       const subtitleSize = ultraDenseContent ? 16 : denseContent ? 17 : 18
       const bulletFontSize = 13
@@ -2002,7 +2009,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                 </>
               ) : (
                 <div style={{ display: 'grid', gap: s(bulletGap), marginTop: contentTopGap, flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                  {nonCardBullets.slice(0, 6).map((bullet, index) => (
+                  {bulletListSource.slice(0, 6).map((bullet, index) => (
                     <div
                       key={index}
                       style={{

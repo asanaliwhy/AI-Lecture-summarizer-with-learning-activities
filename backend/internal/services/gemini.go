@@ -3713,11 +3713,26 @@ func enrichCardGridContentSlide(slide *models.PresentationSlide, transcript stri
 		}
 	}
 
+	fallbackCardSeeds := []string{
+		"CARD: Source Reduction || Communities reduce plastic generation by replacing single use packaging with refill and bulk options, lowering disposal volume, cutting cleanup costs, and creating visible behavior change in daily routines.",
+		"CARD: Reuse Systems || Schools and shops implement returnable containers, washable utensils, and tracking labels to keep materials circulating longer, reduce replacement purchases, and improve collection quality before final recycling steps.",
+		"CARD: Collection Upgrade || Local programs standardize sorting guidance, expand neighborhood drop points, and publish contamination feedback so households separate waste correctly, enabling higher recovery rates and cleaner streams for processing facilities.",
+	}
+
+	if len(cards) < 3 {
+		for _, seed := range fallbackCardSeeds {
+			if len(cards) >= 3 {
+				break
+			}
+			addCard(seed)
+		}
+	}
+
 	if len(cards) == 0 {
 		cards = []string{
-			normalizeCardGridEncodedBullet("CARD: Source Reduction || Communities reduce plastic generation by replacing single use packaging with refill and bulk options, lowering disposal volume, cutting cleanup costs, and creating visible behavior change in daily routines.", title, subtitle, 0),
-			normalizeCardGridEncodedBullet("CARD: Reuse Systems || Schools and shops implement returnable containers, washable utensils, and tracking labels to keep materials circulating longer, reduce replacement purchases, and improve collection quality before final recycling steps.", title, subtitle, 1),
-			normalizeCardGridEncodedBullet("CARD: Collection Upgrade || Local programs standardize sorting guidance, expand neighborhood drop points, and publish contamination feedback so households separate waste correctly, enabling higher recovery rates and cleaner streams for processing facilities.", title, subtitle, 2),
+			normalizeCardGridEncodedBullet(fallbackCardSeeds[0], title, subtitle, 0),
+			normalizeCardGridEncodedBullet(fallbackCardSeeds[1], title, subtitle, 1),
+			normalizeCardGridEncodedBullet(fallbackCardSeeds[2], title, subtitle, 2),
 		}
 	}
 
@@ -3729,6 +3744,28 @@ func enrichCardGridContentSlide(slide *models.PresentationSlide, transcript stri
 	for _, card := range cards {
 		if card != "" {
 			cleanCards = append(cleanCards, card)
+		}
+	}
+	if len(cleanCards) < 3 {
+		for i, seed := range fallbackCardSeeds {
+			if len(cleanCards) >= 3 {
+				break
+			}
+			normalized := normalizeCardGridEncodedBullet(seed, title, subtitle, i)
+			if normalized == "" {
+				continue
+			}
+			key := normalizeCompareText(normalized)
+			exists := false
+			for _, existing := range cleanCards {
+				if normalizeCompareText(existing) == key {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				cleanCards = append(cleanCards, normalized)
+			}
 		}
 	}
 	if len(cleanCards) < 3 {
