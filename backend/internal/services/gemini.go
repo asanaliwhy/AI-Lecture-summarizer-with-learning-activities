@@ -3756,27 +3756,207 @@ func enrichTimelineSlide(slide *models.PresentationSlide, transcript string) {
 		Description string
 	}
 
+	slideContext := strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), pointerStringValue(slide.Body), slide.SpeakerNotes, transcript}, " ")
+	isWasteCycleContext := regexp.MustCompile(`(?i)\b(?:compost|recycl|waste|plastic|landfill|organic|inorganic|sorting|material|resource|decomposition)\b`).MatchString(slideContext)
+
+	containsTimelineLeak := func(value string) bool {
+		clean := strings.ToLower(strings.TrimSpace(value))
+		if clean == "" {
+			return false
+		}
+		if containsTranscriptNoiseTag(clean) || isConversationalTranscriptLine(clean) {
+			return true
+		}
+		if regexp.MustCompile(`(?i)\b(?:toby|lucas|mia|nadia|ben)\b`).MatchString(clean) {
+			return true
+		}
+		if regexp.MustCompile(`(?i)\b[a-z]+\s+(?:mentioned|said|noted|explained|stated)\b`).MatchString(clean) {
+			return true
+		}
+		blocked := []string{
+			"nice to see you",
+			"super important",
+			"right",
+			"all these things are",
+			"people are coming up",
+			"and now",
+		}
+		for _, phrase := range blocked {
+			if strings.Contains(clean, phrase) {
+				return true
+			}
+		}
+		return false
+	}
+
+	titleStartsDescription := func(title, description string) bool {
+		titleWords := strings.Fields(normalizeCompareText(title))
+		descWords := strings.Fields(normalizeCompareText(description))
+		if len(titleWords) == 0 || len(descWords) == 0 {
+			return false
+		}
+		maxPrefix := min(4, min(len(titleWords), len(descWords)))
+		for n := maxPrefix; n >= 1; n-- {
+			if strings.Join(titleWords[:n], " ") == strings.Join(descWords[:n], " ") {
+				return true
+			}
+		}
+		return false
+	}
+
+	inferTimelineTitle := func(description string, step int) string {
+		norm := normalizeCompareText(description)
+		switch {
+		case strings.Contains(norm, "sort"), strings.Contains(norm, "separat"), strings.Contains(norm, "bin"):
+			return "Source Separation"
+		case strings.Contains(norm, "collect"), strings.Contains(norm, "transport"), strings.Contains(norm, "facility"), strings.Contains(norm, "logistics"):
+			return "Collection Logistics"
+		case strings.Contains(norm, "decompos"), strings.Contains(norm, "compost"), strings.Contains(norm, "microorgan"):
+			return "Biological Decomposition"
+		case strings.Contains(norm, "recover"), strings.Contains(norm, "recycl"), strings.Contains(norm, "material"):
+			return "Material Recovery"
+		case strings.Contains(norm, "return"), strings.Contains(norm, "resource"), strings.Contains(norm, "soil"), strings.Contains(norm, "agric"):
+			return "Resource Return"
+		}
+
+		if isWasteCycleContext {
+			wasteTitles := []string{"Source Separation", "Collection Logistics", "Biological Decomposition", "Material Recovery", "Resource Return"}
+			if step >= 1 && step <= len(wasteTitles) {
+				return wasteTitles[step-1]
+			}
+		}
+
+		genericTitles := []string{"Initial Intake", "Coordinated Transfer", "Core Processing", "Output Recovery", "System Reintegration"}
+		if step >= 1 && step <= len(genericTitles) {
+			return genericTitles[step-1]
+		}
+		return fmt.Sprintf("Process Step %d", max(1, step))
+	}
+
+	fallbackDescriptionFor := func(title string, step int) string {
+		norm := normalizeCompareText(title)
+		if isWasteCycleContext {
+			switch {
+			case strings.Contains(norm, "source separation"):
+				return "Categorize household waste into distinct organic, recyclable, and landfill streams at the initial point of disposal."
+			case strings.Contains(norm, "collection logistics"):
+				return "Transport separated materials to specialized facilities for industrial processing or localized community-managed composting sites."
+			case strings.Contains(norm, "biological decomposition"):
+				return "Monitor organic matter as beneficial microorganisms transform food scraps into nutrient-dense, dark soil enhancers over several months."
+			case strings.Contains(norm, "material recovery"):
+				return "Process glass, paper, and various plastics back into raw materials to be utilized in future manufacturing cycles."
+			case strings.Contains(norm, "resource return"):
+				return "Apply the finished compost to local agricultural land to close the nutrient loop and support sustainable new growth."
+			}
+		}
+
+		generic := []string{
+			"Define scope, inputs, and classification criteria so each stream enters the process with clear handling requirements.",
+			"Move validated inputs to the correct processing environment while preserving traceability, safety controls, and operational timing.",
+			"Execute the main transformation stage using monitored conditions that convert inputs into stable and usable outputs.",
+			"Verify quality and recover reusable outputs for subsequent production, service delivery, or controlled redistribution pathways.",
+			"Return finalized outputs to practical use and record outcomes to improve the next operational cycle.",
+		}
+		if step >= 1 && step <= len(generic) {
+			return generic[step-1]
+		}
+		return "This phase defines a concrete process milestone with measurable operational outcomes and clear next-step readiness criteria."
+	}
+
+	normalizeTitle := func(title, description string, step int) string {
+		clean := strings.TrimRight(trimDanglingPhrase(sanitizePresentationText(title)), " .;:!?")
+		if containsTimelineLeak(clean) {
+			clean = ""
+		}
+		if clean != "" {
+			norm := normalizeCompareText(clean)
+			slideNorm := normalizeCompareText(slide.Title)
+			if norm != "" && slideNorm != "" && (norm == slideNorm || strings.Contains(slideNorm, norm) || strings.Contains(norm, slideNorm)) {
+				clean = ""
+			}
+		}
+
+		if clean != "" {
+			norm := normalizeCompareText(clean)
+			weakPrefixes := []string{"all these things", "people are coming", "it is nice", "it's nice", "this flow", "the composting and recycling", "today"}
+			for _, prefix := range weakPrefixes {
+				if strings.HasPrefix(norm, normalizeCompareText(prefix)) {
+					clean = ""
+					break
+				}
+			}
+		}
+
+		if clean == "" {
+			clean = inferTimelineTitle(description, step)
+		}
+
+		words := strings.Fields(clean)
+		if len(words) > 4 {
+			clean = strings.Join(words[:4], " ")
+		}
+		if len(strings.Fields(clean)) < 2 {
+			clean = inferTimelineTitle(description, step)
+		}
+		return strings.TrimRight(sanitizePresentationText(clean), " .;:!?")
+	}
+
+	normalizeDescription := func(title, description string, step int) string {
+		clean := sanitizePresentationText(description)
+		clean = regexp.MustCompile(`(?i)\b[a-z]+\s+(?:mentioned|said|noted|explained|stated)\b`).ReplaceAllString(clean, "")
+		clean = regexp.MustCompile(`(?i)(?:,?\s*(?:right|you\s+know|okay|ok))\.?$`).ReplaceAllString(clean, "")
+		clean = sanitizePresentationText(clean)
+		if clean == "" || containsTimelineLeak(clean) {
+			clean = fallbackDescriptionFor(title, step)
+		}
+
+		clean = normalizeFeatureDescriptionSentence(clean)
+		if clean == "" || containsTimelineLeak(clean) {
+			clean = normalizeFeatureDescriptionSentence(fallbackDescriptionFor(title, step))
+		}
+		if clean == "" {
+			return ""
+		}
+
+		if titleStartsDescription(title, clean) {
+			rawWords := strings.Fields(strings.TrimRight(clean, "."))
+			titleWords := strings.Fields(normalizeCompareText(title))
+			removeCount := min(4, min(len(rawWords), len(titleWords)))
+			if removeCount > 0 && len(rawWords) > removeCount {
+				clean = normalizeFeatureDescriptionSentence("This stage " + strings.Join(rawWords[removeCount:], " "))
+			}
+		}
+
+		if clean == "" || titleStartsDescription(title, clean) {
+			clean = normalizeFeatureDescriptionSentence("This stage establishes a concrete operational milestone with measurable outcomes and clear readiness for the following step.")
+		}
+		return clean
+	}
+
 	items := make([]timelineItem, 0, 5)
 	seen := map[string]struct{}{}
+	seenTitles := map[string]struct{}{}
 	appendItem := func(title, description string) {
 		if len(items) >= 5 {
 			return
 		}
-		title = strings.TrimRight(trimDanglingPhrase(title), " .;:!?")
-		description = normalizeFeatureDescriptionSentence(description)
-		if description == "" {
-			description = "Explains the milestone outcome with clear implementation detail and measurable project impact."
-		}
-		if title == "" {
-			title = strings.TrimRight(firstNWords(description, 4), " .;:!?")
-		}
-		if title == "" {
+		title = normalizeTitle(title, description, len(items)+1)
+		if title == "" || containsTimelineLeak(title) {
 			return
 		}
-		titleWords := strings.Fields(title)
-		if len(titleWords) > 5 {
-			title = strings.Join(titleWords[:5], " ")
+		description = normalizeDescription(title, description, len(items)+1)
+		if description == "" || containsTimelineLeak(description) {
+			return
 		}
+
+		titleKey := normalizeCompareText(title)
+		if titleKey == "" {
+			return
+		}
+		if _, exists := seenTitles[titleKey]; exists {
+			return
+		}
+
 		key := normalizeCompareText(title + " " + description)
 		if key == "" {
 			return
@@ -3784,6 +3964,7 @@ func enrichTimelineSlide(slide *models.PresentationSlide, transcript string) {
 		if _, exists := seen[key]; exists {
 			return
 		}
+		seenTitles[titleKey] = struct{}{}
 		seen[key] = struct{}{}
 		items = append(items, timelineItem{Title: title, Description: description})
 	}
@@ -3825,64 +4006,39 @@ func enrichTimelineSlide(slide *models.PresentationSlide, transcript string) {
 		}
 	}
 
-	if len(items) < 3 {
-		for _, bullet := range slide.Bullets {
-			if isTimelineEncodedBullet(bullet) || isFlowEncodedBullet(bullet) || isNumberedCardEncodedBullet(bullet) || isCardEncodedBullet(bullet) || isFeatureEncodedBullet(bullet) || isComparisonHeaderEncodedBullet(bullet) || isComparisonRowEncodedBullet(bullet) {
-				continue
-			}
-			clean := sanitizePresentationText(stripNumericPrefixes(bullet))
-			if clean == "" {
-				continue
-			}
-			words := strings.Fields(clean)
-			if len(words) < 4 {
-				continue
-			}
-			title := strings.Join(words[:min(4, len(words))], " ")
-			description := strings.Join(words[min(4, len(words)):], " ")
-			if description == "" {
-				description = clean
-			}
-			appendItem(title, description)
-			if len(items) >= 5 {
-				break
-			}
+	defaultSteps := []timelineItem{}
+	if isWasteCycleContext {
+		defaultSteps = []timelineItem{
+			{Title: "Source Separation", Description: "Categorize household waste into distinct organic, recyclable, and landfill streams at the initial point of disposal."},
+			{Title: "Collection Logistics", Description: "Transport separated materials to specialized facilities for industrial processing or localized community-managed composting sites."},
+			{Title: "Biological Decomposition", Description: "Monitor organic matter as beneficial microorganisms transform food scraps into nutrient-dense, dark soil enhancers over several months."},
+			{Title: "Material Recovery", Description: "Process glass, paper, and various plastics back into raw materials to be utilized in future manufacturing cycles."},
+			{Title: "Resource Return", Description: "Apply the finished compost to local agricultural land to close the nutrient loop and support sustainable new growth."},
+		}
+	} else {
+		defaultSteps = []timelineItem{
+			{Title: "Initial Intake", Description: "Define input categories, scope boundaries, and handling criteria so each stream enters the workflow with clear operational requirements."},
+			{Title: "Coordinated Transfer", Description: "Move validated inputs to the correct processing environment while preserving safety constraints, traceability records, and planned timing dependencies."},
+			{Title: "Core Processing", Description: "Execute the primary transformation stage under monitored conditions that convert incoming materials into stable and usable intermediate outputs."},
+			{Title: "Output Recovery", Description: "Verify quality, separate recoverable outputs, and prepare refined materials for practical downstream use or controlled redistribution pathways."},
+			{Title: "System Reintegration", Description: "Return finalized outputs to productive use, then record performance results to guide optimization in the next operating cycle."},
 		}
 	}
 
-	if len(items) < 3 {
-		source := strings.Join([]string{slide.Title, pointerStringValue(slide.Subtitle), pointerStringValue(slide.Body), slide.SpeakerNotes, transcript}, " ")
-		extra := buildCompactBulletsFromText(source, 6, 16)
-		for _, bullet := range extra {
-			words := strings.Fields(bullet)
-			if len(words) < 4 {
-				continue
-			}
-			title := strings.Join(words[:min(4, len(words))], " ")
-			description := strings.Join(words[min(4, len(words)):], " ")
-			if description == "" {
-				description = bullet
-			}
-			appendItem(title, description)
-			if len(items) >= 5 {
-				break
-			}
-		}
-	}
-
-	if len(items) == 0 {
-		appendItem("Research and Planning", "Define requirements, map stakeholders, and establish architecture decisions that reduce downstream rework.")
-		appendItem("Development and Integration", "Implement core modules, validate interfaces, and align cross-functional dependencies for stable delivery.")
-		appendItem("Launch and Optimization", "Deploy incrementally, monitor outcomes, and prioritize improvements based on measured performance signals.")
-	}
-
-	for len(items) < 3 {
-		seedTitle := firstNonEmpty(slide.Title, "Program milestone")
-		appendItem(seedTitle, seedTitle+" is executed with concrete actions and measurable outcomes for stakeholders.")
-		if len(items) >= 3 {
+	for _, step := range defaultSteps {
+		if len(items) >= 5 {
 			break
 		}
-		appendItem("Execution checkpoint", "This checkpoint validates implementation quality and confirms readiness for the next phase.")
+		appendItem(step.Title, step.Description)
+	}
+
+	for len(items) < 5 {
+		idx := len(items) + 1
+		appendItem(inferTimelineTitle("", idx), fallbackDescriptionFor(inferTimelineTitle("", idx), idx))
+		if len(items) >= 5 {
+			break
+		}
+		appendItem(fmt.Sprintf("Process Step %d", idx), "This stage defines a concrete operational milestone with measurable outcomes and explicit readiness criteria for the subsequent step.")
 	}
 
 	if len(items) > 5 {
