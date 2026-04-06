@@ -2857,7 +2857,7 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 		return
 	}
 
-	actionLeadRe := regexp.MustCompile(`(?i)^\s*(?:switching\s+to|by\s+adopting)\s+`)
+	actionLeadRe := regexp.MustCompile(`(?i)^\s*(?:switching\s+to|by\s+adopting|adopting|by\s+choosing|choosing)\s+`)
 
 	collectEvidenceClaims := func(items []string) []string {
 		claims := make([]string, 0, len(items))
@@ -2935,6 +2935,107 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 		return filtered
 	}
 
+	isTwoColumnGenericFiller := func(value string) bool {
+		clean := strings.ToLower(strings.TrimSpace(value))
+		if clean == "" {
+			return true
+		}
+		fillerPhrases := []string{
+			"conventional practices often increase resource use",
+			"environmental pressure in daily operations",
+			"legacy systems can lock households",
+			"lower efficiency over time",
+			"avoidable maintenance burden",
+			"without targeted upgrades",
+			"context dependent",
+			"operational difference",
+		}
+		for _, phrase := range fillerPhrases {
+			if strings.Contains(clean, phrase) {
+				return true
+			}
+		}
+		return false
+	}
+
+	rewriteIfStartsWithLabel := func(item, label, prefix string) string {
+		clean := sanitizePresentationText(item)
+		if clean == "" {
+			return ""
+		}
+		labelNormWords := strings.Fields(normalizeCompareText(label))
+		if len(labelNormWords) == 0 {
+			return clean
+		}
+
+		words := strings.Fields(clean)
+		normWords := strings.Fields(normalizeCompareText(clean))
+		if len(words) == 0 || len(normWords) == 0 {
+			return clean
+		}
+
+		maxPrefix := min(4, min(len(labelNormWords), len(normWords)))
+		removed := 0
+		for n := maxPrefix; n >= 1; n-- {
+			if strings.Join(normWords[:n], " ") == strings.Join(labelNormWords[:n], " ") {
+				removed = n
+				break
+			}
+		}
+
+		if removed > 0 && len(words) > removed {
+			rewritten := sanitizePresentationText(prefix + " " + strings.Join(words[removed:], " "))
+			rewritten = strings.TrimLeft(rewritten, " ,;:-")
+			if rewritten != "" {
+				return rewritten
+			}
+		}
+
+		labelLead := leadingAlphaToken(label)
+		itemLead := leadingAlphaToken(clean)
+		if labelLead != "" && itemLead != "" && labelLead == itemLead {
+			if len(words) > 1 {
+				rewritten := sanitizePresentationText(prefix + " " + strings.Join(words[1:], " "))
+				rewritten = strings.TrimLeft(rewritten, " ,;:-")
+				if rewritten != "" {
+					return rewritten
+				}
+			}
+		}
+
+		return clean
+	}
+
+	sanitizeTwoColumnItems := func(items []string, label, sidePrefix string, evidence []string) []string {
+		normalized := normalizePresentationPhrases(items, 4, 20)
+		normalized = filterActionPrefixDuplicates(normalized, evidence)
+		out := make([]string, 0, len(normalized))
+		seen := map[string]struct{}{}
+		for _, item := range normalized {
+			clean := sanitizePresentationText(item)
+			if clean == "" || isConversationalTranscriptLine(clean) || isTwoColumnMetaItem(clean) || isTwoColumnGenericFiller(clean) {
+				continue
+			}
+			clean = rewriteIfStartsWithLabel(clean, label, sidePrefix)
+			if clean == "" || isTwoColumnGenericFiller(clean) {
+				continue
+			}
+			key := normalizeCompareText(clean)
+			if key == "" {
+				continue
+			}
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, clean)
+			if len(out) >= 4 {
+				break
+			}
+		}
+		return out
+	}
+
 	left := append([]string{}, slide.LeftColumn...)
 	right := append([]string{}, slide.RightColumn...)
 
@@ -2959,13 +3060,22 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 		}
 	}
 
+	leftLabel := sanitizePresentationText(pointerStringValue(slide.LeftLabel))
+	rightLabel := sanitizePresentationText(pointerStringValue(slide.RightLabel))
+	if leftLabel == "" {
+		leftLabel = "Context"
+	}
+	if rightLabel == "" {
+		rightLabel = "Outcomes"
+	}
+
 	left = normalizePresentationPhrases(left, 4, 20)
 	right = normalizePresentationPhrases(right, 4, 20)
 	evidenceClaims := collectEvidenceClaims(slide.Bullets)
 	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(left)...)
 	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(right)...)
-	left = filterActionPrefixDuplicates(left, evidenceClaims)
-	right = filterActionPrefixDuplicates(right, append(evidenceClaims, collectEvidenceClaims(left)...))
+	left = sanitizeTwoColumnItems(left, leftLabel, "These materials", evidenceClaims)
+	right = sanitizeTwoColumnItems(right, rightLabel, "Long-term alternatives", append(evidenceClaims, collectEvidenceClaims(left)...))
 
 	// Use only speaker notes as fallback seed to avoid title/subtitle text
 	// leaking into column items, and to prevent raw transcript speech.
@@ -3001,20 +3111,20 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 	evidenceClaims = collectEvidenceClaims(slide.Bullets)
 	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(left)...)
 	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(right)...)
-	left = filterActionPrefixDuplicates(left, evidenceClaims)
-	right = filterActionPrefixDuplicates(right, append(evidenceClaims, collectEvidenceClaims(left)...))
+	left = sanitizeTwoColumnItems(left, leftLabel, "These materials", evidenceClaims)
+	right = sanitizeTwoColumnItems(right, rightLabel, "Long-term alternatives", append(evidenceClaims, collectEvidenceClaims(left)...))
 
 	leftFallback := []string{
-		"Conventional practices often increase resource use and long term environmental pressure in daily operations.",
-		"Legacy systems can lock households into higher costs and lower efficiency over time.",
-		"Dependence on outdated habits tends to amplify waste, pollution, and avoidable maintenance burden.",
-		"Without targeted upgrades, performance remains stagnant and resilience to future demand stays weak.",
+		"Items designed for one-time use quickly become waste, increasing disposal volume and cleanup pressure across neighborhoods and public spaces.",
+		"Continuous replacement requires repeated manufacturing cycles that consume additional raw materials, fossil energy, and transport capacity throughout supply chains.",
+		"Short product lifespans accelerate landfill accumulation and raise the probability of leakage into rivers, coastlines, and sensitive habitats.",
+		"Persistent plastic fragments and additives can spread as micro-scale residues in soil and water, complicating long-term remediation efforts.",
 	}
 	rightFallback := []string{
-		"Targeted upgrades reduce waste and improve efficiency while keeping daily usage practical for households.",
-		"Adopting cleaner alternatives lowers emissions and supports healthier local environmental conditions.",
-		"Sustainable actions improve reliability and reduce long term costs through better resource management.",
-		"Consistent conservation habits create measurable benefits that compound across communities over time.",
+		"Reusable products lower total waste output by extending service life across many cycles and reducing routine demand for replacement purchases.",
+		"Durable materials such as steel and glass can be cleaned, refilled, and reused repeatedly without rapid loss of performance.",
+		"Shifting to long-life alternatives reduces demand for new plastic production and decreases associated emissions across extraction and manufacturing stages.",
+		"Sustained reuse adoption supports circular systems where products are repaired, refilled, and recirculated instead of discarded after single use.",
 	}
 	for i := 0; len(left) < targetMin && i < len(leftFallback); i++ {
 		left = append(left, leftFallback[i])
@@ -3028,8 +3138,8 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 	evidenceClaims = collectEvidenceClaims(slide.Bullets)
 	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(left)...)
 	evidenceClaims = append(evidenceClaims, collectEvidenceClaims(right)...)
-	left = filterActionPrefixDuplicates(left, evidenceClaims)
-	right = filterActionPrefixDuplicates(right, append(evidenceClaims, collectEvidenceClaims(left)...))
+	left = sanitizeTwoColumnItems(left, leftLabel, "These materials", evidenceClaims)
+	right = sanitizeTwoColumnItems(right, rightLabel, "Long-term alternatives", append(evidenceClaims, collectEvidenceClaims(left)...))
 
 	if len(left) == 0 {
 		left = []string{"Core mechanisms and enabling factors are outlined for this side of the comparison"}
@@ -3042,14 +3152,6 @@ func enrichTwoColumnSlide(slide *models.PresentationSlide, transcript string) {
 	slide.RightColumn = right
 	slide.Bullets = []string{}
 
-	leftLabel := sanitizePresentationText(pointerStringValue(slide.LeftLabel))
-	rightLabel := sanitizePresentationText(pointerStringValue(slide.RightLabel))
-	if leftLabel == "" {
-		leftLabel = "Context"
-	}
-	if rightLabel == "" {
-		rightLabel = "Outcomes"
-	}
 	slide.LeftLabel = stringPtr(leftLabel)
 	slide.RightLabel = stringPtr(rightLabel)
 
