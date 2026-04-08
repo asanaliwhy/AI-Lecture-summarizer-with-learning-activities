@@ -1202,7 +1202,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <div
                                 style={{
                                   fontFamily: theme.displayFont,
-                                  fontSize: fs(32),
+                                  fontSize: fs(24),
                                   lineHeight: 1.12,
                                   letterSpacing: '-0.02em',
                                   fontWeight: 650,
@@ -1214,7 +1214,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <p
                                 style={{
                                   margin: `${s(8)}px 0 0`,
-                                  fontSize: fs(19),
+                                  fontSize: fs(16),
                                   lineHeight: 1.38,
                                   color: theme.subtext,
                                 }}
@@ -1278,7 +1278,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <div
                                 style={{
                                   fontFamily: theme.displayFont,
-                                  fontSize: fs(32),
+                                  fontSize: fs(24),
                                   lineHeight: 1.12,
                                   letterSpacing: '-0.02em',
                                   fontWeight: 650,
@@ -1290,7 +1290,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <p
                                 style={{
                                   margin: `${s(8)}px 0 0`,
-                                  fontSize: fs(19),
+                                  fontSize: fs(16),
                                   lineHeight: 1.38,
                                   color: theme.subtext,
                                 }}
@@ -1548,8 +1548,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         : denseContent
           ? `${s(22)}px ${s(24)}px ${s(20)}px`
           : `${s(28)}px ${s(28)}px`
-      const numTitleSize = ultraDenseContent ? 21 : denseContent ? 22 : 24
-      const numDescSize = ultraDenseContent ? 16 : denseContent ? 17 : 18
+      const numTitleSize = ultraDenseContent ? 20 : denseContent ? 21 : 23
+      const numDescSize = ultraDenseContent ? 15 : denseContent ? 16 : 17
       const numPaddingY = ultraDenseContent ? 8 : denseContent ? 11 : 14
       const numPaddingX = ultraDenseContent ? 12 : denseContent ? 14 : 16
       const cardTitleSize = ultraDenseContent ? 18 : denseContent ? 20 : 22
@@ -1643,24 +1643,19 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                           width: s(54),
                           height: s(54),
                           borderRadius: s(14),
-                          display: 'block',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                           background: `linear-gradient(135deg, ${theme.accentSoft}, ${theme.accent})`,
                           color: theme.surfaceStrong,
                           fontFamily: theme.displayFont,
-                          fontSize: fs(31),
+                          fontSize: fs(29),
                           fontWeight: 700,
-                          position: 'relative',
+                          textAlign: 'center',
+                          lineHeight: 1,
                         }}
                       >
-                        <span style={{ 
-                          position: 'absolute', 
-                          top: '50%', 
-                          left: '50%', 
-                          transform: 'translate(-50%, -50%)',
-                          lineHeight: 1
-                        }}>
-                          {item.number}
-                        </span>
+                        {item.number}
                       </div>
                       <div style={{ minWidth: 0 }}>
                         <div
@@ -1789,17 +1784,16 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                           width: s(bulletChipSize),
                           height: s(bulletChipSize),
                           borderRadius: '50%',
-                          display: 'inline-block',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                           color: theme.surfaceStrong,
                           background: `linear-gradient(135deg, ${theme.accentSoft}, ${theme.accent})`,
-                          position: 'relative',
+                          textAlign: 'center',
+                          lineHeight: 1,
                         }}
                       >
-                        <span style={{ 
-                          position: 'absolute', 
-                          top: '50%', 
-                          left: '50%', 
-                          transform: 'translate(-50%, -50%)',
+                        <span style={{
                           fontSize: fs(12),
                           fontWeight: 800,
                           lineHeight: 1,

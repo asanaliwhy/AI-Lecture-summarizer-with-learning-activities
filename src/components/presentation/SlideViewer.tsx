@@ -43,6 +43,10 @@ export function SlideViewer({ presentation, onBack, onDelete, canDelete = true }
   const [isPresenting, setIsPresenting] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [exportingFormat, setExportingFormat] = useState<PresentationExportFormat | null>(null)
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: typeof window === 'undefined' ? PRESENTATION_CANVAS_WIDTH : window.innerWidth,
+    height: typeof window === 'undefined' ? PRESENTATION_CANVAS_HEIGHT : window.innerHeight,
+  }))
   const rootRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const slideRefs = useRef<(HTMLDivElement | null)[]>([])
@@ -70,6 +74,19 @@ export function SlideViewer({ presentation, onBack, onDelete, canDelete = true }
     }
     localStorage.setItem(storageKey, selectedTheme)
   }, [selectedTheme, storageKey])
+
+  useEffect(() => {
+    const updateViewportSize = () => {
+      setViewportSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      })
+    }
+
+    updateViewportSize()
+    window.addEventListener('resize', updateViewportSize)
+    return () => window.removeEventListener('resize', updateViewportSize)
+  }, [])
 
   // Track which slide is most visible
   useEffect(() => {
@@ -268,18 +285,28 @@ export function SlideViewer({ presentation, onBack, onDelete, canDelete = true }
 
   if (isPresenting) {
     const activeSlide = slides[currentIndex]
+    const horizontalPadding = viewportSize.width < 768 ? 24 : 48
+    const verticalPadding = viewportSize.height < 900 ? 88 : 112
+    const availableWidth = Math.max(320, viewportSize.width - horizontalPadding)
+    const availableHeight = Math.max(180, viewportSize.height - verticalPadding)
+    const presentScale = Math.min(
+      availableWidth / PRESENTATION_CANVAS_WIDTH,
+      availableHeight / PRESENTATION_CANVAS_HEIGHT,
+    )
+    const presentationWidth = PRESENTATION_CANVAS_WIDTH * presentScale
+    const presentationHeight = PRESENTATION_CANVAS_HEIGHT * presentScale
 
     return (
       <div ref={rootRef} className="fixed inset-0 z-50 flex flex-col bg-black">
         <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
           <div
-            className="w-full"
+            className="shrink-0"
             style={{
-              maxWidth: `${PRESENTATION_CANVAS_WIDTH}px`,
-              aspectRatio: `${PRESENTATION_CANVAS_WIDTH} / ${PRESENTATION_CANVAS_HEIGHT}`,
+              width: `${presentationWidth}px`,
+              height: `${presentationHeight}px`,
             }}
           >
-            <SlideRenderer slide={activeSlide} theme={theme} scale={1} />
+            <SlideRenderer slide={activeSlide} theme={theme} scale={presentScale} />
           </div>
         </div>
 
