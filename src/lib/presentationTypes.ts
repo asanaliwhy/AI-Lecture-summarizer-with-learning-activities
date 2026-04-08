@@ -3,7 +3,6 @@ export type SlideType =
   | 'section'
   | 'content'
   | 'two_column'
-  | 'quote'
   | 'stats'
   | 'prose'
   | 'summary'
@@ -47,8 +46,6 @@ export interface Slide {
   rightColumn?: string[]
   leftLabel?: string | null
   rightLabel?: string | null
-  quote?: string | null
-  quoteAuthor?: string | null
   stats?: SlideStat[]
   takeaways?: SlideTakeaway[]
   tableHeaders?: string[]
@@ -113,6 +110,22 @@ function normalizeTakeawaysFromBullets(bullets: string[]): SlideTakeaway[] {
   }))
 }
 
+function normalizeSlideType(type: unknown): SlideType {
+  const normalized = typeof type === 'string' ? type.toLowerCase().trim() : ''
+  if (normalized === 'section') return 'prose'
+  if (
+    normalized === 'title' ||
+    normalized === 'content' ||
+    normalized === 'two_column' ||
+    normalized === 'stats' ||
+    normalized === 'prose' ||
+    normalized === 'summary'
+  ) {
+    return normalized
+  }
+  return 'content'
+}
+
 function normalizeColumns(slide: Slide): SlideColumn[] | undefined {
   if (Array.isArray(slide.columns) && slide.columns.length > 0) {
     return slide.columns.map((column) => ({
@@ -156,6 +169,11 @@ export function normalizePresentation(raw: Partial<Presentation> & { id: string 
     updatedAt: raw.updatedAt,
     lastAccessedAt: raw.lastAccessedAt ?? null,
     slides: slides.map((slide, index) => {
+      const normalizedType = normalizeSlideType((slide as Partial<Slide>).type)
+      const normalizedVariant = typeof slide.variant === 'string' ? slide.variant : null
+      const renderType: SlideType = normalizedType === 'two_column' && normalizedVariant === 'comparison_table'
+        ? 'content'
+        : normalizedType
       const bullets = Array.isArray(slide.bullets) ? slide.bullets : []
       const takeaways = Array.isArray(slide.takeaways) && slide.takeaways.length > 0
         ? slide.takeaways.map((item) => ({
@@ -163,12 +181,13 @@ export function normalizePresentation(raw: Partial<Presentation> & { id: string 
           description: item.description || '',
           icon: item.icon || '',
         }))
-        : slide.type === 'summary' && bullets.length > 0
+        : renderType === 'summary' && bullets.length > 0
           ? normalizeTakeawaysFromBullets(bullets)
           : slide.takeaways
 
       return {
         ...slide,
+        type: renderType,
         id: slide.id || `slide-${slide.index || index + 1}`,
         index: slide.index || index + 1,
         bullets,
@@ -187,9 +206,9 @@ export function normalizePresentation(raw: Partial<Presentation> & { id: string 
           : [],
         notes: slide.notes || slide.speakerNotes || null,
         speakerNotes: slide.speakerNotes || slide.notes || null,
-        variant: typeof slide.variant === 'string'
-          ? slide.variant
-          : slide.type === 'summary'
+        variant: normalizedVariant
+          ? normalizedVariant
+          : renderType === 'summary'
             ? 'summary_icons'
             : null,
       }

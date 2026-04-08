@@ -116,11 +116,30 @@ function toColumns(slide: Slide) {
 function parseCardBullet(value: string): CardBullet | null {
   const text = String(value || '').trim()
   if (!text) return null
-  const match = text.match(/^CARD:\s*(.+?)\s*\|\|\s*(.+)$/i)
-  if (!match) return null
 
-  const label = match[1].trim()
-  const description = match[2].trim()
+  const canonical = text.match(/^CARD:\s*([\s\S]+?)\s*\|\|\s*([\s\S]+)$/i)
+  if (canonical) {
+    const label = canonical[1].trim()
+    const description = canonical[2].trim()
+    if (!label || !description) return null
+    return { label, description }
+  }
+
+  if (!/^CARD\b/i.test(text) || !text.includes('||')) return null
+  const body = text.replace(/^CARD\b\s*/i, '').replace(/^[:#-]\s*/, '').trim()
+  const parts = body
+    .split('||')
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (parts.length < 2) return null
+
+  const shifted = /^\d+$/.test(parts[0]) && parts.length >= 3 ? parts.slice(1) : parts
+  const label = shifted[0]
+    .replace(/^(?:CARD\s*)?\d+\s*[:#-]?\s*/i, '')
+    .trim()
+  const description = shifted.slice(1).join(' ')
+    .replace(/^description\s*:\s*/i, '')
+    .trim()
   if (!label || !description) return null
 
   return { label, description }
@@ -141,7 +160,7 @@ function parseTagsBullet(value: string): string[] {
 function parseNumberedBullet(value: string): NumberedBullet | null {
   const text = String(value || '').trim()
   if (!text) return null
-  const match = text.match(/^NUM:\s*(\d{1,2})\s*\|\|\s*(.+?)\s*\|\|\s*(.+)$/i)
+  const match = text.match(/^NUM:\s*(\d{1,2})\s*\|\|\s*([\s\S]+?)\s*\|\|\s*([\s\S]+)$/i)
   if (!match) return null
 
   const number = Number(match[1])
@@ -156,7 +175,7 @@ function parseTimelineBullet(value: string): NumberedBullet | null {
   const text = String(value || '').trim()
   if (!text) return null
 
-  const match = text.match(/^(?:TIMELINE|MILESTONE):\s*(?:(\d{1,2})\s*\|\|\s*)?(.+?)\s*\|\|\s*(.+)$/i)
+  const match = text.match(/^(?:TIMELINE|MILESTONE):\s*(?:(\d{1,2})\s*\|\|\s*)?([\s\S]+?)\s*\|\|\s*([\s\S]+)$/i)
   if (!match) return null
 
   const number = Number(match[1] || 0)
@@ -175,7 +194,7 @@ function parseFlowArrowBullet(value: string): NumberedBullet | null {
   const text = String(value || '').trim()
   if (!text) return null
 
-  const match = text.match(/^(?:FLOW|ARROW|STEP_FLOW):\s*(?:(\d{1,2})\s*\|\|\s*)?(.+?)\s*\|\|\s*(.+)$/i)
+  const match = text.match(/^(?:FLOW|ARROW|STEP_FLOW):\s*(?:(\d{1,2})\s*\|\|\s*)?([\s\S]+?)\s*\|\|\s*([\s\S]+)$/i)
   if (!match) return null
 
   const number = Number(match[1] || 0)
@@ -194,11 +213,36 @@ function parseFeatureTrioBullet(value: string): FeatureTrioItem | null {
   const text = String(value || '').trim()
   if (!text) return null
 
-  const featureMatch = text.match(/^FEATURE:\s*(.+?)\s*\|\|\s*(.+?)\s*\|\|\s*(.+)$/i)
+  const featureMatch = text.match(/^FEATURE:\s*([\s\S]+?)\s*\|\|\s*([\s\S]+?)\s*\|\|\s*([\s\S]+)$/i)
   if (featureMatch) {
     const icon = featureMatch[1].trim()
-    const title = featureMatch[2].trim()
-    const description = featureMatch[3].trim()
+    let title = featureMatch[2].trim()
+    let description = featureMatch[3].trim()
+
+    if (/^NUM:\s*\d{1,2}\b/i.test(title)) {
+      const parts = description
+        .split('||')
+        .map((part) => part.trim())
+        .filter(Boolean)
+
+      if (parts.length >= 3) {
+        title = `${parts[0]} ${parts[1]}`.trim()
+        description = parts.slice(2).join(' ').trim()
+      } else if (parts.length === 2) {
+        title = parts[0]
+        description = parts[1]
+      }
+    }
+
+    title = stripNumericPrefix(title)
+      .replace(/^NUM:\s*\d{1,2}\s*/i, '')
+      .replace(/\s*\|\|\s*/g, ' ')
+      .trim()
+    description = stripNumericPrefix(description)
+      .replace(/^NUM:\s*\d{1,2}\s*/i, '')
+      .replace(/\s*\|\|\s*/g, ' ')
+      .trim()
+
     if (title && description) {
       return {
         icon: icon || inferSummaryIconToken('', title, description),
@@ -259,7 +303,7 @@ function buildComparisonTableData(slide: Slide, bullets: string[], columns: Slid
     : []
 
   let headers = directHeaders.slice(0, 3)
-  let rows = directRows.slice(0, 8)
+  let rows = directRows.slice(0, 4)
 
   if (rows.length === 0) {
     for (const bullet of bullets) {
@@ -277,7 +321,7 @@ function buildComparisonTableData(slide: Slide, bullets: string[], columns: Slid
   if (rows.length === 0 && columns.length >= 2) {
     const leftItems = Array.isArray(columns[0].items) ? columns[0].items : []
     const rightItems = Array.isArray(columns[1].items) ? columns[1].items : []
-    const maxRows = Math.min(8, Math.max(leftItems.length, rightItems.length))
+    const maxRows = Math.min(4, Math.max(leftItems.length, rightItems.length))
     if (maxRows > 0) {
       headers = headers.length > 0 ? headers : [columns[0].label || 'Left', columns[1].label || 'Right']
       rows = Array.from({ length: maxRows }).map((_, idx) => [leftItems[idx] || '', rightItems[idx] || ''])
@@ -307,7 +351,7 @@ function buildComparisonTableData(slide: Slide, bullets: string[], columns: Slid
       return normalized
     })
     .filter((row) => row.some((cell) => cell.trim() !== ''))
-    .slice(0, 8)
+    .slice(0, 4)
 
   if (rows.length === 0) return null
 
@@ -340,6 +384,7 @@ function getImagePosition(slide: Slide, allowTop = false): 'left' | 'right' | 't
 
 function stripNumericPrefix(value: string): string {
   return String(value || '')
+    .replace(/^(?:CARD:|NUM:|TIMELINE:|FLOW:|FEATURE:|MILESTONE:|HEADER:|ROW:)?\s*(?:\d+\.?)?\s*\|\|?\s*/i, '')
     .replace(/^(?:\s*(?:key\s*)?(?:point|takeaway|insight|step|item)\s*\d+\s*[:.)-]?\s*)/i, '')
     .replace(/^(?:\s*(?:\(?\d{1,2}\)?|[ivxlcdm]{1,5})\s*(?:[).:-]|-\s)\s*|\s*[-*•]+\s*)/i, '')
     .trim()
@@ -779,7 +824,18 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
     </div>
   )
 
-  switch (slide.type) {
+  const resolvedSlideType: Slide['type'] =
+    slide.type === 'title' ||
+    slide.type === 'section' ||
+    slide.type === 'content' ||
+    slide.type === 'two_column' ||
+    slide.type === 'stats' ||
+    slide.type === 'prose' ||
+    slide.type === 'summary'
+      ? slide.type
+      : 'content'
+
+  switch (resolvedSlideType) {
     case 'title': {
       const imagePosition = getImagePosition(slide)
       return (
@@ -934,8 +990,12 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         : []
       const numberedBullets = (parsedNumberedBullets.length > 0 ? parsedNumberedBullets : inferredNumberedBullets).slice(0, 5)
       const useNumberedStack = numberedBullets.length >= 3
-      const nonCardBullets = nonStructuredBullets
       const useCardGrid = !useNumberedStack && cardBullets.length >= 2
+      const nonCardBullets = useCardGrid || useNumberedStack 
+        ? nonStructuredBullets 
+        : bullets
+            .filter(b => !/^TAGS:\s*/i.test(b))
+            .map(b => b.replace(/^(?:CARD:\s*|NUM:\s*\d*(?:\.?)?\|\|?|TIMELINE:\s*\d*(?:\.?)?\|\|?|FLOW:\s*\d*(?:\.?)?\|\|?|FEATURE|MILESTONE|ROW|HEADER):\s*/i, ''))
       const variant = String(slide.variant || '').toLowerCase()
       const timelineBullets = parsedTimelineBullets.length > 0
         ? (parsedTimelineBullets.every((item) => item.number > 0)
@@ -1253,6 +1313,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       if ((variant === 'flow_arrows' || flowArrowBullets.length >= 3) && flowArrowItems.length >= 3) {
         const arrowCount = Math.min(3, flowArrowItems.length)
         const arrows = flowArrowItems.slice(0, arrowCount)
+        const flowStartOffset = slide.subtitle ? s(170) : s(174)
 
         return (
           <div style={baseStyle}>
@@ -1261,7 +1322,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
             <div
               style={{
                 ...layoutPadding,
-                zIndex: 2,
+                zIndex: 2,  
                 display: 'flex',
                 flexDirection: 'column',
                 flex: 1,
@@ -1295,7 +1356,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
 
               <div
                 style={{
-                  marginTop: s(42),
+                  marginTop: flowStartOffset,
                   display: 'grid',
                   gap: s(20),
                   alignContent: 'start',
@@ -1464,95 +1525,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         )
       }
 
-      if (variant === 'media_split' && hasImage) {
-        return (
-          <div style={baseStyle}>
-            {renderDecor()}
 
-            <div
-              style={{
-                ...layoutPadding,
-                zIndex: 2,
-                display: 'grid',
-                gridTemplateColumns: '54% 46%',
-                gap: s(20),
-                alignItems: 'stretch',
-                flex: 1,
-                minHeight: 0,
-              }}
-            >
-              {imagePosition === 'left' && renderImagePanel({ minHeight: s(620) })}
-
-              <div
-                style={{
-                  ...panelCard,
-                  padding: `${s(24)}px ${s(26)}px`,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  minHeight: 0,
-                }}
-              >
-                <h2
-                  style={{
-                    margin: 0,
-                    fontFamily: theme.displayFont,
-                    fontSize: fs(56),
-                    lineHeight: 1.05,
-                    letterSpacing: '-0.03em',
-                    fontWeight: 700,
-                  }}
-                >
-                  {slide.title}
-                </h2>
-
-                {(slide.subtitle || slide.body) && (
-                  <p
-                    style={{
-                      margin: `${s(12)}px 0 0`,
-                      color: theme.subtext,
-                      fontSize: fs(18),
-                      lineHeight: 1.42,
-                    }}
-                  >
-                    {slide.subtitle || slide.body}
-                  </p>
-                )}
-
-                <div style={{ display: 'grid', gap: s(11), marginTop: s(18), flex: 1, minHeight: 0 }}>
-                  {nonCardBullets.slice(0, 4).map((bullet, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        borderRadius: s(14),
-                        border: `1px solid ${theme.border}`,
-                        background: `${theme.surface}c8`,
-                        padding: `${s(12)}px ${s(14)}px`,
-                        display: 'grid',
-                        gridTemplateColumns: `${s(10)}px 1fr`,
-                        gap: s(10),
-                        alignItems: 'start',
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: s(10),
-                          height: s(10),
-                          marginTop: s(5),
-                          borderRadius: '50%',
-                          background: `linear-gradient(135deg, ${theme.accent}, ${theme.accentSoft})`,
-                        }}
-                      />
-                      <span style={{ fontSize: fs(18), lineHeight: 1.45 }}>{stripNumericPrefix(bullet)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {imagePosition !== 'left' && renderImagePanel({ minHeight: s(620) })}
-            </div>
-          </div>
-        )
-      }
 
       const titleText = String(slide.title || '')
       const subtitleText = String(slide.subtitle || '')
@@ -1575,8 +1548,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         : denseContent
           ? `${s(22)}px ${s(24)}px ${s(20)}px`
           : `${s(28)}px ${s(28)}px`
-      const numTitleSize = ultraDenseContent ? 18 : denseContent ? 19 : 21
-      const numDescSize = ultraDenseContent ? 15 : denseContent ? 16 : 17
+      const numTitleSize = ultraDenseContent ? 21 : denseContent ? 22 : 24
+      const numDescSize = ultraDenseContent ? 16 : denseContent ? 17 : 18
       const numPaddingY = ultraDenseContent ? 8 : denseContent ? 11 : 14
       const numPaddingX = ultraDenseContent ? 12 : denseContent ? 14 : 16
       const cardTitleSize = ultraDenseContent ? 18 : denseContent ? 20 : 22
@@ -1584,8 +1557,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       const cardPadding = ultraDenseContent ? 8 : denseContent ? 10 : 12
       const contentTopGap = slide.subtitle
         ? ultraDenseContent
-          ? s(8)
-          : s(12)
+          ? s(12)
+          : s(18)
         : ultraDenseContent
           ? s(16)
           : s(24)
@@ -1648,7 +1621,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
               )}
 
               {useNumberedStack ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: ultraDenseContent ? s(20) : s(10), marginTop: contentTopGap, flex: 1, minHeight: 0 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: ultraDenseContent ? s(22) : s(14), marginTop: contentTopGap, flex: 1, minHeight: 0 }}>
                   {numberedBullets.map((item) => (
                     <div
                       key={`${item.number}-${item.title}`}
@@ -1658,7 +1631,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         background: `${theme.surface}d9`,
                         padding: `${s(numPaddingY)}px ${s(numPaddingX)}px`,
                         display: 'grid',
-                        gridTemplateColumns: `${s(54)}px 1fr`,
+                        gridTemplateColumns: `${s(62)}px 1fr`,
                         gap: s(12),
                         alignItems: 'start',
                         minHeight: s(72),
@@ -1667,14 +1640,14 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     >
                       <div
                         style={{
-                          width: s(46),
-                          height: s(46),
+                          width: s(54),
+                          height: s(54),
                           borderRadius: s(14),
                           display: 'block',
                           background: `linear-gradient(135deg, ${theme.accentSoft}, ${theme.accent})`,
                           color: theme.surfaceStrong,
                           fontFamily: theme.displayFont,
-                          fontSize: fs(24),
+                          fontSize: fs(31),
                           fontWeight: 700,
                           position: 'relative',
                         }}
@@ -1851,53 +1824,6 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
 
     case 'two_column': {
       const imagePosition = getImagePosition(slide)
-      const variant = String(slide.variant || '').toLowerCase()
-      const comparisonTable = buildComparisonTableData(slide, bullets, columns)
-
-      if (variant === 'comparison_table' && comparisonTable) {
-        return (
-          <div style={baseStyle}>
-            {renderDecor()}
-
-            <div
-              style={{
-                ...layoutPadding,
-                zIndex: 2,
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: s(16),
-                minHeight: 0,
-              }}
-            >
-              <div
-                style={{
-                  ...panelCard,
-                  padding: `${s(20)}px ${s(24)}px`,
-                }}
-              >
-                <h2
-                  style={{
-                    margin: 0,
-                    fontFamily: theme.displayFont,
-                    fontSize: fs(52),
-                    lineHeight: 1.05,
-                    letterSpacing: '-0.026em',
-                    fontWeight: 700,
-                  }}
-                >
-                  {slide.title}
-                </h2>
-                {slide.subtitle && <p style={{ marginTop: s(8), color: theme.subtext, fontSize: fs(19) }}>{slide.subtitle}</p>}
-              </div>
-
-              <div style={{ flex: 1, minHeight: 0 }}>
-                {renderComparisonTable(comparisonTable)}
-              </div>
-            </div>
-          </div>
-        )
-      }
 
       return (
         <div style={baseStyle}>
@@ -1965,7 +1891,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         overflow: 'hidden',
                       }}
                     >
-                      {col.items.slice(0, 6).map((item, itemIndex) => (
+                      {col.items.slice(0, 4).map((item, itemIndex) => (
                         <div
                           key={itemIndex}
                           style={{
@@ -2002,73 +1928,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       )
     }
 
-    case 'quote': {
-      return (
-        <div style={baseStyle}>
-          {renderDecor()}
 
-          <div
-            style={{
-              ...layoutPadding,
-              zIndex: 2,
-              flex: 1,
-              display: 'grid',
-              gridTemplateColumns: hasImage ? '56% 44%' : '1fr',
-              gap: s(20),
-              alignItems: 'stretch',
-            }}
-          >
-            <div
-              style={{
-                ...panelCard,
-                padding: `${s(34)}px ${s(34)}px`,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-              }}
-            >
-              <div
-                style={{
-                  marginTop: s(6),
-                  fontFamily: theme.displayFont,
-                  fontSize: fs(108),
-                  lineHeight: 0.75,
-                  color: theme.accentSoft,
-                }}
-              >
-                “
-              </div>
-              <blockquote
-                style={{
-                  margin: `${s(8)}px 0 0`,
-                  fontSize: fs(36),
-                  lineHeight: 1.28,
-                  fontWeight: 600,
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                {slide.quote}
-              </blockquote>
-              {slide.quoteAuthor && (
-                <cite
-                  style={{
-                    marginTop: s(20),
-                    color: theme.accent,
-                    fontStyle: 'normal',
-                    fontSize: fs(18),
-                    fontWeight: 700,
-                  }}
-                >
-                  — {slide.quoteAuthor}
-                </cite>
-              )}
-            </div>
-
-            {hasImage && renderImagePanel({ minHeight: s(622) })}
-          </div>
-        </div>
-      )
-    }
 
     case 'stats': {
       const imagePosition = getImagePosition(slide)
@@ -2529,7 +2389,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
               ...panelCard,
             }}
           >
-            <span style={{ color: theme.subtext, fontSize: fs(20) }}>Unsupported slide type</span>
+            <span style={{ color: theme.subtext, fontSize: fs(20) }}>Content unavailable for this slide.</span>
           </div>
         </div>
       )

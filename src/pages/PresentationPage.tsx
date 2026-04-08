@@ -93,15 +93,7 @@ const TEST_PRESENTATION: Presentation = normalizePresentation({
       notes:
         'These statistics come from peer-reviewed studies on spaced repetition and active recall.',
     },
-    {
-      id: 'slide-6',
-      type: 'quote',
-      quote:
-        'The most effective way to learn is not to consume information but to generate it — retrieval practice transforms passive knowledge into durable understanding.',
-      quoteAuthor: 'Dr. Henry Roediger III, Cognitive Psychologist',
-      notes:
-        'Roediger is one of the leading researchers on the testing effect.',
-    },
+
     {
       id: 'slide-7',
       type: 'summary',
