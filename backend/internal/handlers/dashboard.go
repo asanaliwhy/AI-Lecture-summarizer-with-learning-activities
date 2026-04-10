@@ -397,6 +397,8 @@ func (h *DashboardHandler) Streak(w http.ResponseWriter, r *http.Request) {
 			SELECT DISTINCT DATE(last_reviewed_at) FROM flashcard_cards fc
 			JOIN flashcard_decks fd ON fc.deck_id = fd.id
 			WHERE fd.user_id = $1 AND fc.last_reviewed_at IS NOT NULL
+			UNION
+			SELECT DISTINCT DATE(created_at) FROM presentations WHERE user_id = $1 AND status = 'completed'
 		),
 		start_day AS (
 			SELECT CASE

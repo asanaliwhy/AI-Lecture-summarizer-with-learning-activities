@@ -10,13 +10,30 @@ import { Badge } from '../components/ui/Badge'
 import { api, ApiError, presentationQueryKeys } from '../lib/api'
 import { useToast } from '../components/ui/Toast'
 import { cn } from '../lib/utils'
-import type { Presentation } from '../lib/presentationTypes'
-import { getThemeById } from '../lib/presentationThemes'
+import type { Presentation, SlideTheme } from '../lib/presentationTypes'
+import { DEFAULT_PRESENTATION_THEME_ID, getThemeById, getThemePresetById, isThemeId } from '../lib/presentationThemes'
 import { PRESENTATION_CANVAS_HEIGHT, PRESENTATION_CANVAS_WIDTH, SlideRenderer } from '../components/presentation/SlideRenderer'
 
-function PresentationCardPreview({ presentation }: { presentation: Presentation }) {
+function resolvePresentationTheme(presentation: Presentation): SlideTheme {
+  const fallbackTheme = isThemeId(presentation.theme) ? presentation.theme : DEFAULT_PRESENTATION_THEME_ID
+  try {
+    const storedTheme = localStorage.getItem(`presentation-theme:${presentation.id}`)
+    if (isThemeId(storedTheme)) {
+      return storedTheme
+    }
+  } catch {
+    return fallbackTheme
+  }
+  return fallbackTheme
+}
+
+function resolveThemeCategory(themeId: string): string {
+  return getThemePresetById(themeId).category.toLowerCase()
+}
+
+function PresentationCardPreview({ presentation, themeId }: { presentation: Presentation; themeId: SlideTheme }) {
   const firstSlide = presentation.slides[0]
-  const theme = getThemeById(presentation.theme)
+  const theme = getThemeById(themeId)
   const containerRef = React.useRef<HTMLDivElement | null>(null)
   const [scale, setScale] = React.useState(1)
 
@@ -71,7 +88,7 @@ export function PresentationsPage() {
   const toast = useToast()
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
-  const [quickFilter, setQuickFilter] = useState<'all' | 'starred' | 'navy' | 'minimal' | 'academic' | 'dark'>('all')
+  const [quickFilter, setQuickFilter] = useState<string>('all')
   const [favoritePendingIds, setFavoritePendingIds] = useState<string[]>([])
 
   type PresentationListCache = {
@@ -90,6 +107,14 @@ export function PresentationsPage() {
   })
 
   const presentations = data?.presentations || []
+
+  const themedPresentations = useMemo(
+    () => presentations.map((presentation) => ({
+      presentation,
+      resolvedTheme: resolvePresentationTheme(presentation),
+    })),
+    [presentations],
+  )
 
   const isFavoritePending = (presentationID: string) => favoritePendingIds.includes(presentationID)
 
@@ -139,26 +164,28 @@ export function PresentationsPage() {
   }
 
   const filteredPresentations = useMemo(() => {
-    return presentations.filter((presentation) => {
+    return themedPresentations.filter(({ presentation, resolvedTheme }) => {
       if (quickFilter === 'all') return true
       if (quickFilter === 'starred') return Boolean(presentation.isFavorite)
-      return (presentation.theme || 'navy') === quickFilter
+      return resolveThemeCategory(resolvedTheme) === quickFilter
     })
-  }, [presentations, quickFilter])
+  }, [themedPresentations, quickFilter])
 
-  const filterOptions: Array<{ key: typeof quickFilter; label: string }> = [
+  const filterOptions = [
     { key: 'all', label: 'All' },
     { key: 'starred', label: 'Starred' },
-    { key: 'navy', label: 'Navy' },
     { key: 'minimal', label: 'Minimal' },
+    { key: 'corporate', label: 'Corporate' },
+    { key: 'editorial', label: 'Editorial' },
     { key: 'academic', label: 'Academic' },
+    { key: 'cinematic', label: 'Cinematic' },
     { key: 'dark', label: 'Dark' },
   ]
 
-  const getFilterCount = (key: typeof quickFilter) => {
-    if (key === 'all') return presentations.length
-    if (key === 'starred') return presentations.filter((presentation) => Boolean(presentation.isFavorite)).length
-    return presentations.filter((presentation) => (presentation.theme || 'navy') === key).length
+  const getFilterCount = (key: string) => {
+    if (key === 'all') return themedPresentations.length
+    if (key === 'starred') return themedPresentations.filter(({ presentation }) => Boolean(presentation.isFavorite)).length
+    return themedPresentations.filter(({ resolvedTheme }) => resolveThemeCategory(resolvedTheme) === key).length
   }
 
   return (
@@ -187,10 +214,10 @@ export function PresentationsPage() {
 
           <div className="relative mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { label: 'Total', value: presentations.length },
-              { label: 'Slides', value: presentations.reduce((sum, item) => sum + item.slideCount, 0) },
-              { label: 'Themes', value: new Set(presentations.map((item) => item.theme || 'navy')).size },
-              { label: 'Completed', value: presentations.filter((item) => item.status === 'completed').length },
+              { label: 'Total', value: themedPresentations.length },
+              { label: 'Slides', value: themedPresentations.reduce((sum, item) => sum + item.presentation.slideCount, 0) },
+              { label: 'Themes', value: new Set(themedPresentations.map((item) => item.resolvedTheme)).size },
+              { label: 'Completed', value: themedPresentations.filter((item) => item.presentation.status === 'completed').length },
             ].map((stat) => (
               <div key={stat.label} className="rounded-xl border bg-card/90 p-3 shadow-sm">
                 <div className="flex items-center justify-between">
@@ -293,7 +320,7 @@ export function PresentationsPage() {
           </div>
         ) : filteredPresentations.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredPresentations.map((presentation) => (
+            {filteredPresentations.map(({ presentation, resolvedTheme }) => (
               <Card
                 key={presentation.id}
                 className="group hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer border relative overflow-hidden"
@@ -309,7 +336,7 @@ export function PresentationsPage() {
               >
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500/60 via-slate-500/40 to-amber-500/30" />
                 <CardContent className="p-6 relative z-10 space-y-4">
-                  <PresentationCardPreview presentation={presentation} />
+                  <PresentationCardPreview presentation={presentation} themeId={resolvedTheme} />
 
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
@@ -319,7 +346,7 @@ export function PresentationsPage() {
                       <div className="flex flex-wrap items-center gap-2 mt-2">
                         <Badge variant="secondary">{presentation.slideCount} slides</Badge>
                         <Badge variant="outline" className="capitalize">{presentation.language || 'en'}</Badge>
-                        <Badge variant="outline" className="capitalize">{presentation.theme || 'navy'}</Badge>
+                        <Badge variant="outline" className="capitalize">{resolvedTheme}</Badge>
                         <Badge variant="outline" className="capitalize">{presentation.status}</Badge>
                       </div>
                     </div>

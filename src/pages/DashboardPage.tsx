@@ -25,7 +25,6 @@ import {
 	Presentation,
 	Play,
   Clock,
-  MoreHorizontal,
   Plus,
   ArrowUpRight,
   ArrowDownRight,
@@ -680,13 +679,6 @@ export function DashboardPage() {
                       >
                         {item.type}
                       </Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/80"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
                     </CardHeader>
                     <CardContent className="pt-4 relative z-10">
                       <h3 className="font-semibold leading-tight mb-2 group-hover:text-primary transition-colors">
