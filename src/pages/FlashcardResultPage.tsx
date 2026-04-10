@@ -335,16 +335,6 @@ export function FlashcardResultPage({
           <div className="h-full bg-[#1a1a2e]" style={{ width: `${percentage}%` }} />
         </div>
 
-        <div className="mb-9 flex flex-wrap justify-center gap-4">
-          <Button size="lg" onClick={onStudyAgain}>
-            Study Again
-          </Button>
-          <Button variant="outline" size="lg" onClick={handleExportPdf} disabled={isExporting}>
-            {isExporting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Download className="mr-2 h-5 w-5" />}
-            {isExporting ? 'Exporting...' : 'Export PDF'}
-          </Button>
-        </div>
-
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-[11px] font-bold tracking-[0.08em] text-[#1a1a2e]">CARD BREAKDOWN</h2>
           <div className="text-xs text-muted-foreground">{learningCount} learning</div>
@@ -397,6 +387,16 @@ export function FlashcardResultPage({
               </div>
             )
           })}
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-4 mt-10">
+          <Button variant="outline" size="lg" onClick={handleExportPdf} disabled={isExporting}>
+            {isExporting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Download className="mr-2 h-5 w-5" />}
+            {isExporting ? 'Exporting...' : 'Export PDF'}
+          </Button>
+          <Button size="lg" onClick={onStudyAgain}>
+            Study Again
+          </Button>
         </div>
 
         <div className="mt-10 border-t border-border pt-4 text-center text-xs text-muted-foreground">

@@ -42,8 +42,6 @@ type PresentationSlide struct {
 	RightColumn   []string               `json:"rightColumn,omitempty"`
 	LeftLabel     *string                `json:"leftLabel,omitempty"`
 	RightLabel    *string                `json:"rightLabel,omitempty"`
-	Quote         *string                `json:"quote,omitempty"`
-	QuoteAuthor   *string                `json:"quoteAuthor,omitempty"`
 	Stats         []PresentationStat     `json:"stats,omitempty"`
 	Takeaways     []PresentationTakeaway `json:"takeaways,omitempty"`
 	TableHeaders  []string               `json:"tableHeaders,omitempty"`

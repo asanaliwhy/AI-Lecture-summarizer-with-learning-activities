@@ -477,7 +477,7 @@ npm run dev
 | `FRONTEND_URL` | ✅ | Allowed frontend origin(s) for CORS and links |
 | `GOOGLE_CLIENT_ID` | Optional | Google OAuth client id |
 | `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth secret |
-| `GOOGLE_REDIRECT_URI` | Optional | OAuth callback URI (local: `http://localhost:5173/auth/callback`) |
+| `GOOGLE_REDIRECT_URI` | Optional | OAuth callback URI |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Optional* | Required for production email flows |
 | `STORAGE_TYPE` / `STORAGE_PATH` | Optional | Upload storage strategy/path |
 | `GEMINI_REQUESTS_PER_MINUTE` | Optional | AI request rate limits |
@@ -519,8 +519,6 @@ This repository is intended to run as **4 Railway services**:
 
 ### Google OAuth values
 In Google Cloud OAuth credentials:
-- Authorized JS origin: `http://localhost:5173`
-- Authorized redirect URI: `http://localhost:5173/auth/callback`
 - Authorized JS origin: `https://<frontend-domain>`
 - Authorized redirect URI: `https://<frontend-domain>/auth/callback`
 
