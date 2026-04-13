@@ -1,170 +1,325 @@
-# Lectura — AI Lecture Summarizer with Learning Activities
+<div align="center">
 
-Lectura transforms raw study content into active-learning outputs: multi-format summaries, adaptive quizzes, spaced-repetition flashcards, and **AI-generated presentation decks** — all from a single YouTube link or uploaded file.
+# Lectura
 
-![Landing Page](docs/images/landing-page.png)
+### AI-Powered Lecture Summarizer with Learning Activities
+
+Paste a YouTube link or upload a file — get structured notes, adaptive quizzes,<br>
+spaced-repetition flashcards, and presentation decks in seconds.
+
+[![React](https://img.shields.io/badge/React_18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![Go](https://img.shields.io/badge/Go_1.24-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgresql.org)
+[![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io)
+[![Gemini](https://img.shields.io/badge/Gemini_API-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+
+<br>
+
+<img src="docs/images/landing-page.png" alt="Lectura Landing Page" width="100%">
+
+</div>
+
+---
+
+## 📋 Table of Contents
+
+- [Key Features](#-key-features)
+- [Screenshots](#-screenshots)
+- [Product Flow](#-product-flow)
+- [Tech Stack](#-tech-stack)
+- [Architecture](#-architecture)
+- [Repository Structure](#-repository-structure)
+- [Getting Started](#-getting-started)
+- [API Surface](#-api-surface)
+- [Scripts](#-scripts)
+- [Deployment](#-deployment)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+---
 
 ## ✨ Key Features
 
 ### 📝 Multi-Format Summaries
-Paste a YouTube URL or upload a document and get structured notes in four distinct formats — each engineered for a different kind of thinking:
 
-| Format | Purpose |
-|---|---|
-| **Cornell Method** | Two-column cue/note layout with synthesis — the gold standard for lecture retention |
-| **Bullet Points** | Structured breakdowns with definitions, examples, and key takeaways |
-| **Paragraph** | Flowing prose with subheadings — ideal for essay prep |
-| **Smart Summary** | Key concepts with real-world applications, data tables, and memorable facts |
+Paste a YouTube URL or upload a document and get structured notes in **four distinct formats** — each engineered for a different kind of thinking:
+
+| Format | Purpose | Best For |
+|:---|:---|:---|
+| **Cornell Method** | Two-column cue/note layout with synthesis summary | Exam prep & long-term retention |
+| **Bullet Points** | Structured breakdowns with definitions and examples | Fast scanning & quick review |
+| **Paragraph** | Flowing prose with subheadings and closing analysis | Essay preparation & deep comprehension |
+| **Smart Summary** | Key concepts with real-world applications and data tables | Context-rich understanding |
+
+---
 
 ### 🎯 Adaptive Quizzes
-AI-generated quizzes with multiple-choice and true/false questions at three difficulty levels (Easy, Medium, Hard). Includes timers, hints, and detailed explanations for every answer.
+
+AI-generated quizzes with **multiple-choice** and **true/false** questions at three difficulty levels. Each question includes a timer, optional hints, and detailed explanations for every answer — turning passive review into active recall.
+
+<table>
+<tr>
+<td><strong>Easy</strong> — Recall-level questions on key definitions and facts</td>
+</tr>
+<tr>
+<td><strong>Medium</strong> — Application-level questions requiring understanding of relationships</td>
+</tr>
+<tr>
+<td><strong>Hard</strong> — Analysis-level questions that test deeper critical thinking</td>
+</tr>
+</table>
+
+---
 
 ### 🧠 Spaced-Repetition Flashcards
-Flashcard decks built directly from your summaries using the **SM-2 algorithm**. Rate difficulty after each review and let the system schedule optimal review intervals. Mnemonics and examples are included automatically.
+
+Flashcard decks built directly from your summaries using the **SM-2 algorithm**. Rate difficulty after each review and let the system schedule optimal review intervals. Mnemonics and contextual examples are generated automatically to reinforce understanding.
+
+---
 
 ### 🖥️ AI Presentation Generation
+
 Turn any lecture into a polished, structured slide deck — ready to present or export.
 
-- **Configurable generation** — choose slide count (Short / Medium / Large), text style (Formal, Academic, Conversational), and output language (English, Kazakh, Russian, French, Spanish)
-- **Theme engine** — 20+ curated themes across Light, Dark, Warm, and Cool categories with gradient backgrounds, accent colors, and matched typography
-- **Rich slide types** — title, section, content with bullets, two-column comparisons, stats grids, prose, and summary/takeaway layouts
-- **Inline editing** — click any text on a slide to edit it in place; changes auto-save with debounced persistence
-- **Fullscreen present mode** — immersive, distraction-free presentation with keyboard navigation
-- **Export to PDF & PPTX** — high-fidelity vector exports that match the on-screen rendering pixel-for-pixel
-- **Thumbnail sidebar** — scroll through all slides with a visual thumbnail panel, synced to the active slide
+| Capability | Details |
+|:---|:---|
+| **Configurable generation** | Choose slide count (Short / Medium / Large), text style (Formal, Academic, Conversational), and language (EN, KZ, RU, FR, ES) |
+| **Theme engine** | 20+ curated themes across Light, Dark, Warm, and Cool categories with gradient backgrounds and matched typography |
+| **Rich slide types** | Title, section, content with bullets, two-column comparisons, stats grids, prose, and summary/takeaway layouts |
+| **Inline editing** | Click any text on a slide to edit in place — changes auto-save with debounced persistence |
+| **Present mode** | Immersive fullscreen presentation with keyboard navigation (←→ arrows, Esc to exit) |
+| **Export** | High-fidelity **PDF** and **PPTX** exports that match on-screen rendering pixel-for-pixel |
+| **Thumbnail sidebar** | Visual thumbnail panel synced to the active slide for quick navigation |
+
+---
 
 ### 💬 Ask AI Chat
-Context-grounded Q&A about your summaries. The AI stays anchored to the source material and refuses to drift off-topic.
+
+Context-grounded Q&A about your summaries. The AI stays anchored to the source material and **refuses to drift off-topic** — no hallucinations, just verified answers from your content.
+
+---
 
 ### 📊 Dashboard & Analytics
-Track your learning with daily streaks, activity stats, recent items, and weekly goal tracking across all resource types.
+
+Track your learning with **daily streaks**, activity stats, recent items, and **weekly goal tracking** across all resource types.
+
+---
 
 ### 📚 Unified Library
-Search, filter, sort, and favorite all summaries, quizzes, flashcards, and presentations in one place.
+
+Search, filter, sort, and favorite all summaries, quizzes, flashcards, and presentations in a single, unified interface.
+
+---
+
+## 📸 Screenshots
+
+<details open>
+<summary><strong>🔐 Authentication</strong></summary>
+<br>
+<p align="center">
+<img src="docs/images/login-page.png" alt="Login Page" width="48%">&nbsp;&nbsp;
+<img src="docs/images/register-page.png" alt="Register Page" width="48%">
+</p>
+</details>
+
+<details open>
+<summary><strong>📄 Content & Summary</strong></summary>
+<br>
+<p align="center">
+<img src="docs/images/content-upload.png" alt="Content Upload" width="48%">&nbsp;&nbsp;
+<img src="docs/images/summary-result-page.png" alt="Summary Result" width="48%">
+</p>
+</details>
+
+<details open>
+<summary><strong>🎯 Learning Activities</strong></summary>
+<br>
+<p align="center">
+<img src="docs/images/quiz-page.png" alt="Quiz Page" width="48%">&nbsp;&nbsp;
+<img src="docs/images/flashcard-study-page.png" alt="Flashcard Study" width="48%">
+</p>
+</details>
+
+<details open>
+<summary><strong>🖥️ Presentation Generation</strong></summary>
+<br>
+<p align="center">
+<img src="docs/images/presentation-config.png" alt="Presentation Configuration" width="100%">
+</p>
+<p align="center">
+<img src="docs/images/presentation-viewer.png" alt="Presentation Viewer" width="48%">&nbsp;&nbsp;
+<img src="docs/images/presentation-present-mode.png" alt="Present Mode" width="48%">
+</p>
+</details>
+
+<details open>
+<summary><strong>📊 Navigation & Insights</strong></summary>
+<br>
+<p align="center">
+<img src="docs/images/library-page.png" alt="Library" width="32%">&nbsp;
+<img src="docs/images/dashboard.png" alt="Dashboard" width="32%">&nbsp;
+<img src="docs/images/settings-page.png" alt="Settings" width="32%">
+</p>
+</details>
+
+---
 
 ## 🔄 Product Flow
 
 ```mermaid
 flowchart LR
-  A[Paste YouTube URL or upload file] --> B[Generate summary]
-  B --> C[Study with quiz & flashcards]
-  B --> D[Generate presentation deck]
-  D --> E[Edit · Present · Export]
-  C --> F[Track progress on dashboard]
-  D --> F
+  A["📎 Paste YouTube URL\nor upload file"] --> B["🤖 AI processes\ncontent"]
+  B --> C["📝 Multi-format\nsummary"]
+  C --> D["🎯 Quiz"]
+  C --> E["🧠 Flashcards"]
+  C --> F["🖥️ Presentation"]
+  F --> G["✏️ Edit · 🎬 Present · 📤 Export"]
+  D --> H["📊 Dashboard\nanalytics"]
+  E --> H
+  G --> H
 ```
 
-## 📸 Screenshots
-
-### Authentication
-
-![Login](docs/images/login-page.png)
-![Register](docs/images/register-page.png)
-
-### Content & Summary
-
-![Content Upload](docs/images/content-upload.png)
-![Summary Result](docs/images/summary-result-page.png)
-
-### Learning Activities
-
-![Quiz](docs/images/quiz-page.png)
-![Flashcards](docs/images/flashcard-study-page.png)
-
-### Presentation Generation
-
-![Presentation Config](docs/images/presentation-config.png)
-![Presentation Viewer](docs/images/presentation-viewer.png)
-![Present Mode](docs/images/presentation-present-mode.png)
-
-### Navigation & Insights
-
-![Library](docs/images/library-page.png)
-![Dashboard](docs/images/dashboard.png)
-![Settings](docs/images/settings-page.png)
+---
 
 ## 🛠 Tech Stack
 
-### Frontend
+<table>
+<tr>
+<td width="33%" valign="top">
 
+### Frontend
 - **React 18** + TypeScript
-- **Vite** build tooling
-- **React Router** for client-side routing
-- **TanStack Query** for server-state management
-- **Vitest** for unit tests
-- Tailwind CSS for styling
+- **Vite** for build tooling
+- **React Router** for routing
+- **TanStack Query** for server-state
+- **Tailwind CSS** for styling
+- **Vitest** for testing
+
+</td>
+<td width="33%" valign="top">
 
 ### Backend
-
 - **Go 1.24** with Chi router
-- **PostgreSQL** (pgx driver) for persistent storage
-- **Redis** for job queuing and caching
-- **Gorilla WebSocket** for real-time processing updates
-- **Google Gemini API** for AI generation (summaries, quizzes, flashcards, presentations)
-- **Unsplash API** for presentation imagery
+- **PostgreSQL** via pgx driver
+- **Redis** for job queues & cache
+- **Gorilla WebSocket** for live updates
+- **Google Gemini API** for AI generation
+- **Unsplash API** for imagery
+
+</td>
+<td width="33%" valign="top">
 
 ### Infrastructure
+- **Docker Compose** for local dev
+- **Railway** deployment configs
+- **Nginx** reverse proxy + SSL
+- **Auto-migrations** on startup
 
-- Docker Compose for local orchestration (Postgres, Redis)
-- Railway-ready deployment configuration
-- Nginx reverse proxy with SSL support
+</td>
+</tr>
+</table>
+
+---
+
+## ⚙️ Architecture
+
+```mermaid
+flowchart LR
+  subgraph Client
+    A[React SPA]
+  end
+  subgraph API
+    B[Chi Router + Handlers]
+  end
+  subgraph Workers
+    D[Job Worker Pool]
+  end
+  subgraph Storage
+    F[(PostgreSQL)]
+    G[(Redis Queue)]
+  end
+  subgraph External
+    E[Gemini API]
+    U[Unsplash API]
+  end
+
+  A -- "REST API" --> B
+  A <-- "WebSocket" --> B
+  B --> G
+  G --> D
+  D --> E
+  D --> U
+  D --> F
+  B --> F
+```
+
+---
 
 ## 📂 Repository Structure
 
-```text
+```
 .
-├── src/                              # Frontend
+├── src/                              # React frontend
 │   ├── pages/                        # Route-level page components
 │   ├── components/
-│   │   ├── presentation/             # SlideViewer, SlideRenderer, ThemeSelector, SlideThumbnail
-│   │   ├── layout/                   # AppLayout, navigation
-│   │   └── ui/                       # Shared UI primitives (Button, Card, Toast, etc.)
-│   ├── lib/                          # API client, types, themes, export utilities
+│   │   ├── presentation/             # SlideViewer, SlideRenderer, ThemeSelector
+│   │   ├── layout/                   # AppLayout, Header, Sidebar
+│   │   └── ui/                       # Button, Card, Toast, Dialog, etc.
+│   ├── lib/                          # API client, types, themes, export utils
 │   └── hooks/                        # Custom React hooks
 ├── backend/
-│   ├── cmd/server/                   # Entrypoint
+│   ├── cmd/server/                   # Main entrypoint
 │   ├── internal/
-│   │   ├── handlers/                 # HTTP handlers (auth, content, summary, quiz, flashcard, presentation, dashboard, chat)
-│   │   ├── services/                 # Gemini AI, auth, email, YouTube, file extraction
+│   │   ├── handlers/                 # HTTP handlers per domain
+│   │   ├── services/                 # Gemini AI, auth, email, YouTube
 │   │   ├── repository/               # Data access layer
-│   │   ├── worker/                   # Async job workers for AI generation
+│   │   ├── worker/                   # Async AI generation workers
 │   │   ├── router/                   # Route composition
 │   │   ├── middleware/               # Auth, CORS, logging
 │   │   ├── models/                   # Domain models
 │   │   └── websocket/                # Real-time progress updates
-│   └── migrations/                   # SQL migrations
+│   └── migrations/                   # SQL schema migrations
 ├── docs/images/                      # README screenshots
 ├── docker-compose.yml
 ├── Dockerfile / Dockerfile.railway
 └── nginx.conf / nginx.ssl.conf
 ```
 
-## 🚀 Local Development
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
-- Go 1.24+
-- Docker Desktop (recommended for Postgres/Redis)
+| Requirement | Version |
+|:---|:---|
+| Node.js | 18+ |
+| Go | 1.24+ |
+| Docker Desktop | Latest (recommended) |
 
-### 1. Clone
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/asanaliwhy/AI-Lecture-summarizer-with-learning-activities.git
 cd AI-Lecture-summarizer-with-learning-activities
 ```
 
-### 2. Configure Environment
+### 2. Configure environment
 
-Frontend (`.env` at repo root):
+<details>
+<summary><strong>Frontend <code>.env</code></strong> (repo root)</summary>
 
 ```env
 VITE_API_BASE_URL=http://localhost:8082/api/v1
 VITE_GOOGLE_CLIENT_ID=your_google_client_id
 VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/auth/callback
 ```
+</details>
 
-Backend (`backend/.env`):
+<details>
+<summary><strong>Backend <code>backend/.env</code></strong></summary>
 
 ```env
 PORT=8082
@@ -180,97 +335,72 @@ GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:5173/callback
 ```
+</details>
 
-You can also start from `.env.example` and `backend/.env.example`.
+> **Tip:** Copy from `.env.example` and `backend/.env.example` to get started quickly.
 
-### 3. Start Database & Redis
+### 3. Start services
 
 ```bash
+# Start Postgres and Redis
 docker compose up -d postgres redis
-```
 
-### 4. Run Backend
-
-```bash
+# Start backend (auto-applies migrations)
 cd backend
 go run ./cmd/server
-```
 
-Backend auto-applies migrations at startup.
-
-### 5. Run Frontend
-
-```bash
+# Start frontend (from repo root)
 npm install
 npm run dev
 ```
 
-## 🌐 Default Local URLs
+### 4. Open in browser
 
 | Service | URL |
-|---|---|
-| Frontend | `http://localhost:5173` |
-| Backend API | `http://localhost:8082/api/v1` |
-| Health Check | `http://localhost:8082/api/v1/health` |
+|:---|:---|
+| Frontend | [`http://localhost:5173`](http://localhost:5173) |
+| Backend API | [`http://localhost:8082/api/v1`](http://localhost:8082/api/v1) |
+| Health Check | [`http://localhost:8082/api/v1/health`](http://localhost:8082/api/v1/health) |
+
+---
 
 ## 📡 API Surface
 
 | Domain | Endpoints |
-|---|---|
+|:---|:---|
 | **Auth** | Login, register, Google OAuth, email verification, password change |
-| **Content** | YouTube validation, file upload, transcript extraction |
-| **Summary** | Generate (4 formats), list, detail, favorite, chat |
+| **Content** | YouTube URL validation, file upload, transcript extraction |
+| **Summary** | Generate (4 formats), list, detail, favorite, AI chat |
 | **Quiz** | Generate (3 difficulties), attempt, results, favorite |
 | **Flashcards** | Generate, deck management, spaced-repetition study, favorite |
-| **Presentation** | Generate, list, view, update slides (inline edit), delete, theme, export, favorite |
+| **Presentation** | Generate, list, view, inline slide editing, delete, theme, PDF/PPTX export, favorite |
 | **Dashboard** | Stats, recent activity, streak, weekly goals, notifications |
 | **Library** | Unified cross-resource search, filter, sort |
-| **Jobs / WebSocket** | Async processing queue, real-time progress updates |
+| **Jobs / WS** | Async processing queue, real-time WebSocket progress |
 
-## ⚙️ Processing Architecture
-
-```mermaid
-flowchart LR
-  A[Client Request] --> B[API Handler]
-  B --> C[Job Queue — Redis]
-  C --> D[Worker Pool]
-  D --> E[Gemini API + Extractors]
-  E --> F[(PostgreSQL)]
-  D --> G[WebSocket Progress]
-  G --> A
-```
+---
 
 ## 📋 Scripts
 
-**Frontend** (from project root):
+| Command | Location | Description |
+|:---|:---|:---|
+| `npm run dev` | Root | Start Vite dev server |
+| `npm run build` | Root | TypeScript check + production build |
+| `npm run test` | Root | Run Vitest test suite |
+| `npm run typecheck` | Root | Strict TypeScript checks |
+| `go run ./cmd/server` | `backend/` | Start backend server |
+| `go test ./...` | `backend/` | Run all backend tests |
 
-| Command | Description |
-|---|---|
-| `npm run dev` | Start frontend dev server |
-| `npm run build` | TypeScript check + production build |
-| `npm run test` | Run Vitest test suite |
-| `npm run typecheck` | Strict TypeScript checks |
-
-**Backend** (from `backend/`):
-
-| Command | Description |
-|---|---|
-| `go run ./cmd/server` | Start backend server |
-| `go test ./...` | Run all backend tests |
-
-## ✅ Quality & Testing
-
-- Frontend type safety with strict TypeScript
-- Frontend unit tests with Vitest
-- Backend unit and integration tests across handlers, services, and repositories
-- Job retry and error handling with fallback paths
-- Debounced auto-save for inline slide editing
+---
 
 ## 🚢 Deployment
 
-- `Dockerfile`, `Dockerfile.railway`, `railway.toml`, and Nginx configs included
+- Production-ready `Dockerfile`, `Dockerfile.railway`, `railway.toml`, and Nginx configs included
 - Configure production environment variables before deployment
-- Never commit real secrets to version control
+- Backend auto-applies database migrations on startup
+- **Never** commit real secrets to version control
+
+---
 
 ## 🤝 Contributing
 
@@ -279,6 +409,17 @@ flowchart LR
 3. Run `npm run typecheck`, `npm run test`, and `go test ./...`
 4. Open a PR with a clear summary and screenshots for UI changes
 
+---
+
 ## 📄 License
 
-MIT — see [LICENSE](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+<div align="center">
+<br>
+<strong>Built with ❤️ for students who want to study smarter</strong>
+<br><br>
+<a href="https://github.com/asanaliwhy/AI-Lecture-summarizer-with-learning-activities">⭐ Star this repo</a> if you found it useful!
+</div>
