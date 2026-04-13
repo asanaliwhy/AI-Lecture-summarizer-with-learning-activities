@@ -1,638 +1,284 @@
-<div align="center">
+# Lectura — AI Lecture Summarizer with Learning Activities
 
-# 🎓 Lectura — AI-Powered Study Operating System
+Lectura transforms raw study content into active-learning outputs: multi-format summaries, adaptive quizzes, spaced-repetition flashcards, and **AI-generated presentation decks** — all from a single YouTube link or uploaded file.
 
-### Turn lectures into **summaries, quizzes, flashcards, and progress insights** in minutes.
+![Landing Page](docs/images/landing-page.png)
 
-<p>
-  <img src="https://img.shields.io/badge/Frontend-React%2018-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React"/>
-  <img src="https://img.shields.io/badge/Backend-Go%201.24-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go"/>
-  <img src="https://img.shields.io/badge/AI-Gemini%202.5%20Flash-8E75B2?style=for-the-badge&logo=google&logoColor=white" alt="Gemini"/>
-  <img src="https://img.shields.io/badge/Database-PostgreSQL%2016-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
-  <img src="https://img.shields.io/badge/Cache-Redis%207-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis"/>
-  <img src="https://img.shields.io/badge/Deploy-Railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white" alt="Railway"/>
-  <img src="https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge" alt="MIT License"/>
-</p>
+## ✨ Key Features
 
-<p>
-  <a href="https://easygoing-vitality-production-f7c4.up.railway.app"><strong>🌐 Live Demo</strong></a> •
-  <a href="#-guided-user-journey-page-by-page"><strong>🧭 Product Tour</strong></a> •
-  <a href="#-flow-deep-dive-how-everything-works"><strong>🔄 End-to-End Flows</strong></a>
-</p>
+### 📝 Multi-Format Summaries
+Paste a YouTube URL or upload a document and get structured notes in four distinct formats — each engineered for a different kind of thinking:
 
-<p>
-  <a href="#-overview">Overview</a> •
-  <a href="#-guided-user-journey-page-by-page">Guided Tour</a> •
-  <a href="#-flow-deep-dive-how-everything-works">Flows</a> •
-  <a href="#-architecture">Architecture</a> •
-  <a href="#-features">Features</a> •
-  <a href="#-tech-stack">Tech Stack</a> •
-  <a href="#-api-surface">API</a> •
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-environment-variables-scannable-tables">Env Vars</a> •
-  <a href="#-railway-deployment-guide">Railway Deploy</a> •
-  <a href="#-testing--quality">Testing</a> •
-  <a href="#-contributing">Contributing</a> •
-  <a href="#-license">License</a>
-</p>
+| Format | Purpose |
+|---|---|
+| **Cornell Method** | Two-column cue/note layout with synthesis — the gold standard for lecture retention |
+| **Bullet Points** | Structured breakdowns with definitions, examples, and key takeaways |
+| **Paragraph** | Flowing prose with subheadings — ideal for essay prep |
+| **Smart Summary** | Key concepts with real-world applications, data tables, and memorable facts |
 
-</div>
+### 🎯 Adaptive Quizzes
+AI-generated quizzes with multiple-choice and true/false questions at three difficulty levels (Easy, Medium, Hard). Includes timers, hints, and detailed explanations for every answer.
 
----
+### 🧠 Spaced-Repetition Flashcards
+Flashcard decks built directly from your summaries using the **SM-2 algorithm**. Rate difficulty after each review and let the system schedule optimal review intervals. Mnemonics and examples are included automatically.
 
-## 🚀 Overview
+### 🖥️ AI Presentation Generation
+Turn any lecture into a polished, structured slide deck — ready to present or export.
 
-**Lectura** is a full-stack AI learning platform built to help students transform raw lecture content into structured study artifacts.
+- **Configurable generation** — choose slide count (Short / Medium / Large), text style (Formal, Academic, Conversational), and output language (English, Kazakh, Russian, French, Spanish)
+- **Theme engine** — 20+ curated themes across Light, Dark, Warm, and Cool categories with gradient backgrounds, accent colors, and matched typography
+- **Rich slide types** — title, section, content with bullets, two-column comparisons, stats grids, prose, and summary/takeaway layouts
+- **Inline editing** — click any text on a slide to edit it in place; changes auto-save with debounced persistence
+- **Fullscreen present mode** — immersive, distraction-free presentation with keyboard navigation
+- **Export to PDF & PPTX** — high-fidelity vector exports that match the on-screen rendering pixel-for-pixel
+- **Thumbnail sidebar** — scroll through all slides with a visual thumbnail panel, synced to the active slide
 
-> **20+ frontend tests** · **30+ API routes** · **4 summary formats** · **Docker + Railway ready**
+### 💬 Ask AI Chat
+Context-grounded Q&A about your summaries. The AI stays anchored to the source material and refuses to drift off-topic.
 
-You can:
-- paste a YouTube URL or upload files,
-- generate high-quality summaries in multiple formats,
-- auto-create quizzes and flashcards,
-- track progress with dashboards, streaks, and study sessions,
-- chat with generated summaries,
-- export as PDF.
+### 📊 Dashboard & Analytics
+Track your learning with daily streaks, activity stats, recent items, and weekly goal tracking across all resource types.
 
-The system is designed around:
-- scalable async processing workers,
-- strong auth flows (JWT, refresh tokens, Google OAuth, email verification),
-- production-grade deployment paths (Docker + Railway).
+### 📚 Unified Library
+Search, filter, sort, and favorite all summaries, quizzes, flashcards, and presentations in one place.
 
----
-
-## 🗺 Guided User Journey (Page-by-Page)
-
-> All images are loaded from `docs/images/` and mapped to real product flows.
-
-### 1) Login — Start session securely
-
-![Login page](docs/images/login-page.png)
-
-**What you do**
-- Enter email/password, or choose Google sign-in.
-
-**What happens in the system**
-- Calls auth endpoints (`/auth/login` or `/auth/google/code`).
-- Access + refresh tokens are issued and stored.
-- App loads user profile and routes to dashboard.
-
-**Why this matters**
-- Fast onboarding with secure token lifecycle and Google OAuth fallback.
-
----
-
-### 2) Register — Create account + verification flow
-
-![Register page](docs/images/register-page.png)
-
-**What you do**
-- Submit name, email, password.
-
-**What happens in the system**
-- Backend validates fields and creates user.
-- Verification token is created in Redis.
-- Verification email is sent via SMTP service.
-
-**Why this matters**
-- Prevents fake accounts, enables trust, and secures study history.
-
----
-
-### 3) Content Input — Bring source material
-
-![Content upload page](docs/images/content-upload.png)
-
-**What you do**
-- Paste YouTube URL or upload document.
-
-**What happens in the system**
-- Content metadata/extraction pipeline runs.
-- A processing job is pushed into Redis queues.
-- Worker pool picks job and updates progress.
-
-**Why this matters**
-- Converts raw content into a normalized source for all downstream AI generation.
-
----
-
-### 4) Summary Result — Your knowledge base artifact
-
-![Summary result page](docs/images/summary-result-page.png)
-
-**What you do**
-- Read/edit generated summary, regenerate if needed, start chat or export.
-
-**What happens in the system**
-- Gemini generates structure-aware summaries (`cornell`, `bullets`, `paragraph`, `smart`).
-- Summary is persisted and becomes source for quiz/flashcards.
-
-**Why this matters**
-- Summary becomes the central node for revision, testing, and spaced learning.
-
----
-
-### 5) Quiz Page — Active recall loop
-
-![Quiz page](docs/images/quiz-page.png)
-
-**What you do**
-- Take auto-generated quizzes, submit, review results.
-
-**What happens in the system**
-- Quiz and attempts are saved with progress and scoring.
-- Results feed dashboard metrics and help identify weak areas.
-
-**Why this matters**
-- Moves learning from passive reading to measurable recall.
-
----
-
-### 6) Flashcard Study — Spaced repetition workflow
-
-![Flashcard study page](docs/images/flashcard-study-page.png)
-
-**What you do**
-- Study card-by-card, rate confidence.
-
-**What happens in the system**
-- Ratings are stored to model confidence over time.
-- Deck stats evolve and support long-term retention cycles.
-
-**Why this matters**
-- Builds durable memory, not short-term cramming.
-
----
-
-### 7) Library — Unified knowledge inventory
-
-![Library page](docs/images/library-page.png)
-
-**What you do**
-- Search/filter summaries, quizzes, flashcards in one place.
-
-**What happens in the system**
-- Aggregated list endpoint returns cross-content items.
-- Favorites and metadata accelerate navigation.
-
-**Why this matters**
-- Keeps all learning artifacts discoverable as your content scales.
-
----
-
-### 8) Dashboard + Settings — Optimization layer
-
-![Dashboard page](docs/images/dashboard.png)
-
-![Settings page](docs/images/settings-page.png)
-
-**What you do**
-- Track streaks/goals/activity and configure profile/preferences.
-
-**What happens in the system**
-- Dashboard endpoints aggregate productivity signals.
-- Settings endpoints persist defaults and notification preferences.
-
-**Why this matters**
-- Turns Lectura into a repeatable study system, not just a one-off generator.
-
----
-
-## 🔄 Flow Deep Dive (How Everything Works)
-
-### A) Authentication Flow (Email + Google)
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant U as User
-  participant FE as Frontend
-  participant BE as Backend /auth
-  participant R as Redis
-  participant M as SMTP
-
-  U->>FE: Register or Login
-  FE->>BE: POST /auth/register or /auth/login
-  BE->>R: store verification or refresh tokens
-  BE->>M: send verification email (register flow)
-  BE-->>FE: access_token + refresh_token (login/verified)
-  FE-->>U: authenticated session
-
-  U->>FE: Google Sign-In
-  FE->>BE: POST /auth/google/code
-  BE-->>FE: access_token + refresh_token
-  FE-->>U: redirect to dashboard
-```
-
-### B) Content-to-Summary Processing Flow
-
-```mermaid
-sequenceDiagram
-  autonumber
-  participant U as User
-  participant FE as Frontend
-  participant BE as Backend
-  participant Q as Redis Queue
-  participant W as Worker Pool
-  participant G as Gemini
-  participant DB as PostgreSQL
-  participant WS as WebSocket
-
-  U->>FE: Upload file / Paste YouTube URL
-  FE->>BE: POST /content/upload or /content/validate-youtube
-  FE->>BE: POST /summaries/generate
-  BE->>Q: enqueue job
-  W->>Q: dequeue job
-  W->>G: generate summary
-  W->>DB: save summary + job status
-  W->>WS: publish progress updates
-  FE-->>U: live status + final summary page
-```
-
-### C) Study Reinforcement Flow (Quiz + Flashcards)
-
-1. Summary becomes input for quiz/flashcard generators.
-2. User completes attempts/study sessions.
-3. Scores/ratings/study-time are persisted.
-4. Dashboard + streak logic use this data for feedback loops.
-
----
-
-## 🧠 Architecture
-
-### Quick system map
+## 🔄 Product Flow
 
 ```mermaid
 flowchart LR
-    Client([🌐 Browser]) --> Nginx[Nginx Proxy]
-    Nginx --> React[React SPA]
-    Nginx --> API[Go API Server]
-    API --> PG[(PostgreSQL)]
-    API --> Redis[(Redis)]
-    API --> Gemini[Gemini AI]
-    API <--> WS[WebSocket]
-    Redis --> Worker[Worker Pool]
-    Worker --> PG
-    Worker --> Gemini
+  A[Paste YouTube URL or upload file] --> B[Generate summary]
+  B --> C[Study with quiz & flashcards]
+  B --> D[Generate presentation deck]
+  D --> E[Edit · Present · Export]
+  C --> F[Track progress on dashboard]
+  D --> F
 ```
 
-### High-level flow
+## 📸 Screenshots
 
-```mermaid
-flowchart LR
-  U[User Browser\nReact + TypeScript] -->|HTTPS /api/v1 + WS| N[Nginx\nSPA + Reverse Proxy]
-  N --> B[Go Backend\nChi Router + Services]
-  B --> P[(PostgreSQL)]
-  B --> R[(Redis)]
-  B --> G[Gemini API]
-  B --> M[SMTP Provider]
+### Authentication
 
-  B --> Q1[queue:content-processing]
-  B --> Q2[queue:summary-generation]
-  B --> Q3[queue:quiz-generation]
-  B --> Q4[queue:flashcard-generation]
+![Login](docs/images/login-page.png)
+![Register](docs/images/register-page.png)
 
-  Q1 --> W[Worker Pool\n5 Goroutines]
-  Q2 --> W
-  Q3 --> W
-  Q4 --> W
+### Content & Summary
 
-  W --> G
-  W --> P
-  W --> R
-  W --> M
+![Content Upload](docs/images/content-upload.png)
+![Summary Result](docs/images/summary-result-page.png)
 
-  R --> WS[Pub/Sub Updates]
-  WS --> U
-```
+### Learning Activities
 
-### Runtime internals
+![Quiz](docs/images/quiz-page.png)
+![Flashcards](docs/images/flashcard-study-page.png)
 
-- API entrypoint and wiring live in `backend/cmd/server/main.go`.
-- Route map is centralized in `backend/internal/router/router.go`.
-- Auth routes include register/login/google/refresh/verify/resend flows.
-- Worker pool consumes Redis queues and updates job progress in DB + WebSocket channels.
-- Gemini service uses a bounded concurrency token-bucket strategy.
+### Presentation Generation
 
----
+![Presentation Config](docs/images/presentation-config.png)
+![Presentation Viewer](docs/images/presentation-viewer.png)
+![Present Mode](docs/images/presentation-present-mode.png)
 
-## ✨ Features
+### Navigation & Insights
 
-### 1) AI Learning Pipeline
-- ✅ YouTube transcript ingestion + metadata extraction.
-- ✅ File extraction for PDFs / DOCX / text.
-- ✅ Summary generation with configurable:
-  - format (`cornell`, `bullets`, `paragraph`, `smart`),
-  - length,
-  - focus areas,
-  - language and audience.
-- ✅ Quiz generation with multiple question types and attempt tracking.
-- ✅ Flashcard deck generation with study and rating flows.
-
-### 2) Authentication & Account Security
-- ✅ Email/password registration and login.
-- ✅ Email verification + resend with throttling.
-- ✅ JWT access/refresh token model.
-- ✅ Google OAuth with authorization-code callback flow.
-- ✅ Request-level rate limiting for auth endpoints.
-
-### 3) Productivity & Retention
-- ✅ Dashboard (stats, streaks, activity, weekly goals).
-- ✅ Unified Library (summaries/quizzes/flashcards).
-- ✅ Favorites and quick retrieval.
-- ✅ WebSocket real-time job progress.
-- ✅ Summary chat assistant and PDF export.
-
-### 4) DX + Production Readiness
-- ✅ Dockerized frontend and backend.
-- ✅ Railway-specific deployment configs.
-- ✅ Smoke-check script for post-deploy validation.
-- ✅ Test coverage for core pages and backend handlers/router.
-
----
+![Library](docs/images/library-page.png)
+![Dashboard](docs/images/dashboard.png)
+![Settings](docs/images/settings-page.png)
 
 ## 🛠 Tech Stack
 
 ### Frontend
-- React 18 + TypeScript + Vite
-- Tailwind CSS + Radix UI
-- React Router v6
-- Vitest + Testing Library (project has 20 frontend test files)
+
+- **React 18** + TypeScript
+- **Vite** build tooling
+- **React Router** for client-side routing
+- **TanStack Query** for server-state management
+- **Vitest** for unit tests
+- Tailwind CSS for styling
 
 ### Backend
-- Go 1.24 + Chi Router
-- PostgreSQL (pgx)
-- Redis (cache/session/queues/pubsub)
-- Google Gemini (`gemini-2.5-flash`)
-- WebSocket (gorilla/websocket)
-- Python helper for PDF rendering/export
+
+- **Go 1.24** with Chi router
+- **PostgreSQL** (pgx driver) for persistent storage
+- **Redis** for job queuing and caching
+- **Gorilla WebSocket** for real-time processing updates
+- **Google Gemini API** for AI generation (summaries, quizzes, flashcards, presentations)
+- **Unsplash API** for presentation imagery
 
 ### Infrastructure
-- Docker Compose for local orchestration
-- Nginx for static serving + reverse proxy + TLS config
-- Railway (frontend + backend + managed PostgreSQL + managed Redis)
 
----
+- Docker Compose for local orchestration (Postgres, Redis)
+- Railway-ready deployment configuration
+- Nginx reverse proxy with SSL support
 
-## 🧩 API Surface
+## 📂 Repository Structure
 
-Base path: `/api/v1`
+```text
+.
+├── src/                              # Frontend
+│   ├── pages/                        # Route-level page components
+│   ├── components/
+│   │   ├── presentation/             # SlideViewer, SlideRenderer, ThemeSelector, SlideThumbnail
+│   │   ├── layout/                   # AppLayout, navigation
+│   │   └── ui/                       # Shared UI primitives (Button, Card, Toast, etc.)
+│   ├── lib/                          # API client, types, themes, export utilities
+│   └── hooks/                        # Custom React hooks
+├── backend/
+│   ├── cmd/server/                   # Entrypoint
+│   ├── internal/
+│   │   ├── handlers/                 # HTTP handlers (auth, content, summary, quiz, flashcard, presentation, dashboard, chat)
+│   │   ├── services/                 # Gemini AI, auth, email, YouTube, file extraction
+│   │   ├── repository/               # Data access layer
+│   │   ├── worker/                   # Async job workers for AI generation
+│   │   ├── router/                   # Route composition
+│   │   ├── middleware/               # Auth, CORS, logging
+│   │   ├── models/                   # Domain models
+│   │   └── websocket/                # Real-time progress updates
+│   └── migrations/                   # SQL migrations
+├── docs/images/                      # README screenshots
+├── docker-compose.yml
+├── Dockerfile / Dockerfile.railway
+└── nginx.conf / nginx.ssl.conf
+```
 
-### Auth
-- `POST /auth/register`
-- `POST /auth/login`
-- `GET /auth/google/config`
-- `POST /auth/google`
-- `POST /auth/google/code`
-- `POST /auth/refresh`
-- `GET /auth/verify-email`
-- `POST /auth/resend-verification`
-- `POST /auth/logout` (protected)
-
-### Domain endpoints (protected unless marked)
-- Content: `/content/*`
-- Summaries: `/summaries/*`
-- Quizzes: `/quizzes/*`, `/quiz-attempts/*`
-- Flashcards: `/flashcards/*`
-- Study sessions: `/study-sessions/*`
-- Dashboard: `/dashboard/*`
-- Library: `/library`
-- User: `/user/*`
-- Jobs: `/jobs/*`
-- WebSocket: `/ws`
-
-Health:
-- `/health`
-- `/api/v1/health`
-
----
-
-## ⚡ Quick Start
+## 🚀 Local Development
 
 ### Prerequisites
-- Node.js 20+
-- Go 1.24+
-- Docker + Docker Compose
-- Gemini API key
 
-### A) Full stack via Docker Compose
+- Node.js 18+
+- Go 1.24+
+- Docker Desktop (recommended for Postgres/Redis)
+
+### 1. Clone
 
 ```bash
 git clone https://github.com/asanaliwhy/AI-Lecture-summarizer-with-learning-activities.git
 cd AI-Lecture-summarizer-with-learning-activities
-
-# configure frontend + backend env from templates
-cp .env.example .env
-cp .env.production backend/.env
-# edit backend/.env with real values
-
-docker compose up -d --build
-# frontend: https://localhost:3443 (TLS)
-# backend:  http://localhost:8081/api/v1
 ```
 
-### B) Local dev split mode
+### 2. Configure Environment
+
+Frontend (`.env` at repo root):
+
+```env
+VITE_API_BASE_URL=http://localhost:8082/api/v1
+VITE_GOOGLE_CLIENT_ID=your_google_client_id
+VITE_GOOGLE_REDIRECT_URI=http://localhost:5173/auth/callback
+```
+
+Backend (`backend/.env`):
+
+```env
+PORT=8082
+ENV=development
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/lectura?sslmode=disable
+REDIS_URL=redis://localhost:6379/0
+JWT_SECRET=your_jwt_secret
+GEMINI_API_KEY=your_gemini_api_key
+SUPADATA_API_KEY=your_supadata_api_key
+UNSPLASH_ACCESS_KEY=your_unsplash_access_key
+FRONTEND_URL=http://localhost:5173
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:5173/callback
+```
+
+You can also start from `.env.example` and `backend/.env.example`.
+
+### 3. Start Database & Redis
 
 ```bash
-# terminal 1: infra only
-docker compose up postgres redis -d
+docker compose up -d postgres redis
+```
 
-# terminal 2: backend
+### 4. Run Backend
+
+```bash
 cd backend
-go mod download
-go run cmd/server/main.go
+go run ./cmd/server
+```
 
-# terminal 3: frontend
-cd ..
+Backend auto-applies migrations at startup.
+
+### 5. Run Frontend
+
+```bash
 npm install
 npm run dev
 ```
 
----
+## 🌐 Default Local URLs
 
-## ⚙️ Environment Variables (Scannable Tables)
+| Service | URL |
+|---|---|
+| Frontend | `http://localhost:5173` |
+| Backend API | `http://localhost:8082/api/v1` |
+| Health Check | `http://localhost:8082/api/v1/health` |
 
-### Frontend (`.env`)
+## 📡 API Surface
 
-> You can bootstrap from `.env.example`.
+| Domain | Endpoints |
+|---|---|
+| **Auth** | Login, register, Google OAuth, email verification, password change |
+| **Content** | YouTube validation, file upload, transcript extraction |
+| **Summary** | Generate (4 formats), list, detail, favorite, chat |
+| **Quiz** | Generate (3 difficulties), attempt, results, favorite |
+| **Flashcards** | Generate, deck management, spaced-repetition study, favorite |
+| **Presentation** | Generate, list, view, update slides (inline edit), delete, theme, export, favorite |
+| **Dashboard** | Stats, recent activity, streak, weekly goals, notifications |
+| **Library** | Unified cross-resource search, filter, sort |
+| **Jobs / WebSocket** | Async processing queue, real-time progress updates |
 
-| Variable | Required | Description | Example |
-|---|---|---|---|
-| `VITE_API_BASE_URL` | Recommended | Backend API base URL (auto-normalized to `/api/v1`) | `http://localhost:8081/api/v1` |
-| `VITE_GOOGLE_CLIENT_ID` | Optional | Google OAuth client id | `123...apps.googleusercontent.com` |
-| `VITE_GOOGLE_REDIRECT_URI` | Optional | OAuth callback URL used by frontend | `http://localhost:5173/auth/callback` |
+## ⚙️ Processing Architecture
 
-### Backend (`backend/.env`)
-
-> You can bootstrap from `.env.production`.
-
-| Variable | Required | Description |
-|---|---|---|
-| `PORT` | ✅ | Backend HTTP port (typically `8081`) |
-| `ENV` | ✅ | Environment (`production` / `development`) |
-| `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `REDIS_URL` | ✅ | Redis connection string |
-| `JWT_SECRET` | ✅ | JWT signing secret |
-| `GEMINI_API_KEY` | ✅ | Google Gemini API key |
-| `FRONTEND_URL` | ✅ | Allowed frontend origin(s) for CORS and links |
-| `GOOGLE_CLIENT_ID` | Optional | Google OAuth client id |
-| `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth secret |
-| `GOOGLE_REDIRECT_URI` | Optional | OAuth callback URI |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Optional* | Required for production email flows |
-| `STORAGE_TYPE` / `STORAGE_PATH` | Optional | Upload storage strategy/path |
-| `GEMINI_REQUESTS_PER_MINUTE` | Optional | AI request rate limits |
-| `GEMINI_TOKENS_PER_MINUTE` | Optional | AI token rate limits |
-| `GEMINI_CONCURRENT_REQUESTS` | Optional | AI concurrency level |
-
----
-
-## 🚂 Railway Deployment Guide
-
-This repository is intended to run as **4 Railway services**:
-1. PostgreSQL (managed)
-2. Redis (managed)
-3. Backend (`backend/` root)
-4. Frontend (repo root)
-
-### Backend essentials
-
-| Variable | Required | Example / Notes |
-|---|---|---|
-| `PORT` | ✅ | `8081` |
-| `ENV` | ✅ | `production` |
-| `DATABASE_URL` | ✅ | Railway Postgres connection string |
-| `REDIS_URL` | ✅ | Railway Redis connection string |
-| `JWT_SECRET` | ✅ | Long random secret |
-| `GEMINI_API_KEY` | ✅ | From Google AI Studio |
-| `FRONTEND_URL` | ✅ | `https://easygoing-vitality-production-f7c4.up.railway.app` |
-| `GOOGLE_CLIENT_ID` | Optional | OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Optional | OAuth client secret |
-| `GOOGLE_REDIRECT_URI` | Optional | `https://<frontend-domain>/auth/callback` |
-| `SMTP_*` | Optional* | Required for email verification/reset flows |
-
-### Frontend essentials
-
-| Variable | Required | Example / Notes |
-|---|---|---|
-| `BACKEND_UPSTREAM` | ✅ | `https://<backend-domain>.up.railway.app` |
-| `VITE_API_BASE_URL` | Optional | Can be omitted when same-origin proxy is used |
-
-### Google OAuth values
-In Google Cloud OAuth credentials:
-- Authorized JS origin: `https://<frontend-domain>`
-- Authorized redirect URI: `https://<frontend-domain>/auth/callback`
-
-### Deploy order
-1. Postgres + Redis
-2. Backend (verify `/health`)
-3. Frontend
-4. Validate `/api/v1/auth/google/config`
-
----
-
-## 🧪 Testing & Quality
-
-### Frontend
-```bash
-npm run typecheck
-npm test
-npm run test:ci
-npm run build
+```mermaid
+flowchart LR
+  A[Client Request] --> B[API Handler]
+  B --> C[Job Queue — Redis]
+  C --> D[Worker Pool]
+  D --> E[Gemini API + Extractors]
+  E --> F[(PostgreSQL)]
+  D --> G[WebSocket Progress]
+  G --> A
 ```
 
-### Backend
-```bash
-cd backend
-go test ./...
-```
+## 📋 Scripts
 
-### Post-deploy smoke check
-```bash
-# default BASE_URL is https://localhost:3443
-npm run smoke
-```
+**Frontend** (from project root):
 
----
+| Command | Description |
+|---|---|
+| `npm run dev` | Start frontend dev server |
+| `npm run build` | TypeScript check + production build |
+| `npm run test` | Run Vitest test suite |
+| `npm run typecheck` | Strict TypeScript checks |
 
-## 📂 Project Structure
+**Backend** (from `backend/`):
 
-```text
-.
-├── backend/
-│   ├── cmd/server/main.go
-│   ├── internal/
-│   │   ├── config/
-│   │   ├── database/
-│   │   ├── handlers/
-│   │   ├── middleware/
-│   │   ├── models/
-│   │   ├── repository/
-│   │   ├── router/
-│   │   ├── services/
-│   │   ├── websocket/
-│   │   └── worker/
-│   ├── migrations/
-│   └── scripts/
-├── src/
-│   ├── components/
-│   ├── hooks/
-│   ├── lib/
-│   ├── pages/
-│   └── __tests__/
-├── docs/images/
-├── docker-compose.yml
-├── Dockerfile
-├── Dockerfile.railway
-├── nginx.conf
-├── nginx.ssl.conf
-├── nginx.railway.conf
-└── README.md
-```
+| Command | Description |
+|---|---|
+| `go run ./cmd/server` | Start backend server |
+| `go test ./...` | Run all backend tests |
 
----
+## ✅ Quality & Testing
 
-## 🔐 Security Notes
+- Frontend type safety with strict TypeScript
+- Frontend unit tests with Vitest
+- Backend unit and integration tests across handlers, services, and repositories
+- Job retry and error handling with fallback paths
+- Debounced auto-save for inline slide editing
 
-- Never commit secrets (`JWT_SECRET`, SMTP, OAuth secrets, API keys).
-- Rotate any credential that was ever exposed publicly.
-- Use Railway environment variables or a secrets manager.
-- Keep CORS origins explicit and aligned with deployed frontend domains.
+## 🚢 Deployment
 
----
-
-## 🛣 Roadmap Ideas
-
-- [ ] Multi-language AI explanations by user locale.
-- [ ] Team/classroom shared workspaces.
-- [ ] Advanced spaced-repetition scheduling.
-- [ ] Mobile app client (React Native).
-- [ ] Observability stack (metrics dashboard + traces).
-
----
+- `Dockerfile`, `Dockerfile.railway`, `railway.toml`, and Nginx configs included
+- Configure production environment variables before deployment
+- Never commit real secrets to version control
 
 ## 🤝 Contributing
 
-Contributions are welcome.
+1. Create a feature branch from `main`
+2. Keep changes focused and testable
+3. Run `npm run typecheck`, `npm run test`, and `go test ./...`
+4. Open a PR with a clear summary and screenshots for UI changes
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
-- local setup,
-- branch/commit conventions,
-- pull request checklist.
+## 📄 License
 
-For major feature work, open an issue first to align scope.
-
----
-
-## 📜 License
-
-This project is licensed under the MIT License.
-
-See [LICENSE](LICENSE).
-
----
-
-## 👨‍💻 Author
-
-Built by [@asanaliwhy](https://github.com/asanaliwhy)
-
-If this project helps you, give it a ⭐ and share it.
+MIT — see [LICENSE](LICENSE).
