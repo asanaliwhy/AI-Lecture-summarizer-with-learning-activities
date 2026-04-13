@@ -88,7 +88,7 @@ export function LandingPage() {
               Turn any lecture<br />into <em>deep knowledge</em>
             </h1>
             <p className="hero-body reveal d2">
-              Paste a YouTube link or upload a PDF. Lectura generates Cornell notes, flashcards, quizzes, and summaries — engineered for real retention.
+              Paste a YouTube link or upload a PDF. Lectura generates Cornell notes, summaries, quizzes, flashcards, and presentation decks engineered for real retention.
             </p>
             <div className="hero-actions reveal d3">
               <Link to="/register" className="btn btn-dark">Start for free →</Link>
@@ -142,7 +142,7 @@ export function LandingPage() {
                     <div className="pline w100" />
                   </div>
                 </div>
-                <div className="preview-badge">✓ Generated in 28s</div>
+                <div className="preview-badge">✓ Summary + presentation generated in 28s</div>
               </div>
             </div>
           </div>
@@ -191,8 +191,8 @@ export function LandingPage() {
             <div className="how-step-num">03</div>
             <div>
               <div className="how-step-title">Study and retain</div>
-              <div className="how-step-body">Generate a quiz to test yourself. Create spaced-repetition flashcards. Ask AI questions about the material. Export a beautiful PDF.</div>
-              <span className="how-tag">Quiz · Flashcards · Export</span>
+              <div className="how-step-body">Generate a quiz to test yourself. Create spaced-repetition flashcards. Build a full presentation deck from the same source and present it in fullscreen.</div>
+              <span className="how-tag">Quiz · Flashcards · Presentations</span>
             </div>
           </div>
         </div>
@@ -264,16 +264,19 @@ export function LandingPage() {
             <div className="feat-icon">⚡</div>
             <div className="feat-title">Real-time processing</div>
             <div className="feat-body">WebSocket-powered updates. Watch it generate live — no spinners, no waiting in the dark.</div>
+            <div className="feat-stat">Live Sync <span>Stream</span></div>
           </div>
           <div className="feat col-4 reveal d2">
             <div className="feat-icon">💬</div>
             <div className="feat-title">Ask AI chat</div>
             <div className="feat-body">Ask questions about your summary. The AI stays grounded in your material and refuses to drift off-topic.</div>
+            <div className="feat-stat">Verified <span>RAG Engine</span></div>
           </div>
           <div className="feat col-4 reveal d3">
-            <div className="feat-icon">📄</div>
-            <div className="feat-title">Beautiful PDF exports</div>
-            <div className="feat-body">Every summary exports as a professionally typeset PDF — branded layout, tables, and your content intact.</div>
+            <div className="feat-icon">🖥️</div>
+            <div className="feat-title">AI presentation generation</div>
+            <div className="feat-body">Transform lectures into structured, themed slide decks with fullscreen presentation and professional PDF or PPTX exports.</div>
+            <div className="feat-stat">Vector <span>PDF/PPTX</span></div>
           </div>
         </div>
       </section>
@@ -331,6 +334,7 @@ export function LandingPage() {
               <li className="plan-feat"><span className="chk">✓</span> All 4 summary formats</li>
               <li className="plan-feat"><span className="chk">✓</span> Quiz generation</li>
               <li className="plan-feat"><span className="chk">✓</span> Basic flashcards</li>
+              <li className="plan-feat muted"><span className="dash">–</span> AI presentation generation</li>
               <li className="plan-feat muted"><span className="dash">–</span> PDF exports</li>
               <li className="plan-feat muted"><span className="dash">–</span> Spaced repetition</li>
               <li className="plan-feat muted"><span className="dash">–</span> Ask AI chat</li>
@@ -350,7 +354,8 @@ export function LandingPage() {
               <li className="plan-feat"><span className="chk">✓</span> All 4 summary formats</li>
               <li className="plan-feat"><span className="chk">✓</span> Quiz generation</li>
               <li className="plan-feat"><span className="chk">✓</span> Spaced repetition flashcards</li>
-              <li className="plan-feat"><span className="chk">✓</span> PDF exports</li>
+              <li className="plan-feat"><span className="chk">✓</span> AI presentation generation</li>
+              <li className="plan-feat"><span className="chk">✓</span> PDF + PPTX exports</li>
               <li className="plan-feat"><span className="chk">✓</span> Ask AI chat</li>
               <li className="plan-feat muted"><span className="dash">–</span> Unlimited summaries</li>
             </ul>
@@ -368,7 +373,8 @@ export function LandingPage() {
               <li className="plan-feat"><span className="chk">✓</span> All 4 summary formats</li>
               <li className="plan-feat"><span className="chk">✓</span> Quiz generation</li>
               <li className="plan-feat"><span className="chk">✓</span> Spaced repetition flashcards</li>
-              <li className="plan-feat"><span className="chk">✓</span> PDF exports</li>
+              <li className="plan-feat"><span className="chk">✓</span> AI presentation generation</li>
+              <li className="plan-feat"><span className="chk">✓</span> PDF + PPTX exports</li>
               <li className="plan-feat"><span className="chk">✓</span> Ask AI chat</li>
               <li className="plan-feat"><span className="chk">✓</span> Priority processing</li>
             </ul>

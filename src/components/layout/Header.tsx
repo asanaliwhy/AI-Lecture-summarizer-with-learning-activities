@@ -90,7 +90,12 @@ export function Header({ onMenuToggle }: HeaderProps) {
       </div>
 
       <div className="ml-2 flex shrink-0 items-center gap-2 sm:gap-4">
-        <div className="hidden sm:flex items-center gap-3 pl-1 group cursor-pointer p-1 rounded-full hover:bg-secondary/50 transition-colors">
+        <button
+          type="button"
+          onClick={() => navigate('/settings')}
+          className="hidden sm:flex items-center gap-3 pl-1 group cursor-pointer p-1 rounded-full hover:bg-secondary/50 transition-colors"
+          aria-label="Open profile settings"
+        >
           <div className="hidden 2xl:flex flex-col items-end">
             <span className="text-sm font-medium leading-none group-hover:text-primary transition-colors">
               {user?.full_name || 'User'}
@@ -101,7 +106,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
             <AvatarImage src={user?.avatar_url || ''} alt={user?.full_name || 'User'} />
             <AvatarFallback>{user?.full_name?.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U'}</AvatarFallback>
           </Avatar>
-        </div>
+        </button>
       </div>
     </header>
   )

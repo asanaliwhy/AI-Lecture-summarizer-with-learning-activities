@@ -11,7 +11,7 @@ import { api, ApiError, presentationQueryKeys } from '../lib/api'
 import { useToast } from '../components/ui/Toast'
 import { cn } from '../lib/utils'
 import type { Presentation, SlideTheme } from '../lib/presentationTypes'
-import { DEFAULT_PRESENTATION_THEME_ID, getThemeById, isThemeId } from '../lib/presentationThemes'
+import { DEFAULT_PRESENTATION_THEME_ID, getThemeById, getThemePresetById, isThemeId } from '../lib/presentationThemes'
 import { PRESENTATION_CANVAS_HEIGHT, PRESENTATION_CANVAS_WIDTH, SlideRenderer } from '../components/presentation/SlideRenderer'
 
 function resolvePresentationTheme(presentation: Presentation): SlideTheme {
@@ -25,6 +25,10 @@ function resolvePresentationTheme(presentation: Presentation): SlideTheme {
     return fallbackTheme
   }
   return fallbackTheme
+}
+
+function resolveThemeCategory(themeId: string): string {
+  return getThemePresetById(themeId).category.toLowerCase()
 }
 
 function PresentationCardPreview({ presentation, themeId }: { presentation: Presentation; themeId: SlideTheme }) {
@@ -84,7 +88,7 @@ export function PresentationsPage() {
   const toast = useToast()
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'az'>('newest')
-  const [quickFilter, setQuickFilter] = useState<'all' | 'starred' | 'navy' | 'minimal' | 'academic' | 'dark'>('all')
+  const [quickFilter, setQuickFilter] = useState<string>('all')
   const [favoritePendingIds, setFavoritePendingIds] = useState<string[]>([])
 
   type PresentationListCache = {
@@ -163,23 +167,25 @@ export function PresentationsPage() {
     return themedPresentations.filter(({ presentation, resolvedTheme }) => {
       if (quickFilter === 'all') return true
       if (quickFilter === 'starred') return Boolean(presentation.isFavorite)
-      return resolvedTheme === quickFilter
+      return resolveThemeCategory(resolvedTheme) === quickFilter
     })
   }, [themedPresentations, quickFilter])
 
-  const filterOptions: Array<{ key: typeof quickFilter; label: string }> = [
+  const filterOptions = [
     { key: 'all', label: 'All' },
     { key: 'starred', label: 'Starred' },
-    { key: 'navy', label: 'Navy' },
     { key: 'minimal', label: 'Minimal' },
+    { key: 'corporate', label: 'Corporate' },
+    { key: 'editorial', label: 'Editorial' },
     { key: 'academic', label: 'Academic' },
+    { key: 'cinematic', label: 'Cinematic' },
     { key: 'dark', label: 'Dark' },
   ]
 
-  const getFilterCount = (key: typeof quickFilter) => {
+  const getFilterCount = (key: string) => {
     if (key === 'all') return themedPresentations.length
     if (key === 'starred') return themedPresentations.filter(({ presentation }) => Boolean(presentation.isFavorite)).length
-    return themedPresentations.filter(({ resolvedTheme }) => resolvedTheme === key).length
+    return themedPresentations.filter(({ resolvedTheme }) => resolveThemeCategory(resolvedTheme) === key).length
   }
 
   return (

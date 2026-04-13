@@ -1,5 +1,5 @@
-import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import React, { useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   FileText,
@@ -11,14 +11,13 @@ import {
   LogOut,
   PlusCircle,
   Sparkles,
-  Zap,
   X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/Button'
-import { Progress } from '../ui/Progress'
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/Avatar'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { useAuth } from '../../lib/AuthContext'
 
 interface SidebarProps {
@@ -35,7 +34,10 @@ interface NavItem {
 
 export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   const location = useLocation()
+  const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const navItems: NavItem[] = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
@@ -48,8 +50,14 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   ]
 
   const handleLogout = async () => {
-    await logout()
-    window.location.href = '/login'
+    setIsLoggingOut(true)
+    try {
+      await logout()
+      window.location.href = '/login'
+    } finally {
+      setIsLoggingOut(false)
+      setShowLogoutDialog(false)
+    }
   }
 
   const sidebarContent = (
@@ -116,36 +124,51 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
       </div>
 
       {/* Footer */}
-      <div className="p-4 space-y-4 border-t bg-secondary/10">
-        <div className="space-y-3 p-3 rounded-lg bg-background border shadow-sm hover:shadow-md transition-shadow duration-300">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-medium">Free Plan</span>
-            <span className="text-muted-foreground">3/5 used</span>
-          </div>
-          <Progress value={60} className="h-1.5" />
-          <Button variant="outline" size="sm" className="w-full text-xs h-7 border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors">
-            <Zap className="mr-2 h-3 w-3 text-orange-500" />
-            Upgrade to Pro
-          </Button>
-        </div>
-        <div className="flex items-center gap-3 px-1 pt-1 group cursor-pointer hover:bg-secondary/50 p-2 rounded-md transition-colors">
-          <Avatar className="h-8 w-8 border group-hover:border-primary/50 transition-colors">
-            <AvatarImage src={user?.avatar_url || ''} />
-            <AvatarFallback>{user?.full_name?.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U'}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 overflow-hidden">
-            <p className="truncate text-sm font-medium leading-none group-hover:text-primary transition-colors">
-              {user?.full_name || 'User'}
-            </p>
-            <p className="truncate text-xs text-muted-foreground mt-1">{user?.email || ''}</p>
-          </div>
-          <Button variant="ghost" size="icon" onClick={handleLogout}
-            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+      <div className="p-4 space-y-4 border-t bg-secondary/10 overflow-hidden">
+        <div className="flex items-center gap-2 px-1 pt-1 min-w-0">
+          <button
+            type="button"
+            onClick={() => {
+              onClose()
+              navigate('/settings')
+            }}
+            className="flex flex-1 min-w-0 items-center gap-3 group cursor-pointer hover:bg-secondary/50 p-2 rounded-md transition-colors text-left overflow-hidden"
+          >
+            <Avatar className="h-8 w-8 border group-hover:border-primary/50 transition-colors">
+              <AvatarImage src={user?.avatar_url || ''} />
+              <AvatarFallback>{user?.full_name?.split(' ').map((n) => n[0]).join('').toUpperCase() || 'U'}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <p className="truncate text-sm font-medium leading-none group-hover:text-primary transition-colors">
+                {user?.full_name || 'User'}
+              </p>
+              <p className="truncate text-xs text-muted-foreground mt-1">{user?.email || ''}</p>
+            </div>
+          </button>
+          <Button variant="ghost" size="icon" onClick={() => setShowLogoutDialog(true)}
+            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
           >
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showLogoutDialog}
+        title="Log out"
+        description="Log out of your account now? You will need to sign in again to continue."
+        confirmLabel="Log out"
+        variant="destructive"
+        loading={isLoggingOut}
+        onCancel={() => {
+          if (!isLoggingOut) {
+            setShowLogoutDialog(false)
+          }
+        }}
+        onConfirm={() => {
+          void handleLogout()
+        }}
+      />
     </>
   )
 
