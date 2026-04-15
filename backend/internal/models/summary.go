@@ -33,10 +33,11 @@ type Summary struct {
 }
 
 type GenerateSummaryRequest struct {
-	ContentID      uuid.UUID `json:"content_id"`
-	Format         string    `json:"format"`
-	Length         string    `json:"length"`
-	FocusAreas     []string  `json:"focus_areas"`
-	TargetAudience string    `json:"target_audience"`
-	Language       string    `json:"language"`
+	ContentID           uuid.UUID `json:"content_id"`
+	Format              string    `json:"format"`
+	Length              string    `json:"length"`
+	FocusAreas          []string  `json:"focus_areas"`
+	TargetAudience      string    `json:"target_audience"`
+	Language            string    `json:"language"`
+	ExtractScreenText   bool      `json:"extract_screen_text"`
 }
