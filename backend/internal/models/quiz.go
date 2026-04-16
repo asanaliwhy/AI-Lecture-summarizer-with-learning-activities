@@ -34,15 +34,16 @@ type QuizAttempt struct {
 }
 
 type GenerateQuizRequest struct {
-	SummaryID        uuid.UUID `json:"summary_id"`
-	Title            string    `json:"title"`
-	NumQuestions     int       `json:"num_questions"`
-	Difficulty       string    `json:"difficulty"`
-	QuestionTypes    []string  `json:"question_types"`
-	EnableTimer      bool      `json:"enable_timer"`
-	ShuffleQuestions bool      `json:"shuffle_questions"`
-	EnableHints      bool      `json:"enable_hints"`
-	Topics           []string  `json:"topics"`
+	SummaryID           uuid.UUID `json:"summary_id"`
+	Title               string    `json:"title"`
+	NumQuestions        int       `json:"num_questions"`
+	Difficulty          string    `json:"difficulty"`
+	QuestionTypes       []string  `json:"question_types"`
+	EnableTimer         bool      `json:"enable_timer"`
+	ShuffleQuestions    bool      `json:"shuffle_questions"`
+	EnableHints         bool      `json:"enable_hints"`
+	Topics              []string  `json:"topics"`
+	ExtractScreenText   bool      `json:"extract_screen_text"`
 }
 
 type QuizQuestion struct {
