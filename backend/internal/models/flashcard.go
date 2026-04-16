@@ -43,6 +43,7 @@ type GenerateFlashcardsRequest struct {
 	EnableSpacedRepetition bool      `json:"enable_spaced_repetition"`
 	IncludeMnemonics       bool      `json:"include_mnemonics"`
 	IncludeExamples        bool      `json:"include_examples"`
+	ExtractScreenText      bool      `json:"extract_screen_text"`
 }
 
 type CardRatingRequest struct {
