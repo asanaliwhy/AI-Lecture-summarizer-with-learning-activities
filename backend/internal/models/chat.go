@@ -20,7 +20,8 @@ type ChatRequest struct {
 
 // ChatResponse is the reply from the AI chat.
 type ChatResponse struct {
-	Reply string `json:"reply"`
+	Reply         string  `json:"reply"`
+	ScreenOcrHint *string `json:"screen_ocr_hint,omitempty"`
 }
 
 // ChatHistoryMessage is a persisted chat message row.
