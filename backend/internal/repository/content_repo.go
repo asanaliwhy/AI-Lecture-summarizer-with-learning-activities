@@ -59,3 +59,12 @@ func (r *ContentRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status str
 	_, err := r.pool.Exec(ctx, "UPDATE content SET status = $1 WHERE id = $2", status, id)
 	return err
 }
+
+func (r *ContentRepo) UpdateMetadata(ctx context.Context, id uuid.UUID, metadataJSON json.RawMessage) error {
+	metaBytes := []byte("{}")
+	if len(metadataJSON) > 0 {
+		metaBytes = metadataJSON
+	}
+	_, err := r.pool.Exec(ctx, "UPDATE content SET metadata_json = $1 WHERE id = $2", metaBytes, id)
+	return err
+}
