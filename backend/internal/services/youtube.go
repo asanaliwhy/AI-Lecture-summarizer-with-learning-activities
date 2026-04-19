@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -346,6 +347,106 @@ func (s *YouTubeService) DownloadAudio(videoURL string) ([]byte, string, error) 
 		return res.audioBytes, res.mimeType, res.err
 	case <-time.After(90 * time.Second): // 90-second max for downloading audio
 		return nil, "", fmt.Errorf("audio download timed out after 90s")
+	}
+}
+
+// DownloadVideo downloads a relatively small MP4 video stream for a YouTube URL.
+// This is used for extracting a single frame for on-screen text OCR.
+func (s *YouTubeService) DownloadVideo(videoURL string) ([]byte, string, error) {
+	type result struct {
+		videoBytes []byte
+		mimeType   string
+		err        error
+	}
+
+	ch := make(chan result, 1)
+
+	go func() {
+		video, err := s.ytClient.GetVideo(videoURL)
+		if err != nil {
+			ch <- result{err: fmt.Errorf("failed to fetch YouTube video metadata: %w", err)}
+			return
+		}
+
+		// Prefer MP4 formats that clearly contain video. We pick the lowest bitrate candidate to reduce bandwidth.
+		formats := video.Formats
+		if len(formats) == 0 {
+			ch <- result{err: fmt.Errorf("no formats available")}
+			return
+		}
+
+		isVideoLike := func(f yt.Format) bool {
+			// Heuristic: video formats usually have non-zero width/height or FPS.
+			// Audio-only formats generally have 0x0 dimensions.
+			return f.Width > 0 || f.Height > 0 || f.FPS > 0
+		}
+
+		candidates := make([]yt.Format, 0, len(formats))
+		for _, f := range formats {
+			if !isVideoLike(f) {
+				continue
+			}
+			mime := strings.TrimSpace(strings.Split(f.MimeType, ";")[0])
+			if strings.HasPrefix(mime, "video/mp4") {
+				candidates = append(candidates, f)
+			}
+		}
+		if len(candidates) == 0 {
+			// Fallback: any video-like format.
+			for _, f := range formats {
+				if isVideoLike(f) {
+					candidates = append(candidates, f)
+				}
+			}
+		}
+		if len(candidates) == 0 {
+			ch <- result{err: fmt.Errorf("no video formats available")}
+			return
+		}
+
+		sort.Slice(candidates, func(i, j int) bool {
+			// Smaller bitrate first; if equal, smaller content length if present.
+			if candidates[i].Bitrate != candidates[j].Bitrate {
+				return candidates[i].Bitrate < candidates[j].Bitrate
+			}
+			return candidates[i].ContentLength < candidates[j].ContentLength
+		})
+
+		best := candidates[0]
+
+		stream, _, err := s.ytClient.GetStream(video, &best)
+		if err != nil {
+			ch <- result{err: fmt.Errorf("failed to open video stream: %w", err)}
+			return
+		}
+		defer stream.Close()
+
+		// Keep this fairly strict: we only need a frame, not a full HD movie.
+		const maxVideoBytes = 180 * 1024 * 1024 // 180MB safety cap
+		limited := io.LimitReader(stream, maxVideoBytes+1)
+		videoBytes, err := io.ReadAll(limited)
+		if err != nil {
+			ch <- result{err: fmt.Errorf("failed to read video stream: %w", err)}
+			return
+		}
+		if len(videoBytes) > maxVideoBytes {
+			ch <- result{err: fmt.Errorf("video stream exceeds %d MB limit", maxVideoBytes/(1024*1024))}
+			return
+		}
+
+		mimeType := strings.TrimSpace(strings.Split(best.MimeType, ";")[0])
+		if mimeType == "" {
+			mimeType = "video/mp4"
+		}
+
+		ch <- result{videoBytes: videoBytes, mimeType: mimeType, err: nil}
+	}()
+
+	select {
+	case res := <-ch:
+		return res.videoBytes, res.mimeType, res.err
+	case <-time.After(120 * time.Second):
+		return nil, "", fmt.Errorf("video download timed out after 120s")
 	}
 }
 
