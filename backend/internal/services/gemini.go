@@ -141,6 +141,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		FocusAreas     []string `json:"focus_areas"`
 		TargetAudience string   `json:"target_audience"`
 		Language       string   `json:"language"`
+		ExtractScreenText bool `json:"extract_screen_text"`
 	}
 	json.Unmarshal(job.ConfigJSON, &config)
 	metadataOnlyMode := isMetadataOnlyContent(transcript)
@@ -156,7 +157,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 
 	// Build layered prompt
 	prompt := buildSummaryPrompt(config.Format, config.Length, config.FocusAreas,
-		config.TargetAudience, config.Language, transcript, metadataOnlyMode)
+		config.TargetAudience, config.Language, transcript, metadataOnlyMode, config.ExtractScreenText)
 
 	// Publish status update
 	s.PublishUpdate(ctx, job.UserID, models.WSMessage{
@@ -1969,12 +1970,15 @@ Current summary:
 	return text
 }
 
-func buildSummaryPrompt(format, length string, focusAreas []string, audience, language, transcript string, metadataOnlyMode bool) string {
+func buildSummaryPrompt(format, length string, focusAreas []string, audience, language, transcript string, metadataOnlyMode bool, extractScreenText bool) string {
 	var b strings.Builder
 
 	// Layer 1 — Role
 	b.WriteString("You are an expert educational content analyst. Your task is to create a structured summary of the following lecture transcript.\n\n")
 	b.WriteString("Universal rule: Cross-section uniqueness rule: Each fact or insight must be expressed with unique phrasing. If the same information appears in multiple sections, vary the angle, vocabulary, or implication. Never copy-paste the same sentence across sections. Maintain consistent academic-but-accessible vocabulary throughout all sections.\n\n")
+	if extractScreenText {
+		b.WriteString("Visual text mode: Include clearly visible on-screen text (slide titles, formulas, code snippets, labels) as additional evidence when present. When subtitles and on-screen text conflict, prefer the wording that is explicit and contextually consistent.\n\n")
+	}
 
 	// Layer 2 — Format
 	switch format {
@@ -6126,6 +6130,9 @@ func buildQuizPrompt(config models.GenerateQuizRequest, content string) string {
 		b.WriteString("Use nuanced distinctions, implications, edge cases, and strong distractors.\n")
 	}
 	b.WriteString("Set every item's difficulty field exactly to this requested difficulty value.\n")
+	if config.ExtractScreenText {
+		b.WriteString("Use any reliable on-screen text evidence available in the source context (slides, diagrams, labels, formulas) in addition to spoken transcript content.\n")
+	}
 
 	cleanTopics := make([]string, 0, len(config.Topics))
 	for _, t := range config.Topics {
@@ -6205,6 +6212,9 @@ func buildFlashcardPrompt(config models.GenerateFlashcardsRequest, content strin
 		b.WriteString("Examples setting: include concise contextual examples when useful.\n")
 	} else {
 		b.WriteString("Examples setting: set example to null for all cards.\n")
+	}
+	if config.ExtractScreenText {
+		b.WriteString("Use on-screen text cues from the source context (slides/labels/formulas/code) when they help produce more accurate cards.\n")
 	}
 
 	b.WriteString(`
@@ -6533,4 +6543,40 @@ SUMMARY CONTENT:
 	}
 
 	return reply, nil
+}
+
+// OCRImage extracts on-screen text from an image.
+// Returns plain text only (no markdown).
+func (s *GeminiService) OCRImage(ctx context.Context, imageBytes []byte, mimeType string) (string, error) {
+	if err := s.acquireRate(ctx); err != nil {
+		return "", err
+	}
+	defer s.releaseRate()
+
+	visionModel := s.client.GenerativeModel("gemini-3-flash-preview")
+	visionModel.SetTemperature(0.1)
+	visionModel.SetTopP(0.9)
+	visionModel.SetMaxOutputTokens(2048)
+
+	prompt := `Extract ALL readable text from this image.
+Return ONLY the text you can see, as plain text.
+Preserve line breaks when they appear on screen.
+Do not add explanations, do not translate, do not summarize.`
+
+	// genai.ImageData expects just the format name (e.g. "png"),
+	// not the full MIME type (e.g. "image/png").
+	imageFormat := strings.TrimPrefix(mimeType, "image/")
+
+	resp, err := generateContentWithTimeout(
+		ctx,
+		visionModel,
+		60*time.Second,
+		genai.Text(prompt),
+		genai.ImageData(imageFormat, imageBytes),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(extractText(resp)), nil
 }
