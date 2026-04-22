@@ -13,6 +13,7 @@ import (
 
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
+	"lectura-backend/internal/repository"
 	"lectura-backend/internal/services"
 )
 
@@ -22,6 +23,12 @@ const (
 	maxChatHistoryBytes  = 32000
 	maxChatBodyBytes     = 64 * 1024
 )
+
+// When frame OCR fails but the user asked about a timestamp, steer the model away from generic
+// "I cannot watch video" disclaimers and toward a short technical explanation + summary-only help.
+const chatAssistantOCRMissHint = `
+
+[Assistant instruction: The user asked what appears on-screen at a specific timestamp. The app could not load a video frame (YouTube/download failed). Reply in the SAME language as the user's message. Give one short sentence that the frame could not be fetched (technical/network or video restrictions). Then help using ONLY the summary text. Do NOT use boilerplate like "As an AI I cannot watch videos" or long generic refusals.]`
 
 type chatService interface {
 	ChatWithSummary(ctx context.Context, summaryContent, userMessage string, history []models.ChatMessage) (string, error)
@@ -37,13 +44,23 @@ type ChatHandler struct {
 	summaryRepo   summaryRepository
 	chatRepo      chatHistoryRepository
 	geminiService chatService
+	contentRepo   *repository.ContentRepo
+	screenOCR     *services.ScreenOCRService
 }
 
-func NewChatHandler(summaryRepo summaryRepository, chatRepo chatHistoryRepository, geminiService *services.GeminiService) *ChatHandler {
+func NewChatHandler(
+	summaryRepo summaryRepository,
+	chatRepo chatHistoryRepository,
+	geminiService *services.GeminiService,
+	contentRepo *repository.ContentRepo,
+	screenOCR *services.ScreenOCRService,
+) *ChatHandler {
 	return &ChatHandler{
 		summaryRepo:   summaryRepo,
 		chatRepo:      chatRepo,
 		geminiService: geminiService,
+		contentRepo:   contentRepo,
+		screenOCR:     screenOCR,
 	}
 }
 
@@ -277,6 +294,27 @@ func (h *ChatHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If user asked about a specific time (e.g. "5:00" / "5 minutes"),
+	// attempt on-demand OCR of the video frame at that timestamp and append
+	// it to the context. This is intentionally invisible in UI.
+	var screenOcrHint *string
+	if h.screenOCR != nil {
+		appendOCR, hint, ocrErr := h.screenOCR.ScreenOCRForChat(r.Context(), summary.ContentID, req.Message)
+		if ocrErr != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to prepare screen context", r))
+			return
+		}
+		if appendOCR != "" {
+			summaryContent = summaryContent + appendOCR
+		}
+		if strings.TrimSpace(hint) != "" {
+			screenOcrHint = &hint
+			if appendOCR == "" {
+				summaryContent = summaryContent + chatAssistantOCRMissHint
+			}
+		}
+	}
+
 	// Call Gemini chat
 	reply, err := h.geminiService.ChatWithSummary(r.Context(), summaryContent, req.Message, history)
 	if err != nil {
@@ -284,5 +322,5 @@ func (h *ChatHandler) AskQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, models.ChatResponse{Reply: reply})
+	writeJSON(w, http.StatusOK, models.ChatResponse{Reply: reply, ScreenOcrHint: screenOcrHint})
 }
