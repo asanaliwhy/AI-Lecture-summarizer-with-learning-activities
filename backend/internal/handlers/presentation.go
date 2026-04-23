@@ -31,6 +31,7 @@ type presentationRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Presentation, error)
 	GetByUser(ctx context.Context, userID uuid.UUID, search, sortBy string, limit, offset int) ([]*models.Presentation, int, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+	UpdateSlides(ctx context.Context, id uuid.UUID, slides []models.PresentationSlide, status string, qualityFallback bool) error
 	UpdateLastAccessed(ctx context.Context, id uuid.UUID) error
 	ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
 }
@@ -260,4 +261,43 @@ func (h *PresentationHandler) ToggleFavorite(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Favorite toggled"})
+}
+
+func (h *PresentationHandler) UpdateSlides(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid presentation ID", r))
+		return
+	}
+
+	presentation, err := h.presentationRepo.GetByID(r.Context(), id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Presentation not found", r))
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	if presentation.UserID != userID {
+		writeJSON(w, http.StatusForbidden, errorResp("FORBIDDEN", "Access denied", r))
+		return
+	}
+
+	var req struct {
+		Slides []models.PresentationSlide `json:"slides"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
+	if len(req.Slides) == 0 {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "slides array is required", r))
+		return
+	}
+
+	if err := h.presentationRepo.UpdateSlides(r.Context(), id, req.Slides, presentation.Status, presentation.QualityFallback); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to update slides", r))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Slides updated"})
 }
