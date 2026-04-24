@@ -107,7 +107,8 @@ func main() {
 	libraryHandler := handlers.NewLibraryHandler(pool)
 	userHandler := handlers.NewUserHandler(userRepo)
 	jobHandler := handlers.NewJobHandler(jobRepo, summaryRepo, quizRepo, flashcardRepo, presentationRepo)
-	chatHandler := handlers.NewChatHandler(summaryRepo, chatMessageRepo, geminiService)
+	screenOCRService := services.NewScreenOCRService(contentRepo, youtubeService, geminiService)
+	chatHandler := handlers.NewChatHandler(summaryRepo, chatMessageRepo, geminiService, contentRepo, screenOCRService)
 
 	// ──── Step 6: Start Job Worker Pool ────
 	workerPool := worker.NewPool(
