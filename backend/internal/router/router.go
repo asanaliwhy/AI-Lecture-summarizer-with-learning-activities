@@ -114,6 +114,7 @@ func New(
 			r.Post("/", presentationHandler.CreatePresentation)
 			r.Get("/", presentationHandler.ListPresentations)
 			r.Get("/{id}", presentationHandler.GetPresentation)
+			r.Put("/{id}/slides", presentationHandler.UpdateSlides)
 			r.Put("/{id}/favorite", presentationHandler.ToggleFavorite)
 			r.Delete("/{id}", presentationHandler.DeletePresentation)
 		})
