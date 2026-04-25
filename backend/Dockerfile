@@ -16,7 +16,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /lectura-server ./cmd/
 # ─── Stage 2: Run ───
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata ffmpeg python3 py3-pip \
+    && pip3 install --no-cache-dir --break-system-packages -U yt-dlp \
+    && rm -rf /root/.cache/pip
 
 WORKDIR /app
 
