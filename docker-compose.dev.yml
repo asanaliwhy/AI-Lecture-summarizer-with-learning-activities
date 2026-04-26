@@ -1,0 +1,80 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lectura-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-lectura}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - lectura_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: lectura-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - lectura_redis:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lectura-backend
+    restart: unless-stopped
+    environment:
+      ENV: ${ENV:-development}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-lectura}?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
+      SUPADATA_API_KEY: ${SUPADATA_API_KEY:-}
+      GEMINI_REQUESTS_PER_MINUTE: ${GEMINI_REQUESTS_PER_MINUTE:-30}
+      GEMINI_TOKENS_PER_MINUTE: ${GEMINI_TOKENS_PER_MINUTE:-500000}
+      GEMINI_CONCURRENT_REQUESTS: ${GEMINI_CONCURRENT_REQUESTS:-3}
+      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      STORAGE_PATH: /app/uploads
+      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST is required}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:?SMTP_USER is required}
+      SMTP_PASS: ${SMTP_PASS:?SMTP_PASS is required}
+      SMTP_FROM: ${SMTP_FROM:?SMTP_FROM is required}
+      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      PORT: "8082"
+    ports:
+      - "${BACKEND_PORT:-8082}:8082"
+    volumes:
+      - lectura_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/api/v1/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  lectura_pgdata:
+  lectura_redis:
+  lectura_uploads:
