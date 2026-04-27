@@ -300,6 +300,7 @@ export interface GenerateSummaryPayload {
     focus_areas: string[]
     target_audience: string
     language: string
+    extract_screen_text: boolean
 }
 
 export interface PresentationSlideResponse extends Omit<Slide, 'id' | 'type'> {
@@ -395,6 +396,7 @@ export interface GenerateQuizPayload {
     shuffle_questions: boolean
     enable_hints: boolean
     topics: string[]
+    extract_screen_text: boolean
 }
 
 export interface FlashcardDeckListItemResponse {
@@ -468,6 +470,7 @@ export interface GenerateFlashcardsPayload {
     enable_spaced_repetition: boolean
     include_mnemonics: boolean
     include_examples: boolean
+    extract_screen_text: boolean
 }
 
 export interface YouTubeValidationMetadata extends Record<string, unknown> {
@@ -686,7 +689,7 @@ export const api = {
             }),
 
         chat: (id: string, message: string, history: { role: string; content: string }[]) =>
-            apiFetch<{ reply: string }>(`/summaries/${id}/chat`, {
+            apiFetch<{ reply: string; screen_ocr_hint?: string | null }>(`/summaries/${id}/chat`, {
                 method: 'POST',
                 body: JSON.stringify({ message, history }),
             }),
@@ -734,6 +737,12 @@ export const api = {
 
         toggleFavorite: (id: string) =>
             apiFetch<{ message: string }>(`/presentations/${id}/favorite`, { method: 'PUT' }),
+
+        updateSlides: (id: string, slides: Slide[]) =>
+            apiFetch<{ message: string }>(`/presentations/${id}/slides`, {
+                method: 'PUT',
+                body: JSON.stringify({ slides }),
+            }),
     },
 
     // Quizzes
