@@ -55,6 +55,7 @@ export function QuizConfigPage() {
   const [enableTimer, setEnableTimer] = useState(false)
   const [shuffleQuestions, setShuffleQuestions] = useState(true)
   const [enableHints, setEnableHints] = useState(true)
+  const [extractScreenText, setExtractScreenText] = useState(true)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState('')
 
@@ -173,6 +174,7 @@ export function QuizConfigPage() {
         shuffle_questions: shuffleQuestions,
         enable_hints: enableHints,
         topics: selectedTopics,
+        extract_screen_text: extractScreenText,
       })
       if (result.job_id) {
         navigate(`/processing/${result.job_id}`)
@@ -408,6 +410,17 @@ export function QuizConfigPage() {
                         <p className="text-xs text-muted-foreground">Lets you reveal prompts during difficult questions.</p>
                       </div>
                       <Checkbox id="hints" checked={enableHints} onCheckedChange={(checked) => setEnableHints(Boolean(checked))} />
+                    </div>
+
+                    <div className="flex items-start justify-between gap-4 rounded-xl border p-3.5 bg-muted/10">
+                      <div className="space-y-1">
+                        <label htmlFor="extract-text" className="text-sm font-medium inline-flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-primary" />
+                          Extract Screen Text
+                        </label>
+                        <p className="text-xs text-muted-foreground">Include text from video screen captures in question context.</p>
+                      </div>
+                      <Checkbox id="extract-text" checked={extractScreenText} onCheckedChange={(checked) => setExtractScreenText(Boolean(checked))} />
                     </div>
                   </div>
                 </div>
