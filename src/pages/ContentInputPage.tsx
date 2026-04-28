@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { Slider } from '../components/ui/Slider'
 import { Label } from '../components/ui/Label'
 import { Badge } from '../components/ui/Badge'
+import { Checkbox } from '../components/ui/Checkbox'
 import {
   AlertCircle,
   UploadCloud,
@@ -27,6 +28,7 @@ import {
   List,
   AlignLeft,
   Type,
+  Sparkles,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useToast } from '../components/ui/Toast'
@@ -62,6 +64,7 @@ export function ContentInputPage() {
   const [targetAudience, setTargetAudience] = useState('academic')
   const [language, setLanguage] = useState('en')
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [extractScreenText, setExtractScreenText] = useState(true)
   const [isGenerating, setIsGenerating] = useState(false)
   const [validationError, setValidationError] = useState('')
   const [fileError, setFileError] = useState<string | null>(null)
@@ -225,6 +228,7 @@ export function ContentInputPage() {
           focus_areas: [],
           target_audience: targetAudience,
           language,
+          extract_screen_text: false,
         })
         toast.success('File uploaded. Summary generation started!')
         navigate(`/processing/${result.job_id}`)
@@ -239,6 +243,7 @@ export function ContentInputPage() {
           focus_areas: [],
           target_audience: targetAudience,
           language,
+          extract_screen_text: extractScreenText,
         })
         toast.success('Summary generation started!')
         navigate(`/processing/${result.job_id}`)
@@ -672,6 +677,24 @@ export function ContentInputPage() {
                           <option value="es">Spanish</option>
                         </select>
                       </div>
+                      {sourceType === 'youtube' && (
+                        <div className="flex items-start justify-between gap-4 rounded-xl border p-3.5 bg-muted/10">
+                          <div className="space-y-1">
+                            <label htmlFor="summary-extract-screen-text" className="text-sm font-medium inline-flex items-center gap-2">
+                              <Sparkles className="h-4 w-4 text-primary" />
+                              Read text on video screen
+                            </label>
+                            <p className="text-xs text-muted-foreground">
+                              Uses visual text from frames together with subtitles when available.
+                            </p>
+                          </div>
+                          <Checkbox
+                            id="summary-extract-screen-text"
+                            checked={extractScreenText}
+                            onCheckedChange={(checked) => setExtractScreenText(Boolean(checked))}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
