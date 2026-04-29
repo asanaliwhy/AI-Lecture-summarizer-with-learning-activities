@@ -56,6 +56,7 @@ export function FlashcardConfigPage() {
   const [enableSpacedRepetition, setEnableSpacedRepetition] = useState(true)
   const [includeMnemonics, setIncludeMnemonics] = useState(false)
   const [includeExamples, setIncludeExamples] = useState(true)
+  const [extractScreenText, setExtractScreenText] = useState(true)
   const [isFlipped, setIsFlipped] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState('')
@@ -128,6 +129,7 @@ export function FlashcardConfigPage() {
     setEnableSpacedRepetition(true)
     setIncludeMnemonics(false)
     setIncludeExamples(true)
+    setExtractScreenText(true)
     setSelectedTopics(availableTopics)
     setIsFlipped(false)
     setError('')
@@ -160,6 +162,7 @@ export function FlashcardConfigPage() {
         enable_spaced_repetition: enableSpacedRepetition,
         include_mnemonics: includeMnemonics,
         include_examples: includeExamples,
+        extract_screen_text: extractScreenText,
       })
 
       const jobId = result.job?.id || result.job_id
@@ -383,6 +386,16 @@ export function FlashcardConfigPage() {
                         <p className="text-xs text-muted-foreground">Shows practical usage to reinforce understanding.</p>
                       </div>
                       <Checkbox id="examples" checked={includeExamples} onCheckedChange={(checked) => setIncludeExamples(Boolean(checked))} />
+                    </div>
+                    <div className="flex items-start justify-between gap-4 rounded-xl border p-3.5 bg-muted/10">
+                      <div className="space-y-1">
+                        <label htmlFor="flashcard-extract-text" className="text-sm font-medium inline-flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-primary" />
+                          Read text on video screen
+                        </label>
+                        <p className="text-xs text-muted-foreground">Include visual text detected from the source video when available.</p>
+                      </div>
+                      <Checkbox id="flashcard-extract-text" checked={extractScreenText} onCheckedChange={(checked) => setExtractScreenText(Boolean(checked))} />
                     </div>
                   </div>
 
