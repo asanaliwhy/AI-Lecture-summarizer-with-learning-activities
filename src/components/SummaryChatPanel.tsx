@@ -4,6 +4,7 @@ import { MessageCircle, X, Send, Loader2, Bot, User, Trash2 } from 'lucide-react
 import DOMPurify from 'dompurify'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
+import { useToast } from './ui/Toast'
 
 interface ChatMessage {
     role: 'user' | 'assistant'
@@ -36,6 +37,7 @@ export function SummaryChatPanel({
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
     const queryClient = useQueryClient()
+    const toast = useToast()
 
     const scrollToBottom = useCallback(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -94,7 +96,10 @@ export function SummaryChatPanel({
             .catch((err) => console.error('Failed to persist user chat message', err))
 
         try {
-            const { reply } = await api.summaries.chat(summaryId, trimmed, messages)
+            const { reply, screen_ocr_hint: screenOcrHint } = await api.summaries.chat(summaryId, trimmed, messages)
+            if (screenOcrHint && String(screenOcrHint).trim()) {
+                toast.warning(String(screenOcrHint).trim())
+            }
             setMessages((prev) => {
                 const assistantMessage: ChatMessage = { role: 'assistant', content: reply }
                 const next: ChatMessage[] = [...prev, assistantMessage]
