@@ -688,18 +688,8 @@ export function DashboardPage() {
                         <Clock className="h-3 w-3" />
                         <span>{item.date}</span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex gap-2">
-                          {item.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="text-xs bg-secondary px-2 py-1 rounded-md text-secondary-foreground border border-transparent group-hover:border-border/50 transition-colors"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                        {item.progress > 0 && (
+                      {item.progress > 0 && (
+                        <div className="flex justify-end">
                           <div className="h-1.5 w-16 bg-secondary rounded-full overflow-hidden">
                             <div
                               className="h-full bg-green-500 transition-all duration-1000 ease-out"
@@ -708,8 +698,8 @@ export function DashboardPage() {
                               }}
                             />
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -759,23 +749,6 @@ export function DashboardPage() {
                     </CardContent>
                   </Card>
                 </Link>
-                <Link to="/presentations/new">
-                  <Card className="hover:bg-secondary/50 transition-all duration-300 cursor-pointer border-dashed hover:border-solid hover:shadow-md group">
-                    <CardContent className="p-4 flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-sky-100 dark:bg-sky-500/15 flex items-center justify-center text-sky-600 dark:text-sky-300 group-hover:scale-110 transition-transform">
-                        <Presentation className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm group-hover:text-sky-700 transition-colors">
-                          New Presentation
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Build a slide deck
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
                 <Link to="/flashcards">
                   <Card className="hover:bg-secondary/50 transition-all duration-300 cursor-pointer border-dashed hover:border-solid hover:shadow-md group">
                     <CardContent className="p-4 flex items-center gap-4">
@@ -793,6 +766,23 @@ export function DashboardPage() {
                     </CardContent>
                   </Card>
                 </Link>
+                <Link to="/presentations/new">
+                  <Card className="hover:bg-secondary/50 transition-all duration-300 cursor-pointer border-dashed hover:border-solid hover:shadow-md group">
+                    <CardContent className="p-4 flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-300 group-hover:scale-110 transition-transform">
+                        <Presentation className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm group-hover:text-emerald-700 transition-colors">
+                          New Presentation
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Build a slide deck
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
               </div>
             </section>
 
@@ -802,11 +792,6 @@ export function DashboardPage() {
                 <h2 className="text-lg font-semibold tracking-tight">
                   Weekly Activity
                 </h2>
-                {isActivityEstimated && (
-                  <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
-                    Estimated
-                  </Badge>
-                )}
               </div>
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
@@ -853,11 +838,6 @@ export function DashboardPage() {
                       ))}
                     </div>
                   </div>
-                  {isActivityEstimated && (
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      Activity is estimated from recent summary creation because tracked study-session data is unavailable.
-                    </p>
-                  )}
                 </CardContent>
               </Card>
             </section>
