@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useCallback, useRef } from 'react'
 import {
   BarChart3,
   BookOpen,
@@ -25,6 +25,83 @@ interface SlideRendererProps {
   theme: ThemeConfig
   scale?: number
   isCard?: boolean
+  editable?: boolean
+  onSlideChange?: (updatedSlide: Slide) => void
+}
+
+interface EditableTextProps {
+  value: string
+  onChange?: (newValue: string) => void
+  editable?: boolean
+  tag?: 'div' | 'span' | 'h1' | 'h2' | 'p'
+  style?: React.CSSProperties
+  children?: React.ReactNode
+}
+
+function EditableText({ value, onChange, editable, tag: Tag = 'div', style, children }: EditableTextProps) {
+  const ref = useRef<HTMLElement>(null)
+  const lastValueRef = useRef(value)
+
+  const handleBlur = useCallback(() => {
+    if (!onChange || !ref.current) return
+    const text = ref.current.innerText.trim()
+    if (text !== lastValueRef.current) {
+      lastValueRef.current = text
+      onChange(text)
+    }
+  }, [onChange])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      ref.current?.blur()
+    }
+    if (e.key === 'Escape') {
+      if (ref.current) {
+        ref.current.innerText = lastValueRef.current
+      }
+      ref.current?.blur()
+    }
+  }, [])
+
+  if (!editable || !onChange) {
+    return <Tag style={style}>{children ?? value}</Tag>
+  }
+
+  return (
+    <Tag
+      ref={ref as React.RefObject<HTMLDivElement>}
+      contentEditable
+      suppressContentEditableWarning
+      spellCheck={false}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      style={{
+        ...style,
+        outline: 'none',
+        cursor: 'text',
+        borderRadius: 4,
+        transition: 'box-shadow 0.15s ease',
+        boxShadow: 'inset 0 0 0 0px transparent',
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 0 0 1.5px rgba(59,130,246,0.45)'
+      }}
+      onMouseLeave={(e) => {
+        if (document.activeElement !== e.currentTarget) {
+          (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 0 0 0px transparent'
+        }
+      }}
+      onFocus={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 0 0 2px rgba(59,130,246,0.6)'
+      }}
+      onBlurCapture={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 0 0 0px transparent'
+      }}
+    >
+      {value}
+    </Tag>
+  )
 }
 
 interface CardBullet {
@@ -484,9 +561,58 @@ function summaryIconTone(token: string, theme: ThemeConfig): { background: strin
   return { background: `${theme.accent}1f`, border: `${theme.accent}4a` }
 }
 
-export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: SlideRendererProps) {
+export function SlideRenderer({ slide, theme, scale = 1, isCard = false, editable = false, onSlideChange }: SlideRendererProps) {
   const s = (px: number) => px * scale
   const fs = (px: number) => `${px * scale}px`
+
+  const canEdit = editable && Boolean(onSlideChange)
+  const themeExtras = theme as ThemeConfig & {
+    accentGradient?: string
+    borderSubtle?: string
+    panelGlass?: string
+    isDarkTheme?: boolean
+  }
+  const accentGradient = themeExtras.accentGradient || `linear-gradient(135deg, ${theme.accentSoft}, ${theme.accent})`
+  const borderSubtle = themeExtras.borderSubtle || theme.border
+  const panelGlass = themeExtras.panelGlass || `${theme.surface}c7`
+  const isDarkTheme = Boolean(themeExtras.isDarkTheme)
+
+  const updateField = useCallback((field: keyof Slide, value: unknown) => {
+    if (!onSlideChange) return
+    onSlideChange({ ...slide, [field]: value })
+  }, [onSlideChange, slide])
+
+  const updateBullet = useCallback((bulletIndex: number, newValue: string) => {
+    if (!onSlideChange) return
+    const newBullets = [...(slide.bullets || [])]
+    newBullets[bulletIndex] = newValue
+    onSlideChange({ ...slide, bullets: newBullets })
+  }, [onSlideChange, slide])
+
+  const updateStat = useCallback((statIndex: number, field: 'value' | 'label' | 'description', newValue: string) => {
+    if (!onSlideChange) return
+    const newStats = [...(slide.stats || [])]
+    newStats[statIndex] = { ...newStats[statIndex], [field]: newValue }
+    onSlideChange({ ...slide, stats: newStats })
+  }, [onSlideChange, slide])
+
+  const updateTakeaway = useCallback((takeawayIndex: number, field: 'title' | 'description', newValue: string) => {
+    if (!onSlideChange) return
+    const newTakeaways = [...(slide.takeaways || [])]
+    newTakeaways[takeawayIndex] = { ...newTakeaways[takeawayIndex], [field]: newValue }
+    onSlideChange({ ...slide, takeaways: newTakeaways })
+  }, [onSlideChange, slide])
+
+  const updateColumnItem = useCallback((colIndex: number, itemIndex: number, newValue: string) => {
+    if (!onSlideChange) return
+    const newColumns = [...(slide.columns || [])]
+    const col = { ...newColumns[colIndex] }
+    const newItems = [...(col.items || [])]
+    newItems[itemIndex] = newValue
+    col.items = newItems
+    newColumns[colIndex] = col
+    onSlideChange({ ...slide, columns: newColumns })
+  }, [onSlideChange, slide])
 
   const columns = toColumns(slide)
   const bullets = toArray(slide.bullets)
@@ -505,9 +631,10 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
           style={{
             width: s(48),
             height: s(48),
-            borderRadius: s(14),
-            border: `1px solid ${tone.border}`,
-            background: tone.background,
+            borderRadius: s(16),
+            border: `1px solid ${borderSubtle}`,
+            background: accentGradient,
+            boxShadow: `inset 0 0 ${s(18)}px ${tone.background}, 0 ${s(8)}px ${s(18)}px rgba(10, 16, 28, 0.18)`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -525,13 +652,14 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         style={{
           width: s(48),
           height: s(48),
-          borderRadius: s(14),
-          border: `1px solid ${tone.border}`,
-          background: tone.background,
+          borderRadius: s(16),
+          border: `1px solid ${borderSubtle}`,
+          background: accentGradient,
+          boxShadow: `inset 0 0 ${s(18)}px ${tone.background}, 0 ${s(8)}px ${s(18)}px rgba(10, 16, 28, 0.18)`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: theme.accent,
+          color: isDarkTheme ? '#f8fafc' : theme.surfaceStrong,
         }}
       >
         <Icon size={s(24)} strokeWidth={2.2} />
@@ -655,7 +783,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         borderBottomRightRadius: rowIndex === data.rows.length-1 && colIndex === data.headers.length-1 ? s(18) : undefined,
                       }}
                     >
-                      {cell}
+                      <EditableText tag="span" value={cell} editable={canEdit} onChange={() => {}} />
                     </td>
                   ))}
                 </tr>
@@ -687,9 +815,10 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
 
   const panelCard: React.CSSProperties = {
     borderRadius: s(24),
-    border: `1px solid ${theme.border}`,
-    background: theme.cardGradient,
-    boxShadow: `0 ${s(12)}px ${s(34)}px rgba(7, 11, 19, 0.16)`,
+    border: `1px solid ${borderSubtle}`,
+    background: `linear-gradient(155deg, ${panelGlass} 0%, ${theme.cardGradient} 100%)`,
+    boxShadow: `0 ${s(12)}px ${s(34)}px rgba(7, 11, 19, 0.18), inset 0 1px 0 rgba(255, 255, 255, ${isDarkTheme ? 0.05 : 0.35})`,
+    backdropFilter: isDarkTheme ? `blur(${s(8)}px)` : undefined,
     overflow: 'hidden',
     minWidth: 0,
   }
@@ -718,6 +847,20 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
           borderRadius: '50%',
           background: `radial-gradient(circle, ${theme.accentSoft}20 0%, transparent 72%)`,
           pointerEvents: 'none',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          background: [
+            `linear-gradient(130deg, ${theme.accent}14 0%, transparent 30%, transparent 70%, ${theme.accentSoft}14 100%)`,
+            `radial-gradient(circle at 18% 88%, ${theme.accentSoft}1c 0%, transparent 52%)`,
+            'repeating-radial-gradient(circle at 0 0, rgba(255,255,255,0.03) 0 1px, rgba(0,0,0,0) 1px 6px)',
+          ].join(', '),
+          mixBlendMode: isDarkTheme ? 'screen' : 'multiply',
+          opacity: isDarkTheme ? 0.5 : 0.3,
         }}
       />
     </>
@@ -775,7 +918,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
               width: s(42),
               height: s(42),
               borderRadius: '50%',
-              background: `linear-gradient(135deg, ${theme.accentSoft}, ${theme.accent})`,
+              background: accentGradient,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -802,8 +945,9 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         alignItems: 'center',
         gap: s(10),
         borderRadius: s(999),
-        border: `1px solid ${theme.border}`,
-        background: `${theme.surface}d6`,
+        border: `1px solid ${borderSubtle}`,
+        background: panelGlass,
+        backdropFilter: isDarkTheme ? `blur(${s(8)}px)` : undefined,
         padding: `${s(8)}px ${s(14)}px`,
         color: theme.accent,
         fontSize: fs(18),
@@ -817,10 +961,10 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
           width: s(6),
           height: s(6),
           borderRadius: '50%',
-          background: theme.accent,
-        }}
-      />
-      {label}
+            background: accentGradient,
+          }}
+        />
+        {label}
     </div>
   )
 
@@ -865,7 +1009,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
               }}
             >
               {slide.sectionLabel ? textOverline(slide.sectionLabel) : null}
-              <h1
+              <EditableText
+                tag="h1"
+                value={slide.title || ''}
+                editable={canEdit}
+                onChange={(v) => updateField('title', v)}
                 style={{
                   margin: `${s(20)}px 0 0`,
                   fontFamily: theme.displayFont,
@@ -874,11 +1022,13 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   letterSpacing: '-0.032em',
                   color: theme.text,
                 }}
-              >
-                {slide.title}
-              </h1>
+              />
               {slide.subtitle && (
-                <p
+                <EditableText
+                  tag="p"
+                  value={String(slide.subtitle)}
+                  editable={canEdit}
+                  onChange={(v) => updateField('subtitle', v)}
                   style={{
                     margin: `${s(22)}px 0 0`,
                     color: theme.subtext,
@@ -886,9 +1036,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     lineHeight: 1.42,
                     maxWidth: s(600),
                   }}
-                >
-                  {slide.subtitle}
-                </p>
+                />
               )}
             </div>
 
@@ -936,7 +1084,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
               }}
             >
               {slide.sectionLabel ? textOverline(slide.sectionLabel) : null}
-              <h2
+              <EditableText
+                tag="h2"
+                value={slide.title || ''}
+                editable={canEdit}
+                onChange={(v) => updateField('title', v)}
                 style={{
                   margin: `${s(22)}px 0 0`,
                   fontFamily: theme.displayFont,
@@ -944,20 +1096,20 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   lineHeight: 1.03,
                   letterSpacing: '-0.032em',
                 }}
-              >
-                {slide.title}
-              </h2>
+              />
               {slide.subtitle && (
-                <p
+                <EditableText
+                  tag="p"
+                  value={String(slide.subtitle)}
+                  editable={canEdit}
+                  onChange={(v) => updateField('subtitle', v)}
                   style={{
                     marginTop: s(20),
                     color: theme.subtext,
                     fontSize: fs(20),
                     lineHeight: 1.42,
                   }}
-                >
-                  {slide.subtitle}
-                </p>
+                />
               )}
             </div>
 
@@ -1077,7 +1229,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   padding: `${s(20)}px ${s(24)}px`,
                 }}
               >
-                <h2
+                <EditableText
+                  tag="h2"
+                  value={slide.title || ''}
+                  editable={canEdit}
+                  onChange={(v) => updateField('title', v)}
                   style={{
                     margin: 0,
                     fontFamily: theme.displayFont,
@@ -1086,13 +1242,9 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     letterSpacing: '-0.026em',
                     fontWeight: 700,
                   }}
-                >
-                  {slide.title}
-                </h2>
+                />
                 {slide.subtitle && (
-                  <p style={{ marginTop: s(10), color: theme.subtext, fontSize: fs(19), lineHeight: 1.42 }}>
-                    {slide.subtitle}
-                  </p>
+                  <EditableText tag="p" value={String(slide.subtitle)} editable={canEdit} onChange={(v) => updateField('subtitle', v)} style={{ marginTop: s(10), color: theme.subtext, fontSize: fs(19), lineHeight: 1.42 }} />
                 )}
               </div>
 
@@ -1119,7 +1271,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                 minHeight: 0,
               }}
             >
-              <h2
+              <EditableText
+                tag="h2"
+                value={slide.title || ''}
+                editable={canEdit}
+                onChange={(v) => updateField('title', v)}
                 style={{
                   margin: 0,
                   fontFamily: theme.displayFont,
@@ -1128,20 +1284,20 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   letterSpacing: '-0.03em',
                   fontWeight: 700,
                 }}
-              >
-                {slide.title}
-              </h2>
+              />
               {slide.subtitle && (
-                <p
+                <EditableText
+                  tag="p"
+                  value={String(slide.subtitle)}
+                  editable={canEdit}
+                  onChange={(v) => updateField('subtitle', v)}
                   style={{
                     marginTop: s(12),
                     color: theme.subtext,
                     fontSize: fs(19),
                     lineHeight: 1.4,
                   }}
-                >
-                  {slide.subtitle}
-                </p>
+                />
               )}
 
               <div
@@ -1202,7 +1358,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <div
                                 style={{
                                   fontFamily: theme.displayFont,
-                                  fontSize: fs(24),
+                                  fontSize: fs(25),
                                   lineHeight: 1.12,
                                   letterSpacing: '-0.02em',
                                   fontWeight: 650,
@@ -1214,7 +1370,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <p
                                 style={{
                                   margin: `${s(8)}px 0 0`,
-                                  fontSize: fs(16),
+                                  fontSize: fs(17),
                                   lineHeight: 1.38,
                                   color: theme.subtext,
                                 }}
@@ -1245,7 +1401,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               alignItems: 'center',
                               justifyContent: 'center',
                               fontFamily: theme.displayFont,
-                              fontSize: fs(25),
+                              fontSize: fs(26),
                               lineHeight: 1,
                               fontWeight: 700,
                               color: theme.text,
@@ -1278,7 +1434,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <div
                                 style={{
                                   fontFamily: theme.displayFont,
-                                  fontSize: fs(24),
+                                  fontSize: fs(25),
                                   lineHeight: 1.12,
                                   letterSpacing: '-0.02em',
                                   fontWeight: 650,
@@ -1290,7 +1446,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               <p
                                 style={{
                                   margin: `${s(8)}px 0 0`,
-                                  fontSize: fs(16),
+                                  fontSize: fs(17),
                                   lineHeight: 1.38,
                                   color: theme.subtext,
                                 }}
@@ -1329,7 +1485,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                 minHeight: 0,
               }}
             >
-              <h2
+              <EditableText
+                tag="h2"
+                value={slide.title || ''}
+                editable={canEdit}
+                onChange={(v) => updateField('title', v)}
                 style={{
                   margin: 0,
                   fontFamily: theme.displayFont,
@@ -1338,20 +1498,20 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   letterSpacing: '-0.03em',
                   fontWeight: 700,
                 }}
-              >
-                {slide.title}
-              </h2>
+              />
               {slide.subtitle && (
-                <p
+                <EditableText
+                  tag="p"
+                  value={String(slide.subtitle)}
+                  editable={canEdit}
+                  onChange={(v) => updateField('subtitle', v)}
                   style={{
                     marginTop: s(12),
                     color: theme.subtext,
                     fontSize: fs(19),
                     lineHeight: 1.4,
                   }}
-                >
-                  {slide.subtitle}
-                </p>
+                />
               )}
 
               <div
@@ -1403,7 +1563,10 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                 >
                   {arrows.map((item, index) => (
                     <div key={`flow-text-${item.number}-${index}`} style={{ minWidth: 0, padding: `0 ${s(4)}px` }}>
-                      <div
+                      <EditableText
+                        value={item.title}
+                        editable={canEdit}
+                        onChange={(v) => updateBullet(index, `FLOW:${item.number}||${v}||${item.description}`)}
                         style={{
                           fontFamily: theme.displayFont,
                           fontSize: fs(40),
@@ -1412,19 +1575,19 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                           fontWeight: 650,
                           color: theme.text,
                         }}
-                      >
-                        {item.title}
-                      </div>
-                      <p
+                      />
+                      <EditableText
+                        tag="p"
+                        value={item.description}
+                        editable={canEdit}
+                        onChange={(v) => updateBullet(index, `FLOW:${item.number}||${item.title}||${v}`)}
                         style={{
                           margin: `${s(10)}px 0 0`,
                           color: theme.subtext,
                           fontSize: fs(18),
                           lineHeight: 1.45,
                         }}
-                      >
-                        {item.description}
-                      </p>
+                      />
                     </div>
                   ))}
                 </div>
@@ -1453,7 +1616,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
               }}
             >
               <div>
-                <h2
+                <EditableText
+                  tag="h2"
+                  value={slide.title || ''}
+                  editable={canEdit}
+                  onChange={(v) => updateField('title', v)}
                   style={{
                     margin: 0,
                     fontFamily: theme.displayFont,
@@ -1462,13 +1629,9 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     letterSpacing: '-0.03em',
                     fontWeight: 700,
                   }}
-                >
-                  {slide.title}
-                </h2>
+                />
                 {slide.subtitle && (
-                  <p style={{ marginTop: s(12), color: theme.subtext, fontSize: fs(18), lineHeight: 1.4 }}>
-                    {slide.subtitle}
-                  </p>
+                  <EditableText tag="p" value={String(slide.subtitle)} editable={canEdit} onChange={(v) => updateField('subtitle', v)} style={{ marginTop: s(12), color: theme.subtext, fontSize: fs(18), lineHeight: 1.4 }} />
                 )}
               </div>
 
@@ -1494,7 +1657,10 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: s(12) }}>
                       {renderFeatureIcon(item.icon, item.title, item.description)}
                     </div>
-                    <div
+                    <EditableText
+                      value={item.title}
+                      editable={canEdit}
+                      onChange={(v) => updateBullet(index, `FEATURE:${item.icon}||${v}||${item.description}`)}
                       style={{
                         fontFamily: theme.displayFont,
                         fontSize: fs(36),
@@ -1503,10 +1669,12 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         fontWeight: 650,
                         textAlign: 'center',
                       }}
-                    >
-                      {item.title}
-                    </div>
-                    <p
+                    />
+                    <EditableText
+                      tag="p"
+                      value={item.description}
+                      editable={canEdit}
+                      onChange={(v) => updateBullet(index, `FEATURE:${item.icon}||${item.title}||${v}`)}
                       style={{
                         margin: `${s(8)}px 0 0`,
                         color: theme.subtext,
@@ -1514,9 +1682,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         lineHeight: 1.5,
                         textAlign: 'center',
                       }}
-                    >
-                      {item.description}
-                    </p>
+                    />
                   </div>
                 ))}
               </div>
@@ -1537,7 +1703,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
       const denseContent = nonCardBullets.length >= 5 || numberedBullets.length >= 4 || numDescriptionWords >= 45 || titleWordCount >= 8 || subtitleWordCount >= 16
       const ultraDenseContent = nonCardBullets.length >= 6 || numberedBullets.length >= 5 || numDescriptionWords >= 65 || titleWordCount >= 11 || subtitleWordCount >= 22
       const headingSize = ultraDenseContent ? 40 : denseContent ? 48 : 52
-      const subtitleSize = ultraDenseContent ? 16 : denseContent ? 17 : 18
+      const subtitleSize = ultraDenseContent ? 19 : denseContent ? 20 : 21
       const bulletFontSize = 13
       const bulletGap = ultraDenseContent ? 8 : 11
       const bulletPaddingY = ultraDenseContent ? 8 : denseContent ? 10 : 11
@@ -1548,8 +1714,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
         : denseContent
           ? `${s(22)}px ${s(24)}px ${s(20)}px`
           : `${s(28)}px ${s(28)}px`
-      const numTitleSize = ultraDenseContent ? 20 : denseContent ? 21 : 23
-      const numDescSize = ultraDenseContent ? 15 : denseContent ? 16 : 17
+      const numTitleSize = ultraDenseContent ? 22 : denseContent ? 23 : 25
+      const numDescSize = ultraDenseContent ? 17 : denseContent ? 18 : 19
       const numPaddingY = ultraDenseContent ? 8 : denseContent ? 11 : 14
       const numPaddingX = ultraDenseContent ? 12 : denseContent ? 14 : 16
       const cardTitleSize = ultraDenseContent ? 18 : denseContent ? 20 : 22
@@ -1595,7 +1761,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                 minHeight: 0,
               }}
             >
-              <h2
+              <EditableText
+                tag="h2"
+                value={slide.title || ''}
+                editable={canEdit}
+                onChange={(v) => updateField('title', v)}
                 style={{
                   margin: 0,
                   fontFamily: theme.displayFont,
@@ -1604,25 +1774,25 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   lineHeight: 1.06,
                   letterSpacing: '-0.028em',
                 }}
-              >
-                {slide.title}
-              </h2>
+              />
               {slide.subtitle && (
-                <p
+                <EditableText
+                  tag="p"
+                  value={String(slide.subtitle)}
+                  editable={canEdit}
+                  onChange={(v) => updateField('subtitle', v)}
                   style={{
                     margin: `${ultraDenseContent ? s(6) : s(12)}px 0 ${ultraDenseContent ? s(10) : s(14)}px`,
                     color: theme.subtext,
                     fontSize: fs(subtitleSize),
                     lineHeight: 1.36,
                   }}
-                >
-                  {slide.subtitle}
-                </p>
+                />
               )}
 
               {useNumberedStack ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: ultraDenseContent ? s(22) : s(14), marginTop: contentTopGap, flex: 1, minHeight: 0 }}>
-                  {numberedBullets.map((item) => (
+                  {numberedBullets.map((item, index) => (
                     <div
                       key={`${item.number}-${item.title}`}
                       style={{
@@ -1646,7 +1816,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          background: `linear-gradient(135deg, ${theme.accentSoft}, ${theme.accent})`,
+                          background: accentGradient,
                           color: theme.surfaceStrong,
                           fontFamily: theme.displayFont,
                           fontSize: fs(29),
@@ -1658,7 +1828,10 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         {item.number}
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <div
+                        <EditableText
+                          value={item.title}
+                          editable={canEdit}
+                          onChange={(v) => updateBullet(index, `NUM:${item.number}||${v}||${item.description}`)}
                           style={{
                             fontFamily: theme.displayFont,
                             fontSize: fs(numTitleSize),
@@ -1666,10 +1839,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                             lineHeight: 1.22,
                             color: theme.text,
                           }}
-                        >
-                          {item.title}
-                        </div>
-                        <div
+                        />
+                        <EditableText
+                          value={item.description}
+                          editable={canEdit}
+                          onChange={(v) => updateBullet(index, `NUM:${item.number}||${item.title}||${v}`)}
                           style={{
                             marginTop: s(5),
                             fontSize: fs(numDescSize),
@@ -1677,9 +1851,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                             lineHeight: ultraDenseContent ? 1.35 : 1.4,
                             color: theme.subtext,
                           }}
-                        >
-                          {item.description}
-                        </div>
+                        />
                       </div>
                     </div>
                   ))}
@@ -1703,7 +1875,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         style={{
                           borderRadius: s(14),
                           border: `1px solid ${theme.border}`,
-                          background: `${theme.surface}cf`,
+                            background: `${theme.surface}cf`,
                           padding: `${s(cardPadding)}px ${s(cardPadding)}px`,
                           minWidth: 0,
                           display: 'flex',
@@ -1713,7 +1885,10 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                           overflow: 'hidden',
                         }}
                       >
-                        <div
+                        <EditableText
+                          value={card.label}
+                          editable={canEdit}
+                          onChange={(v) => updateBullet(index, `CARD:${v}||${card.description}`)}
                           style={{
                             fontFamily: theme.displayFont,
                             fontSize: fs(cardTitleSize),
@@ -1722,10 +1897,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                             letterSpacing: '-0.015em',
                             color: theme.text,
                           }}
-                        >
-                          {card.label}
-                        </div>
-                        <div
+                        />
+                        <EditableText
+                          value={card.description}
+                          editable={canEdit}
+                          onChange={(v) => updateBullet(index, `CARD:${card.label}||${v}`)}
                           style={{
                             marginTop: s(6),
                             fontSize: fs(cardDescSize),
@@ -1733,9 +1909,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                             lineHeight: ultraDenseContent ? 1.4 : 1.5,
                             color: theme.subtext,
                           }}
-                        >
-                          {card.description}
-                        </div>
+                        />
                       </div>
                     ))}
                   </div>
@@ -1788,7 +1962,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                           alignItems: 'center',
                           justifyContent: 'center',
                           color: theme.surfaceStrong,
-                          background: `linear-gradient(135deg, ${theme.accentSoft}, ${theme.accent})`,
+                            background: accentGradient,
                           textAlign: 'center',
                           lineHeight: 1,
                         }}
@@ -1803,7 +1977,13 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                           {index + 1}
                         </span>
                       </span>
-                      <span style={{ fontSize: fs(bulletFontSize), lineHeight: 1.36 }}>{stripNumericPrefix(bullet)}</span>
+                      <EditableText
+                        tag="span"
+                        value={stripNumericPrefix(bullet)}
+                        editable={canEdit}
+                        onChange={(v) => updateBullet(index, v)}
+                        style={{ fontSize: fs(bulletFontSize), lineHeight: 1.36 }}
+                      />
                     </div>
                   ))}
                 </div>
@@ -1845,7 +2025,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   marginBottom: s(14),
                 }}
               >
-                <h2
+                <EditableText
+                  tag="h2"
+                  value={slide.title || ''}
+                  editable={canEdit}
+                  onChange={(v) => updateField('title', v)}
                   style={{
                     margin: 0,
                     fontFamily: theme.displayFont,
@@ -1854,10 +2038,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     lineHeight: 1.06,
                     letterSpacing: '-0.026em',
                   }}
-                >
-                  {slide.title}
-                </h2>
-                {slide.subtitle && <p style={{ marginTop: s(8), color: theme.subtext, fontSize: fs(19) }}>{slide.subtitle}</p>}
+                />
+                {slide.subtitle && <EditableText tag="p" value={String(slide.subtitle)} editable={canEdit} onChange={(v) => updateField('subtitle', v)} style={{ marginTop: s(8), color: theme.subtext, fontSize: fs(19) }} />}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: s(14), flex: 1, minHeight: 0 }}>
@@ -1904,10 +2086,15 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                               height: s(12),
                               borderRadius: '50%',
                               marginTop: s(4),
-                              background: `linear-gradient(135deg, ${theme.accent}, ${theme.accentSoft})`,
+                               background: accentGradient,
                             }}
                           />
-                          {item}
+                          <EditableText
+                            tag="span"
+                            value={item}
+                            editable={canEdit}
+                            onChange={(v) => updateColumnItem(index, itemIndex, v)}
+                          />
                         </div>
                       ))}
                     </div>
@@ -1951,7 +2138,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   marginBottom: s(14),
                 }}
               >
-                <h2
+                <EditableText
+                  tag="h2"
+                  value={slide.title || ''}
+                  editable={canEdit}
+                  onChange={(v) => updateField('title', v)}
                   style={{
                     margin: 0,
                     fontFamily: theme.displayFont,
@@ -1960,10 +2151,8 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     lineHeight: 1.06,
                     letterSpacing: '-0.026em',
                   }}
-                >
-                  {slide.title}
-                </h2>
-                {slide.subtitle && <p style={{ marginTop: s(8), color: theme.subtext, fontSize: fs(19) }}>{slide.subtitle}</p>}
+                />
+                {slide.subtitle && <EditableText tag="p" value={String(slide.subtitle)} editable={canEdit} onChange={(v) => updateField('subtitle', v)} style={{ marginTop: s(8), color: theme.subtext, fontSize: fs(19) }} />}
               </div>
 
               <div
@@ -1984,9 +2173,13 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                       textAlign: 'center',
                       display: 'grid',
                       alignContent: 'center',
+                      background: `linear-gradient(180deg, ${theme.accent}26 0%, transparent ${s(44)}px), linear-gradient(155deg, ${panelGlass} 0%, ${theme.cardGradient} 100%)`,
                     }}
                   >
-                    <div
+                    <EditableText
+                      value={stat.value}
+                      editable={canEdit}
+                      onChange={(v) => updateStat(index, 'value', v)}
                       style={{
                         fontFamily: theme.displayFont,
                         fontSize: fs(52),
@@ -1995,10 +2188,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         fontWeight: 700,
                         letterSpacing: '-0.02em',
                       }}
-                    >
-                      {stat.value}
-                    </div>
-                    <div
+                    />
+                    <EditableText
+                      value={stat.label}
+                      editable={canEdit}
+                      onChange={(v) => updateStat(index, 'label', v)}
                       style={{
                         marginTop: s(8),
                         fontSize: fs(20),
@@ -2007,11 +2201,12 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         letterSpacing: '0.08em',
                         fontWeight: 600,
                       }}
-                    >
-                      {stat.label}
-                    </div>
+                    />
                     {stat.description && (
-                      <div
+                      <EditableText
+                        value={stat.description}
+                        editable={canEdit}
+                        onChange={(v) => updateStat(index, 'description', v)}
                         style={{
                           marginTop: s(6),
                           fontSize: fs(19),
@@ -2019,9 +2214,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                           lineHeight: 1.4,
                           fontWeight: 400,
                         }}
-                      >
-                        {stat.description}
-                      </div>
+                      />
                     )}
                   </div>
                 ))}
@@ -2091,7 +2284,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                 gridColumn: hasImage && imagePosition === 'top' ? '1 / -1' : undefined,
               }}
             >
-              <h2
+              <EditableText
+                tag="h2"
+                value={slide.title || ''}
+                editable={canEdit}
+                onChange={(v) => updateField('title', v)}
                 style={{
                   margin: 0,
                   fontFamily: theme.displayFont,
@@ -2100,19 +2297,19 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   lineHeight: 1.05,
                   letterSpacing: '-0.026em',
                 }}
-              >
-                {slide.title}
-              </h2>
+              />
               {slide.subtitle && (
-                <p style={{ marginTop: s(10), color: theme.subtext, fontSize: fs(19), lineHeight: 1.4 }}>
-                  {slide.subtitle}
-                </p>
+                <EditableText tag="p" value={String(slide.subtitle)} editable={canEdit} onChange={(v) => updateField('subtitle', v)} style={{ marginTop: s(10), color: theme.subtext, fontSize: fs(19), lineHeight: 1.4 }} />
               )}
 
               <div style={{ marginTop: s(14), display: 'grid', gap: s(10) }}>
                 {paragraphs.slice(0, 3).map((paragraph, index) => (
-                  <p
+                  <EditableText
                     key={index}
+                    tag="p"
+                    value={paragraph}
+                    editable={canEdit}
+                    onChange={(v) => updateField('body', v)}
                     style={{
                       margin: 0,
                       color: theme.text,
@@ -2120,9 +2317,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                       lineHeight: 1.5,
                       fontWeight: 400,
                     }}
-                  >
-                    {paragraph}
-                  </p>
+                  />
                 ))}
               </div>
             </div>
@@ -2156,7 +2351,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   paddingBottom: s(4),
                 }}
               >
-                <h2
+                <EditableText
+                  tag="h2"
+                  value={slide.title || 'Key Takeaways'}
+                  editable={canEdit}
+                  onChange={(v) => updateField('title', v)}
                   style={{
                     margin: 0,
                     fontFamily: theme.displayFont,
@@ -2164,21 +2363,9 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     lineHeight: 1.04,
                     letterSpacing: '-0.03em',
                   }}
-                >
-                  {slide.title || 'Key Takeaways'}
-                </h2>
+                />
                 {slide.subtitle && (
-                  <p
-                    style={{
-                      margin: `${s(12)}px 0 0`,
-                      color: theme.subtext,
-                      fontSize: fs(19),
-                      lineHeight: 1.42,
-                      maxWidth: '88%',
-                    }}
-                  >
-                    {slide.subtitle}
-                  </p>
+                  <EditableText tag="p" value={String(slide.subtitle)} editable={canEdit} onChange={(v) => updateField('subtitle', v)} style={{ margin: `${s(12)}px 0 0`, color: theme.subtext, fontSize: fs(19), lineHeight: 1.42, maxWidth: '88%' }} />
                 )}
               </div>
 
@@ -2209,7 +2396,10 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     }}
                   >
                     {renderSummaryIcon(item)}
-                    <div
+                    <EditableText
+                      value={item.title || item.description || ''}
+                      editable={canEdit}
+                      onChange={(v) => updateTakeaway(index, 'title', v)}
                       style={{
                         marginTop: s(16),
                         fontFamily: theme.displayFont,
@@ -2218,11 +2408,12 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         letterSpacing: '-0.018em',
                         color: theme.text,
                       }}
-                    >
-                      {item.title || item.description}
-                    </div>
+                    />
                     {item.title && item.description && (
-                      <div
+                      <EditableText
+                        value={item.description}
+                        editable={canEdit}
+                        onChange={(v) => updateTakeaway(index, 'description', v)}
                         style={{
                           marginTop: s(10),
                           color: theme.subtext,
@@ -2230,9 +2421,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                           lineHeight: 1.5,
                           maxWidth: '95%',
                         }}
-                      >
-                        {item.description}
-                      </div>
+                      />
                     )}
                   </div>
                 ))}
@@ -2271,7 +2460,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                 }}
               >
                 <div>
-                  <h2
+                  <EditableText
+                    tag="h2"
+                    value={slide.title || 'Key Takeaways'}
+                    editable={canEdit}
+                    onChange={(v) => updateField('title', v)}
                     style={{
                       margin: `${s(8)}px 0 0`,
                       fontFamily: theme.displayFont,
@@ -2279,9 +2472,7 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                       lineHeight: 1.03,
                       letterSpacing: '-0.03em',
                     }}
-                  >
-                    {slide.title || 'Key Takeaways'}
-                  </h2>
+                  />
                 </div>
 
                 {renderImagePanel({ minHeight: s(286), marginTop: s(14) })}
@@ -2295,7 +2486,11 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   padding: `${s(22)}px ${s(24)}px`,
                 }}
               >
-                <h2
+                <EditableText
+                  tag="h2"
+                  value={slide.title || 'Key Takeaways'}
+                  editable={canEdit}
+                  onChange={(v) => updateField('title', v)}
                   style={{
                     margin: 0,
                     fontFamily: theme.displayFont,
@@ -2303,13 +2498,9 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                     lineHeight: 1.04,
                     letterSpacing: '-0.028em',
                   }}
-                >
-                  {slide.title || 'Key Takeaways'}
-                </h2>
+                />
                 {slide.subtitle && (
-                  <p style={{ marginTop: s(8), color: theme.subtext, fontSize: fs(19) }}>
-                    {slide.subtitle}
-                  </p>
+                  <EditableText tag="p" value={String(slide.subtitle)} editable={canEdit} onChange={(v) => updateField('subtitle', v)} style={{ marginTop: s(8), color: theme.subtext, fontSize: fs(19) }} />
                 )}
               </div>
             )}
@@ -2339,7 +2530,10 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                   }}
                 >
                   {item.title && (
-                    <div
+                    <EditableText
+                      value={item.title}
+                      editable={canEdit}
+                      onChange={(v) => updateTakeaway(index, 'title', v)}
                       style={{
                         fontFamily: theme.displayFont,
                         fontSize: fs(20),
@@ -2347,20 +2541,19 @@ export function SlideRenderer({ slide, theme, scale = 1, isCard = false }: Slide
                         letterSpacing: '-0.018em',
                         color: theme.text,
                       }}
-                    >
-                      {item.title}
-                    </div>
+                    />
                   )}
-                  <div
+                  <EditableText
+                    value={item.description}
+                    editable={canEdit}
+                    onChange={(v) => updateTakeaway(index, 'description', v)}
                     style={{
                       marginTop: item.title ? s(6) : 0,
                       color: theme.subtext,
                       fontSize: fs(20),
                       lineHeight: 1.5,
                     }}
-                  >
-                    {item.description}
-                  </div>
+                  />
                 </div>
               ))}
             </div>
