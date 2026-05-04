@@ -6,6 +6,10 @@ export interface ThemePreset extends ThemeConfig {
   id: SlideTheme
   category: ThemeCategory
   mood: string
+  accentGradient: string
+  borderSubtle: string
+  panelGlass: string
+  isDarkTheme: boolean
 }
 
 interface ThemeSpec {
@@ -27,42 +31,100 @@ interface ThemeSpec {
 
 const themeFonts: Record<ThemeCategory, { displayFont: string; bodyFont: string }> = {
   Minimal: {
-    displayFont: "'Georgia', 'Times New Roman', serif",
-    bodyFont: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+    displayFont: "'Plus Jakarta Sans', 'Segoe UI', sans-serif",
+    bodyFont: "'Plus Jakarta Sans', 'Segoe UI', sans-serif",
   },
   Corporate: {
-    displayFont: "'Trebuchet MS', 'Segoe UI', sans-serif",
-    bodyFont: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+    displayFont: "'Space Grotesk', 'Segoe UI', sans-serif",
+    bodyFont: "'Plus Jakarta Sans', 'Segoe UI', sans-serif",
   },
   Editorial: {
-    displayFont: "'Palatino Linotype', 'Book Antiqua', Palatino, serif",
-    bodyFont: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+    displayFont: "'Playfair Display', 'Times New Roman', serif",
+    bodyFont: "'Plus Jakarta Sans', 'Segoe UI', sans-serif",
   },
   Academic: {
-    displayFont: "'Cambria', 'Times New Roman', serif",
-    bodyFont: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+    displayFont: "'DM Serif Display', 'Times New Roman', serif",
+    bodyFont: "'Plus Jakarta Sans', 'Segoe UI', sans-serif",
   },
   Cinematic: {
-    displayFont: "'Trebuchet MS', 'Segoe UI', sans-serif",
-    bodyFont: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+    displayFont: "'Syne', 'Space Grotesk', sans-serif",
+    bodyFont: "'Space Grotesk', 'Segoe UI', sans-serif",
   },
   Dark: {
-    displayFont: "'Trebuchet MS', 'Segoe UI', sans-serif",
-    bodyFont: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+    displayFont: "'Space Grotesk', 'Segoe UI', sans-serif",
+    bodyFont: "'Plus Jakarta Sans', 'Segoe UI', sans-serif",
   },
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const normalized = String(hex || '').trim()
+  const match = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)
+  if (!match) {
+    return { r: 0, g: 0, b: 0 }
+  }
+
+  let raw = match[1]
+  if (raw.length === 3) {
+    raw = raw.split('').map((ch) => `${ch}${ch}`).join('')
+  }
+
+  return {
+    r: parseInt(raw.slice(0, 2), 16),
+    g: parseInt(raw.slice(2, 4), 16),
+    b: parseInt(raw.slice(4, 6), 16),
+  }
+}
+
+function rgba(hex: string, alpha: number): string {
+  const { r, g, b } = hexToRgb(hex)
+  return `rgba(${r}, ${g}, ${b}, ${clamp(alpha, 0, 1)})`
+}
+
+function mixHex(a: string, b: string, amount: number): string {
+  const x = hexToRgb(a)
+  const y = hexToRgb(b)
+  const ratio = clamp(amount, 0, 1)
+  const toHex = (value: number) => Math.round(value).toString(16).padStart(2, '0')
+  const r = x.r + (y.r - x.r) * ratio
+  const g = x.g + (y.g - x.g) * ratio
+  const bMix = x.b + (y.b - x.b) * ratio
+  return `#${toHex(r)}${toHex(g)}${toHex(bMix)}`
+}
+
+function relativeLuminance(hex: string): number {
+  const { r, g, b } = hexToRgb(hex)
+  const srgb = [r, g, b].map((channel) => {
+    const value = channel / 255
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2]
+}
+
+function isDarkColor(hex: string): boolean {
+  return relativeLuminance(hex) < 0.42
 }
 
 function toThemePreset(spec: ThemeSpec): ThemePreset {
   const fonts = themeFonts[spec.category]
+  const isDarkTheme = spec.category === 'Dark' || isDarkColor(spec.surfaceStrong)
+  const accentBright = mixHex(spec.accent, '#ffffff', isDarkTheme ? 0.08 : 0.22)
+  const accentDeep = mixHex(spec.accent, spec.surfaceStrong, isDarkTheme ? 0.26 : 0.16)
+  const backgroundCore = mixHex(spec.background, spec.backgroundAlt, isDarkTheme ? 0.3 : 0.62)
+  const backgroundTail = mixHex(spec.surfaceStrong, spec.background, isDarkTheme ? 0.45 : 0.18)
+
   return {
     id: spec.id,
     name: spec.name,
     category: spec.category,
     mood: spec.mood,
     background: spec.background,
-    backgroundGradient: `radial-gradient(circle at 18% 12%, ${spec.backgroundAlt} 0%, ${spec.background} 52%, ${spec.surfaceStrong} 100%)`,
+    backgroundGradient: [
+      `radial-gradient(120% 100% at 14% 8%, ${rgba(accentBright, isDarkTheme ? 0.22 : 0.15)} 0%, transparent 58%)`,
+      `radial-gradient(110% 90% at 92% 10%, ${rgba(spec.accentSoft, isDarkTheme ? 0.2 : 0.12)} 0%, transparent 62%)`,
+      `linear-gradient(160deg, ${spec.backgroundAlt} 0%, ${backgroundCore} 46%, ${backgroundTail} 100%)`,
+    ].join(', '),
     cardBackground: spec.card,
-    cardGradient: `linear-gradient(145deg, ${spec.card} 0%, ${spec.surface} 100%)`,
+    cardGradient: `linear-gradient(160deg, ${rgba(spec.card, isDarkTheme ? 0.92 : 0.88)} 0%, ${rgba(spec.surface, isDarkTheme ? 0.85 : 0.78)} 100%)`,
     surface: spec.surface,
     surfaceStrong: spec.surfaceStrong,
     text: spec.text,
@@ -71,7 +133,11 @@ function toThemePreset(spec: ThemeSpec): ThemePreset {
     accentSoft: spec.accentSoft,
     border: spec.border,
     sectionBackground: spec.surface,
-    overlay: `linear-gradient(120deg, ${spec.surfaceStrong}33, ${spec.surfaceStrong}cc)`,
+    overlay: `linear-gradient(135deg, ${rgba(accentDeep, isDarkTheme ? 0.34 : 0.2)}, ${rgba(spec.surfaceStrong, isDarkTheme ? 0.72 : 0.42)})`,
+    accentGradient: `linear-gradient(135deg, ${accentBright} 0%, ${spec.accent} 46%, ${accentDeep} 100%)`,
+    borderSubtle: isDarkTheme ? rgba(spec.border, 0.56) : rgba(spec.border, 0.44),
+    panelGlass: isDarkTheme ? rgba(spec.surfaceStrong, 0.58) : rgba('#ffffff', 0.58),
+    isDarkTheme,
     displayFont: fonts.displayFont,
     bodyFont: fonts.bodyFont,
   }
