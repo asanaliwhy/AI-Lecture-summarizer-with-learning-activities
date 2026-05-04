@@ -32,6 +32,15 @@ export function ThemeSelector({ activeTheme, onThemeChange }: ThemeSelectorProps
     })
   }, [activeFilter, searchQuery])
 
+  const groupedThemes = useMemo(() => {
+    return THEME_CATEGORIES
+      .map((category) => ({
+        category,
+        themes: filteredThemes.filter((theme) => theme.category === category),
+      }))
+      .filter((group) => group.themes.length > 0)
+  }, [filteredThemes])
+
   return (
     <div className="w-[460px] max-w-[calc(100vw-2rem)]">
       <div className="relative mb-3">
@@ -63,47 +72,58 @@ export function ThemeSelector({ activeTheme, onThemeChange }: ThemeSelectorProps
         ))}
       </div>
 
-      <div className="grid max-h-[420px] grid-cols-2 gap-2 overflow-y-auto pr-1">
-        {filteredThemes.map((theme) => {
-          const isActive = activeTheme === theme.id
-          return (
-            <button
-              key={theme.id}
-              type="button"
-              onClick={() => onThemeChange(theme.id)}
-              className={cn(
-                'rounded-xl border p-2 text-left transition-all',
-                isActive
-                  ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/70'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50',
-              )}
-            >
-              <div
-                className="mb-2 h-12 w-full rounded-md border border-black/5"
-                style={{ background: theme.backgroundGradient }}
-              />
+      <div className="max-h-[420px] overflow-y-auto pr-1">
+        <div className="space-y-3">
+          {groupedThemes.map((group) => (
+            <div key={group.category}>
+              <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                {group.category}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {group.themes.map((theme) => {
+                  const isActive = activeTheme === theme.id
+                  return (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      onClick={() => onThemeChange(theme.id)}
+                      className={cn(
+                        'rounded-xl border p-2 text-left transition-all',
+                        isActive
+                          ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/70'
+                          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50',
+                      )}
+                    >
+                      <div
+                        className="mb-2 h-12 w-full rounded-md border border-black/5"
+                        style={{ background: theme.backgroundGradient }}
+                      />
 
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-[12px] font-semibold text-slate-800">{theme.name}</p>
-                  <p className="truncate text-[10px] text-slate-500">{theme.category} - {theme.mood}</p>
-                </div>
-                {isActive && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white">
-                    <Check className="h-3 w-3" />
-                  </span>
-                )}
-              </div>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: theme.accent }} />
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: theme.accentSoft }} />
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: theme.surface }} />
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: theme.text }} />
+                      </div>
 
-              <div className="mt-2 flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: theme.accent }} />
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: theme.accentSoft }} />
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: theme.surface }} />
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: theme.text }} />
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-[12px] font-semibold text-slate-800">{theme.name}</p>
+                          <p className="truncate text-[10px] text-slate-500">{theme.category} - {theme.mood}</p>
+                        </div>
+                        {isActive && (
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white">
+                            <Check className="h-3 w-3" />
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
-            </button>
-          )
-        })}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
