@@ -261,9 +261,9 @@ export function SummariesPage() {
   return (
     <AppLayout>
       <div className="space-y-8 animate-in fade-in duration-500">
-        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background via-background to-secondary/25 p-6 shadow-sm">
-          <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
-          <div className="pointer-events-none absolute -left-16 -bottom-20 h-44 w-44 rounded-full bg-blue-400/10 blur-3xl" />
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-blue-50/85 via-background to-cyan-100/50 p-6 shadow-sm">
+          <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-blue-400/14 blur-3xl" />
+          <div className="pointer-events-none absolute -left-16 -bottom-20 h-44 w-44 rounded-full bg-cyan-400/12 blur-3xl" />
 
           <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>

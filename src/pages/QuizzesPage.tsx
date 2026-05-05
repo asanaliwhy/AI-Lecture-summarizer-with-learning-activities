@@ -331,9 +331,9 @@ export function QuizzesPage() {
     <AppLayout>
       <div className="space-y-8 animate-in fade-in duration-500">
         {/* Hero */}
-        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background via-background to-secondary/25 p-6 shadow-sm">
-          <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
-          <div className="pointer-events-none absolute -left-16 -bottom-20 h-44 w-44 rounded-full bg-purple-400/10 blur-3xl" />
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-purple-50/85 via-background to-fuchsia-100/50 p-6 shadow-sm">
+          <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-purple-400/14 blur-3xl" />
+          <div className="pointer-events-none absolute -left-16 -bottom-20 h-44 w-44 rounded-full bg-fuchsia-400/12 blur-3xl" />
 
           <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -464,8 +464,8 @@ export function QuizzesPage() {
           </div>
         ) : quizzes.length === 0 ? (
           <div className="text-center py-16">
-            <div className="h-16 w-16 bg-green-100 dark:bg-green-500/15 rounded-full flex items-center justify-center mx-auto mb-4">
-              <BrainCircuit className="h-8 w-8 text-green-600 dark:text-green-300" />
+            <div className="h-16 w-16 bg-purple-100 dark:bg-purple-500/15 rounded-full flex items-center justify-center mx-auto mb-4">
+              <BrainCircuit className="h-8 w-8 text-purple-600 dark:text-purple-300" />
             </div>
             <h3 className="text-lg font-semibold mb-2">No quizzes yet</h3>
             <p className="text-muted-foreground mb-4">Create a summary first, then generate a quiz from it.</p>
@@ -490,12 +490,12 @@ export function QuizzesPage() {
                     }
                   }}
                 >
-                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500/60 via-teal-500/40 to-cyan-500/30" />
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-purple-500/60 via-fuchsia-500/40 to-indigo-500/30" />
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent to-secondary/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                   <CardContent className="p-6 relative z-10">
                     <div className="flex justify-between items-start gap-4">
                       <div className="flex gap-4 min-w-0">
-                        <div className="h-12 w-12 rounded-xl bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                        <div className="h-12 w-12 rounded-xl bg-purple-100 dark:bg-purple-500/15 text-purple-600 dark:text-purple-300 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm">
                           <BrainCircuit className="h-6 w-6" />
                         </div>
                         <div className="min-w-0">
