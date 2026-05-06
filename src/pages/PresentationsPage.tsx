@@ -191,9 +191,9 @@ export function PresentationsPage() {
   return (
     <AppLayout>
       <div className="space-y-8 animate-in fade-in duration-500">
-        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background via-background to-secondary/25 p-6 shadow-sm">
-          <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
-          <div className="pointer-events-none absolute -left-16 -bottom-20 h-44 w-44 rounded-full bg-blue-400/10 blur-3xl" />
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-emerald-50/85 via-background to-green-100/55 p-6 shadow-sm">
+          <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-emerald-400/14 blur-3xl" />
+          <div className="pointer-events-none absolute -left-16 -bottom-20 h-44 w-44 rounded-full bg-green-500/12 blur-3xl" />
 
           <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -217,7 +217,6 @@ export function PresentationsPage() {
               { label: 'Total', value: themedPresentations.length },
               { label: 'Slides', value: themedPresentations.reduce((sum, item) => sum + item.presentation.slideCount, 0) },
               { label: 'Themes', value: new Set(themedPresentations.map((item) => item.resolvedTheme)).size },
-              { label: 'Completed', value: themedPresentations.filter((item) => item.presentation.status === 'completed').length },
             ].map((stat) => (
               <div key={stat.label} className="rounded-xl border bg-card/90 p-3 shadow-sm">
                 <div className="flex items-center justify-between">
@@ -319,7 +318,7 @@ export function PresentationsPage() {
             <Button onClick={() => navigate('/presentations/new')}>Create Presentation</Button>
           </div>
         ) : filteredPresentations.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {filteredPresentations.map(({ presentation, resolvedTheme }) => (
               <Card
                 key={presentation.id}
@@ -347,7 +346,6 @@ export function PresentationsPage() {
                         <Badge variant="secondary">{presentation.slideCount} slides</Badge>
                         <Badge variant="outline" className="capitalize">{presentation.language || 'en'}</Badge>
                         <Badge variant="outline" className="capitalize">{resolvedTheme}</Badge>
-                        <Badge variant="outline" className="capitalize">{presentation.status}</Badge>
                       </div>
                     </div>
                     <Button
