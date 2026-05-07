@@ -1611,7 +1611,7 @@ export function QuizResultsPage() {
         title={!sourceSummaryId ? 'Source summary not available' : 'Discuss the current quiz/question in chat'}
         disabled={!sourceSummaryId || questions.length === 0}
         onClick={handleOpenFloatingDiscuss}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-white shadow-lg hover:bg-blue-700 hover:shadow-xl transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-black px-5 py-3 text-white shadow-lg hover:bg-neutral-800 hover:shadow-xl transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <MessageCircle className="h-5 w-5" />
         <span className="text-sm font-medium">Discuss in Chat</span>
