@@ -43,8 +43,8 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
     { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
 		{ icon: FileText, label: 'Summaries', href: '/summaries' },
 		{ icon: BrainCircuit, label: 'Quizzes', href: '/quizzes' },
-		{ icon: Presentation, label: 'Presentations', href: '/presentations' },
 		{ icon: Layers, label: 'Flashcards', href: '/flashcards' },
+		{ icon: Presentation, label: 'Presentations', href: '/presentations' },
     { icon: Library, label: 'Library', href: '/library' },
     { icon: Settings, label: 'Settings', href: '/settings' },
   ]
