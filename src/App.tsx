@@ -39,6 +39,7 @@ export function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/callback" element={<AuthCallbackPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/verify-email" element={<EmailVerificationPage />} />
 
             {/* Authenticated Routes */}
