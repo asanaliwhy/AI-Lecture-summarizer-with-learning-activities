@@ -20,6 +20,7 @@ import (
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
 	"lectura-backend/internal/repository"
+	"lectura-backend/internal/services"
 )
 
 type DashboardHandler struct {
@@ -668,7 +669,8 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 // User & Settings handler
 
 type UserHandler struct {
-	userRepo userSettingsRepo
+	userRepo      userSettingsRepo
+	encryptionKey string
 }
 
 type userSettingsRepo interface {
@@ -735,8 +737,8 @@ func defaultSettings(userID uuid.UUID) *models.UserSettings {
 	}
 }
 
-func NewUserHandler(userRepo *repository.UserRepo) *UserHandler {
-	return &UserHandler{userRepo: userRepo}
+func NewUserHandler(userRepo *repository.UserRepo, encryptionKey string) *UserHandler {
+	return &UserHandler{userRepo: userRepo, encryptionKey: encryptionKey}
 }
 
 func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
@@ -796,6 +798,62 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, user)
+}
+
+// SetGeminiKey accepts a user's custom Gemini API key (or clears it).
+func (h *UserHandler) SetGeminiKey(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	user, err := h.userRepo.GetByID(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "User not found", r))
+		return
+	}
+
+	var req struct {
+		GeminiAPIKey string `json:"gemini_api_key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Invalid request body", r))
+		return
+	}
+
+	apiKey := strings.TrimSpace(req.GeminiAPIKey)
+
+	if apiKey == "" {
+		// Clear the key
+		user.GeminiAPIKeyEnc = nil
+		user.HasGeminiKey = false
+	} else {
+		// Basic validation
+		if len(apiKey) < 20 {
+			writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "API key appears invalid (too short)", r))
+			return
+		}
+
+		if h.encryptionKey == "" {
+			writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Encryption not configured", r))
+			return
+		}
+
+		encrypted, err := services.Encrypt(apiKey, h.encryptionKey)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to encrypt API key", r))
+			return
+		}
+
+		user.GeminiAPIKeyEnc = &encrypted
+		user.HasGeminiKey = true
+	}
+
+	if err := h.userRepo.Update(r.Context(), user); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to save API key", r))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"has_gemini_key": user.HasGeminiKey,
+		"message":        "API key updated successfully",
+	})
 }
 
 func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {

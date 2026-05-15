@@ -104,6 +104,13 @@ func (p *Pool) Stop() {
 	close(p.stopChan)
 }
 
+// resolveGemini returns a GeminiService that uses the user's own API key if one
+// is stored, otherwise returns the shared service. The cleanup function MUST be
+// deferred by the caller.
+func (p *Pool) resolveGemini(ctx context.Context, userID uuid.UUID) (*services.GeminiService, func()) {
+	return p.gemini.ResolveForUser(ctx, userID)
+}
+
 func (p *Pool) worker(id int, queues []string) {
 	for {
 		select {
@@ -186,6 +193,9 @@ func (p *Pool) worker(id int, queues []string) {
 }
 
 func (p *Pool) processSummary(ctx context.Context, job *models.Job) error {
+	gemini, cleanup := p.resolveGemini(ctx, job.UserID)
+	defer cleanup()
+
 	// Get the content transcript
 	summary, err := p.summaryRepo.GetByID(ctx, job.ReferenceID)
 	if err != nil {
@@ -223,7 +233,7 @@ func (p *Pool) processSummary(ctx context.Context, job *models.Job) error {
 			return extractErr
 		}
 
-		p.gemini.PublishUpdate(ctx, job.UserID, models.WSMessage{
+		gemini.PublishUpdate(ctx, job.UserID, models.WSMessage{
 			Type: "status_update",
 			Payload: models.StatusUpdate{
 				JobID:    job.ID,
@@ -240,7 +250,7 @@ func (p *Pool) processSummary(ctx context.Context, job *models.Job) error {
 				return fmt.Errorf("transcript extraction failed for video %s: %v; audio fallback download failed: %w", videoID, transcriptErr, audioErr)
 			}
 
-			transcribed, transcribeErr := p.gemini.TranscribeAudio(ctx, audioBytes, mimeType)
+			transcribed, transcribeErr := gemini.TranscribeAudio(ctx, audioBytes, mimeType)
 			if transcribeErr != nil {
 				return fmt.Errorf("transcript extraction failed for video %s: %v; STT fallback transcription failed: %w", videoID, transcriptErr, transcribeErr)
 			}
@@ -264,10 +274,13 @@ func (p *Pool) processSummary(ctx context.Context, job *models.Job) error {
 		return fmt.Errorf("cannot generate summary: transcript is not available")
 	}
 
-	return p.gemini.GenerateSummary(ctx, job, transcript)
+	return gemini.GenerateSummary(ctx, job, transcript)
 }
 
 func (p *Pool) processPresentation(ctx context.Context, job *models.Job) error {
+	gemini, cleanup := p.resolveGemini(ctx, job.UserID)
+	defer cleanup()
+
 	presentation, err := p.presentationRepo.GetByID(ctx, job.ReferenceID)
 	if err != nil {
 		return fmt.Errorf("failed to get presentation: %w", err)
@@ -303,7 +316,7 @@ func (p *Pool) processPresentation(ctx context.Context, job *models.Job) error {
 			return extractErr
 		}
 
-		p.gemini.PublishUpdate(ctx, job.UserID, models.WSMessage{
+		gemini.PublishUpdate(ctx, job.UserID, models.WSMessage{
 			Type: "status_update",
 			Payload: models.StatusUpdate{
 				JobID:    job.ID,
@@ -319,7 +332,7 @@ func (p *Pool) processPresentation(ctx context.Context, job *models.Job) error {
 				return fmt.Errorf("transcript extraction failed for video %s: %v; audio fallback download failed: %w", videoID, transcriptErr, audioErr)
 			}
 
-			transcribed, transcribeErr := p.gemini.TranscribeAudio(ctx, audioBytes, mimeType)
+			transcribed, transcribeErr := gemini.TranscribeAudio(ctx, audioBytes, mimeType)
 			if transcribeErr != nil {
 				return fmt.Errorf("transcript extraction failed for video %s: %v; STT fallback transcription failed: %w", videoID, transcriptErr, transcribeErr)
 			}
@@ -343,7 +356,7 @@ func (p *Pool) processPresentation(ctx context.Context, job *models.Job) error {
 		return fmt.Errorf("cannot generate presentation: transcript is not available")
 	}
 
-	return p.gemini.GeneratePresentation(ctx, job, transcript)
+	return gemini.GeneratePresentation(ctx, job, transcript)
 }
 
 func (p *Pool) waitForContentReady(ctx context.Context, contentID uuid.UUID, timeout time.Duration) (*models.Content, error) {
@@ -383,6 +396,9 @@ func (p *Pool) waitForContentReady(ctx context.Context, contentID uuid.UUID, tim
 }
 
 func (p *Pool) processQuiz(ctx context.Context, job *models.Job) error {
+	gemini, cleanup := p.resolveGemini(ctx, job.UserID)
+	defer cleanup()
+
 	current, err := p.jobRepo.GetByID(ctx, job.ID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch job state for %s: %w", job.ID, err)
@@ -414,10 +430,13 @@ func (p *Pool) processQuiz(ctx context.Context, job *models.Job) error {
 		content = *summary.ContentRaw
 	}
 
-	return p.gemini.GenerateQuiz(ctx, job, content)
+	return gemini.GenerateQuiz(ctx, job, content)
 }
 
 func (p *Pool) processFlashcard(ctx context.Context, job *models.Job) error {
+	gemini, cleanup := p.resolveGemini(ctx, job.UserID)
+	defer cleanup()
+
 	current, err := p.jobRepo.GetByID(ctx, job.ID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch job state for %s: %w", job.ID, err)
@@ -455,10 +474,13 @@ func (p *Pool) processFlashcard(ctx context.Context, job *models.Job) error {
 		content = *summary.ContentRaw
 	}
 
-	return p.gemini.GenerateFlashcards(ctx, job, content)
+	return gemini.GenerateFlashcards(ctx, job, content)
 }
 
 func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
+	gemini, cleanup := p.resolveGemini(ctx, job.UserID)
+	defer cleanup()
+
 	current, err := p.jobRepo.GetByID(ctx, job.ID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch job state for %s: %w", job.ID, err)
@@ -483,7 +505,7 @@ func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
 		}
 
 		// Step 1: Fetch transcript
-		p.gemini.PublishUpdate(ctx, job.UserID, models.WSMessage{
+		gemini.PublishUpdate(ctx, job.UserID, models.WSMessage{
 			Type: "status_update",
 			Payload: models.StatusUpdate{
 				JobID:    job.ID,
@@ -509,7 +531,7 @@ func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
 				return nil
 			}
 
-			transcribed, transcribeErr := p.gemini.TranscribeAudio(ctx, audioBytes, mimeType)
+			transcribed, transcribeErr := gemini.TranscribeAudio(ctx, audioBytes, mimeType)
 			if transcribeErr != nil {
 				fallbackTranscript := buildMetadataFallbackTranscript(content)
 				if saveErr := p.contentRepo.UpdateTranscript(ctx, content.ID, fallbackTranscript); saveErr != nil {
@@ -567,7 +589,7 @@ func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
 				mimeType = "video/mp4"
 			}
 
-			extracted, extractErr = p.gemini.TranscribeAudio(ctx, fileBytes, mimeType)
+			extracted, extractErr = gemini.TranscribeAudio(ctx, fileBytes, mimeType)
 		default:
 			extractErr = fmt.Errorf("unsupported file type for extraction: %s", ext)
 		}
