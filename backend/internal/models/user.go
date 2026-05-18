@@ -18,9 +18,12 @@ type User struct {
 	Plan            string     `json:"plan"`
 	AuthProvider    string     `json:"auth_provider"`
 	GoogleID        *string    `json:"-"`
-	GeminiAPIKeyEnc *string    `json:"-"`
-	CreatedAt       time.Time  `json:"created_at"`
-	LastLoginAt     *time.Time `json:"last_login_at"`
+	GeminiAPIKeyEnc      *string    `json:"-"`
+	HasGeminiKey         bool       `json:"has_gemini_key"`
+	StripeCustomerID     *string    `json:"stripe_customer_id"`
+	StripeSubscriptionID *string    `json:"stripe_subscription_id"`
+	CreatedAt            time.Time  `json:"created_at"`
+	LastLoginAt          *time.Time `json:"last_login_at"`
 }
 
 type RegisterRequest struct {

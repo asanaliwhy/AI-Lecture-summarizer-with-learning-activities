@@ -34,10 +34,12 @@ type GeminiService struct {
 	quizRepo          *repository.QuizRepo
 	flashRepo         *repository.FlashcardRepo
 	jobRepo           *repository.JobRepo
+	userRepo          *repository.UserRepo
 	redis             *redis.Client
 	unsplashAccessKey string
 	httpClient        *http.Client
 	rateChan          chan struct{} // Token bucket
+	encryptionKey     string        // For decrypting user API keys
 }
 
 func NewGeminiService(
@@ -48,8 +50,10 @@ func NewGeminiService(
 	quizRepo *repository.QuizRepo,
 	flashRepo *repository.FlashcardRepo,
 	jobRepo *repository.JobRepo,
+	userRepo *repository.UserRepo,
 	redisClient *redis.Client,
 	unsplashAccessKey string,
+	encryptionKey string,
 ) (*GeminiService, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
@@ -75,15 +79,79 @@ func NewGeminiService(
 		quizRepo:          quizRepo,
 		flashRepo:         flashRepo,
 		jobRepo:           jobRepo,
+		userRepo:          userRepo,
 		redis:             redisClient,
 		unsplashAccessKey: strings.TrimSpace(unsplashAccessKey),
 		httpClient:        &http.Client{Timeout: 15 * time.Second},
 		rateChan:          rateChan,
+		encryptionKey:     encryptionKey,
 	}, nil
 }
 
 func (s *GeminiService) Close() {
-	s.client.Close()
+	if s.client != nil {
+		s.client.Close()
+	}
+}
+
+// WithAPIKey creates a lightweight clone of this GeminiService that uses the
+// given API key for all Gemini calls. Repos, Redis, rate-limiter, and HTTP
+// client are shared with the parent. The caller must call Close() on the
+// returned service when done.
+func (s *GeminiService) WithAPIKey(apiKey string) (*GeminiService, error) {
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Gemini client with user key: %w", err)
+	}
+
+	model := client.GenerativeModel("gemini-3-flash-preview")
+	model.SetTemperature(0.3)
+	model.SetTopP(0.95)
+
+	return &GeminiService{
+		client:            client,
+		model:             model,
+		summaryRepo:       s.summaryRepo,
+		presentationRepo:  s.presentationRepo,
+		quizRepo:          s.quizRepo,
+		flashRepo:         s.flashRepo,
+		jobRepo:           s.jobRepo,
+		userRepo:          s.userRepo,
+		redis:             s.redis,
+		unsplashAccessKey: s.unsplashAccessKey,
+		httpClient:        s.httpClient,
+		rateChan:          s.rateChan,
+		encryptionKey:     s.encryptionKey,
+	}, nil
+}
+
+// ResolveForUser returns a GeminiService that uses the user's own API key
+// if one is stored, otherwise returns the shared service. The cleanup
+// function MUST be called when done.
+func (s *GeminiService) ResolveForUser(ctx context.Context, userID uuid.UUID) (*GeminiService, func()) {
+	if s.userRepo == nil || s.encryptionKey == "" {
+		return s, func() {}
+	}
+
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil || user.GeminiAPIKeyEnc == nil || *user.GeminiAPIKeyEnc == "" {
+		return s, func() {}
+	}
+
+	apiKey, err := Decrypt(*user.GeminiAPIKeyEnc, s.encryptionKey)
+	if err != nil {
+		log.Printf("Failed to decrypt API key for user %s: %v", userID, err)
+		return s, func() {}
+	}
+
+	userService, err := s.WithAPIKey(apiKey)
+	if err != nil {
+		log.Printf("Failed to create Gemini client for user %s: %v", userID, err)
+		return s, func() {}
+	}
+
+	return userService, func() { userService.Close() }
 }
 
 // acquireRate blocks until a rate slot is available

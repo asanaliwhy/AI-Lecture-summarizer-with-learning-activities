@@ -10,6 +10,7 @@ interface User {
     bio?: string | null
     is_verified: boolean
     plan: string
+    has_gemini_key?: boolean
 }
 
 interface AuthContextType {
