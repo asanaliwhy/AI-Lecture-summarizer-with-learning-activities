@@ -27,6 +27,7 @@ func New(
 	userHandler *handlers.UserHandler,
 	jobHandler *handlers.JobHandler,
 	chatHandler *handlers.ChatHandler,
+	billingHandler *handlers.BillingHandler,
 	wsHub *websocket.Hub,
 	frontendURL string,
 	trustedProxyCIDRs []string,
@@ -185,6 +186,7 @@ func New(
 			r.Get("/me", userHandler.GetMe)
 			r.Put("/me", userHandler.UpdateMe)
 			r.Put("/password", userHandler.ChangePassword)
+			r.Put("/gemini-key", userHandler.SetGeminiKey)
 			r.Delete("/me", userHandler.DeleteMe)
 			r.Get("/settings", userHandler.GetSettings)
 			r.Put("/settings", userHandler.UpdateSettings)
@@ -205,6 +207,17 @@ func New(
 			r.Get("/ws/ticket", wsTicketHandler.IssueTicket)
 		})
 		r.Get("/ws", wsHub.HandleWebSocket)
+
+		// ──── Billing Routes ────
+		r.Route("/billing", func(r chi.Router) {
+			r.Post("/webhook", billingHandler.Webhook) // Public (webhook signature verification inside)
+
+			r.Group(func(r chi.Router) {
+				r.Use(jwtAuth.Middleware)
+				r.Post("/checkout", billingHandler.CreateCheckoutSession)
+				r.Post("/portal", billingHandler.CreatePortalSession)
+			})
+		})
 	})
 
 	return r
