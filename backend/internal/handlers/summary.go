@@ -19,13 +19,16 @@ import (
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
 	"lectura-backend/internal/repository"
+	"lectura-backend/internal/services"
 )
 
 type SummaryHandler struct {
-	summaryRepo summaryRepository
-	contentRepo *repository.ContentRepo
-	jobRepo     *repository.JobRepo
-	redis       *redis.Client
+	summaryRepo  summaryRepository
+	contentRepo  *repository.ContentRepo
+	jobRepo      *repository.JobRepo
+	redis        *redis.Client
+	quotaService *services.QuotaService
+	userRepo     *repository.UserRepo
 }
 
 type summaryRepository interface {
@@ -38,12 +41,14 @@ type summaryRepository interface {
 	ToggleFavorite(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
 }
 
-func NewSummaryHandler(summaryRepo summaryRepository, contentRepo *repository.ContentRepo, jobRepo *repository.JobRepo, redisClient *redis.Client) *SummaryHandler {
+func NewSummaryHandler(summaryRepo summaryRepository, contentRepo *repository.ContentRepo, jobRepo *repository.JobRepo, redisClient *redis.Client, quotaService *services.QuotaService, userRepo *repository.UserRepo) *SummaryHandler {
 	return &SummaryHandler{
-		summaryRepo: summaryRepo,
-		contentRepo: contentRepo,
-		jobRepo:     jobRepo,
-		redis:       redisClient,
+		summaryRepo:  summaryRepo,
+		contentRepo:  contentRepo,
+		jobRepo:      jobRepo,
+		redis:        redisClient,
+		quotaService: quotaService,
+		userRepo:     userRepo,
 	}
 }
 
@@ -61,6 +66,25 @@ func (h *SummaryHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	if err != nil || content.UserID != userID {
 		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Content not found", r))
 		return
+	}
+
+	// Quota Check
+	user, err := h.userRepo.GetByID(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to load user profile", r))
+		return
+	}
+
+	if !user.HasGeminiKey {
+		allowed, err := h.quotaService.CheckQuota(r.Context(), userID, user.Plan, "summary")
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to verify quota", r))
+			return
+		}
+		if !allowed {
+			writeJSON(w, http.StatusPaymentRequired, errorResp("QUOTA_EXCEEDED", "You have reached your monthly limit for Summaries. Please upgrade your plan or add a custom API key.", r))
+			return
+		}
 	}
 
 	// Create summary record

@@ -15,6 +15,7 @@ import (
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
 	"lectura-backend/internal/repository"
+	"lectura-backend/internal/services"
 )
 
 var themeIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,63}$`)
@@ -24,6 +25,8 @@ type PresentationHandler struct {
 	contentRepo      *repository.ContentRepo
 	jobRepo          presentationJobRepository
 	redis            *redis.Client
+	quotaService     *services.QuotaService
+	userRepo         *repository.UserRepo
 }
 
 type presentationRepository interface {
@@ -42,12 +45,14 @@ type presentationJobRepository interface {
 	DeleteByReference(ctx context.Context, referenceID uuid.UUID, jobTypes ...string) error
 }
 
-func NewPresentationHandler(presentationRepo *repository.PresentationRepo, contentRepo *repository.ContentRepo, jobRepo *repository.JobRepo, redisClient *redis.Client) *PresentationHandler {
+func NewPresentationHandler(presentationRepo *repository.PresentationRepo, contentRepo *repository.ContentRepo, jobRepo *repository.JobRepo, redisClient *redis.Client, quotaService *services.QuotaService, userRepo *repository.UserRepo) *PresentationHandler {
 	return &PresentationHandler{
 		presentationRepo: presentationRepo,
 		contentRepo:      contentRepo,
 		jobRepo:          jobRepo,
 		redis:            redisClient,
+		quotaService:     quotaService,
+		userRepo:         userRepo,
 	}
 }
 
@@ -102,6 +107,25 @@ func (h *PresentationHandler) CreatePresentation(w http.ResponseWriter, r *http.
 	if content.Type != "youtube" {
 		writeJSON(w, http.StatusBadRequest, errorResp("VALIDATION_ERROR", "Presentations currently support validated YouTube content only", r))
 		return
+	}
+
+	// Quota Check
+	user, err := h.userRepo.GetByID(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to load user profile", r))
+		return
+	}
+
+	if !user.HasGeminiKey {
+		allowed, err := h.quotaService.CheckQuota(r.Context(), userID, user.Plan, "presentation")
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to verify quota", r))
+			return
+		}
+		if !allowed {
+			writeJSON(w, http.StatusPaymentRequired, errorResp("QUOTA_EXCEEDED", "You have reached your monthly limit for Presentations. Please upgrade your plan or add a custom API key.", r))
+			return
+		}
 	}
 
 	topic := content.Title

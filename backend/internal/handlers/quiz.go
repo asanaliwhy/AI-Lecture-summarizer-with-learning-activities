@@ -15,13 +15,16 @@ import (
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
 	"lectura-backend/internal/repository"
+	"lectura-backend/internal/services"
 )
 
 type QuizHandler struct {
-	quizRepo    quizRepository
-	summaryRepo quizSummaryRepository
-	jobRepo     quizJobRepository
-	redis       queuePusher
+	quizRepo     quizRepository
+	summaryRepo  quizSummaryRepository
+	jobRepo      quizJobRepository
+	redis        queuePusher
+	quotaService *services.QuotaService
+	userRepo     *repository.UserRepo
 }
 
 type queuePusher interface {
@@ -50,12 +53,14 @@ type quizRepository interface {
 	SubmitAttempt(ctx context.Context, attemptID uuid.UUID, score float64, correct int, answers json.RawMessage) error
 }
 
-func NewQuizHandler(quizRepo *repository.QuizRepo, summaryRepo *repository.SummaryRepo, jobRepo *repository.JobRepo, redisClient *redis.Client) *QuizHandler {
+func NewQuizHandler(quizRepo *repository.QuizRepo, summaryRepo *repository.SummaryRepo, jobRepo *repository.JobRepo, redisClient *redis.Client, quotaService *services.QuotaService, userRepo *repository.UserRepo) *QuizHandler {
 	return &QuizHandler{
-		quizRepo:    quizRepo,
-		summaryRepo: summaryRepo,
-		jobRepo:     jobRepo,
-		redis:       redisClient,
+		quizRepo:     quizRepo,
+		summaryRepo:  summaryRepo,
+		jobRepo:      jobRepo,
+		redis:        redisClient,
+		quotaService: quotaService,
+		userRepo:     userRepo,
 	}
 }
 
@@ -90,6 +95,25 @@ func (h *QuizHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	if err != nil || summary.UserID != userID {
 		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Summary not found", r))
 		return
+	}
+
+	// Quota Check
+	user, err := h.userRepo.GetByID(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to load user profile", r))
+		return
+	}
+
+	if !user.HasGeminiKey {
+		allowed, err := h.quotaService.CheckQuota(r.Context(), userID, user.Plan, "quiz")
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to verify quota", r))
+			return
+		}
+		if !allowed {
+			writeJSON(w, http.StatusPaymentRequired, errorResp("QUOTA_EXCEEDED", "You have reached your monthly limit for Quizzes. Please upgrade your plan or add a custom API key.", r))
+			return
+		}
 	}
 
 	quiz := &models.Quiz{

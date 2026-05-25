@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
 import { AppLayout } from '../components/layout/AppLayout'
@@ -47,7 +47,7 @@ import {
   type NotificationPreferencesResponse,
   type UpdateNotificationPreferencePayload,
 } from '../lib/api'
-import { User, Bell, Key, CreditCard, Shield, LogOut, Loader2, Sparkles } from 'lucide-react'
+import { User, Bell, Key, CreditCard, Shield, LogOut, Loader2, Sparkles, Eye, EyeOff, Zap, Infinity } from 'lucide-react'
 import { useToast } from '../components/ui/Toast'
 
 const MAX_AVATAR_BYTES = 800 * 1024
@@ -104,6 +104,32 @@ export function SettingsPage() {
   const [savingNotificationKey, setSavingNotificationKey] =
     useState<UpdateNotificationPreferencePayload['key'] | null>(null)
   const avatarInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Gemini API key state
+  const [geminiKeyInput, setGeminiKeyInput] = useState('')
+  const [showGeminiKey, setShowGeminiKey] = useState(false)
+  const [isSavingGeminiKey, setIsSavingGeminiKey] = useState(false)
+  const [isClearingGeminiKey, setIsClearingGeminiKey] = useState(false)
+
+  // Billing state
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState<'student' | 'pro' | null>(null)
+  const [isPortalLoading, setIsPortalLoading] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  useEffect(() => {
+    const checkoutStatus = searchParams.get('checkout')
+    if (checkoutStatus === 'success') {
+      toast.success('Subscription updated successfully! Your new limits are now active.')
+      refreshUser()
+      // Remove the query param to prevent showing toast again on refresh
+      searchParams.delete('checkout')
+      setSearchParams(searchParams)
+    } else if (checkoutStatus === 'cancel') {
+      toast.info('Checkout was cancelled.')
+      searchParams.delete('checkout')
+      setSearchParams(searchParams)
+    }
+  }, [searchParams, setSearchParams, refreshUser, toast])
 
   useEffect(() => {
     if (user) {
@@ -426,6 +452,68 @@ export function SettingsPage() {
       toast.error(message)
     } finally {
       setSavingNotificationKey(null)
+    }
+  }
+
+  const handleSetGeminiKey = async () => {
+    const trimmed = geminiKeyInput.trim()
+    if (!trimmed) {
+      toast.error('Please enter a Gemini API key.')
+      return
+    }
+    setIsSavingGeminiKey(true)
+    try {
+      await api.user.setGeminiKey(trimmed)
+      await refreshUser()
+      setGeminiKeyInput('')
+      toast.success('Gemini API key saved and encrypted successfully!')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to save API key'
+      toast.error(message)
+    } finally {
+      setIsSavingGeminiKey(false)
+    }
+  }
+
+  const handleClearGeminiKey = async () => {
+    setIsClearingGeminiKey(true)
+    try {
+      await api.user.setGeminiKey('')
+      await refreshUser()
+      toast.success('Gemini API key removed. Using shared developer key.')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to remove API key'
+      toast.error(message)
+    } finally {
+      setIsClearingGeminiKey(false)
+    }
+  }
+
+  const handleUpgrade = async (plan: 'student' | 'pro') => {
+    setIsCheckoutLoading(plan)
+    try {
+      const { url } = await api.billing.checkout(plan)
+      if (url) {
+        window.location.href = url
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create checkout session'
+      toast.error(message)
+      setIsCheckoutLoading(null)
+    }
+  }
+
+  const handlePortal = async () => {
+    setIsPortalLoading(true)
+    try {
+      const { url } = await api.billing.portal()
+      if (url) {
+        window.location.href = url
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to open billing portal'
+      toast.error(message)
+      setIsPortalLoading(false)
     }
   }
 
@@ -842,6 +930,101 @@ export function SettingsPage() {
                 </Button>
               </CardFooter>
             </Card>
+
+            {/* Gemini API Key Card */}
+            <Card className="border shadow-sm rounded-2xl overflow-hidden">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  Gemini API Key (BYOK)
+                </CardTitle>
+                <CardDescription>
+                  Use your own Google Gemini API key for unlimited AI generations — bypassing shared quota limits.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {user?.has_gemini_key ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 rounded-xl border border-green-200/70 bg-green-50/40 dark:bg-green-950/20 p-4">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40">
+                        <Key className="h-4 w-4 text-green-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">API Key configured</p>
+                        <p className="text-xs text-muted-foreground font-mono tracking-widest mt-0.5">••••••••••••••••••••••••••••••••</p>
+                      </div>
+                      <Badge variant="secondary" className="text-green-700 bg-green-100 dark:bg-green-900/40 border-0">
+                        Active
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Your key is stored encrypted with AES-256-GCM. All AI generations use your key and your Google quota.
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="border-red-200 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      onClick={handleClearGeminiKey}
+                      disabled={isClearingGeminiKey}
+                    >
+                      {isClearingGeminiKey && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Remove API Key
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border bg-muted/20 p-4 space-y-1">
+                      <p className="text-sm font-medium">Why use your own key?</p>
+                      <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                        <li>Bypass shared plan quotas entirely</li>
+                        <li>Your key, your usage — no limits imposed by us</li>
+                        <li>Google's free tier gives you generous daily quotas</li>
+                      </ul>
+                      <a
+                        href="https://aistudio.google.com/app/apikey"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-2"
+                      >
+                        Get your free key at Google AI Studio →
+                      </a>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="gemini-api-key">Paste your API Key</Label>
+                      <div className="relative">
+                        <input
+                          id="gemini-api-key"
+                          type={showGeminiKey ? 'text' : 'password'}
+                          placeholder="AIza..."
+                          value={geminiKeyInput}
+                          onChange={(e) => setGeminiKeyInput(e.target.value)}
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 pr-10 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowGeminiKey((v) => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          aria-label={showGeminiKey ? 'Hide key' : 'Show key'}
+                        >
+                          {showGeminiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        The key is encrypted with AES-256-GCM before storage. It is never sent back to your browser.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleSetGeminiKey}
+                      disabled={!geminiKeyInput.trim() || isSavingGeminiKey}
+                    >
+                      {isSavingGeminiKey && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Save API Key
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Billing Tab */}
@@ -856,30 +1039,50 @@ export function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-6 md:grid-cols-2">
-                  <div className="rounded-xl border p-4 bg-card/60">
+                  <div className={`rounded-xl border p-4 ${user?.plan === 'student' ? 'bg-primary/5 border-primary/20' : 'bg-card/60'}`}>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold">Free Plan</h3>
-                      <Badge>Current</Badge>
+                      <h3 className="font-semibold">Student Plan</h3>
+                      {user?.plan === 'student' && <Badge>Current</Badge>}
+                      {user?.plan !== 'student' && (
+                        <span className="font-bold text-lg">
+                          $5<span className="text-sm font-normal text-muted-foreground">/mo</span>
+                        </span>
+                      )}
                     </div>
                     <ul className="space-y-2 text-sm text-muted-foreground mb-6">
                       <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500" /> 5 Summaries / mo
+                        <Check className="h-4 w-4 text-green-500" /> 50 Summaries / mo
                       </li>
                       <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500" /> Basic Quizzes
+                        <Check className="h-4 w-4 text-green-500" /> 50 Quizzes & Flashcards / mo
                       </li>
                       <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500" /> 100MB Storage
+                        <Check className="h-4 w-4 text-green-500" /> 30 Presentations / mo
                       </li>
                     </ul>
-                    <Button variant="outline" className="w-full" disabled>Current Plan</Button>
+                    {user?.plan === 'student' ? (
+                      <Button variant="outline" className="w-full" disabled>Current Plan</Button>
+                    ) : (
+                      <Button
+                        className="w-full"
+                        variant="outline"
+                        onClick={() => handleUpgrade('student')}
+                        disabled={isCheckoutLoading !== null}
+                      >
+                        {isCheckoutLoading === 'student' && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Upgrade to Student
+                      </Button>
+                    )}
                   </div>
-                  <div className="rounded-xl border p-4 bg-primary/5 border-primary/20">
+                  <div className={`rounded-xl border p-4 ${user?.plan === 'pro' ? 'bg-primary/5 border-primary/20' : 'bg-card/60'}`}>
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-semibold">Pro Plan</h3>
-                      <span className="font-bold text-lg">
-                        $12<span className="text-sm font-normal text-muted-foreground">/mo</span>
-                      </span>
+                      {user?.plan === 'pro' && <Badge>Current</Badge>}
+                      {user?.plan !== 'pro' && (
+                        <span className="font-bold text-lg">
+                          $12<span className="text-sm font-normal text-muted-foreground">/mo</span>
+                        </span>
+                      )}
                     </div>
                     <ul className="space-y-2 text-sm text-muted-foreground mb-6">
                       <li className="flex items-center gap-2">
@@ -892,27 +1095,100 @@ export function SettingsPage() {
                         <Check className="h-4 w-4 text-green-500" /> Priority Support
                       </li>
                     </ul>
-                    <Button className="w-full" variant="outline">Upgrade to Pro</Button>
+                    {user?.plan === 'pro' ? (
+                      <Button variant="outline" className="w-full" disabled>Current Plan</Button>
+                    ) : (
+                      <Button
+                        className="w-full"
+                        variant="outline"
+                        onClick={() => handleUpgrade('pro')}
+                        disabled={isCheckoutLoading !== null}
+                      >
+                        {isCheckoutLoading === 'pro' && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Upgrade to Pro
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
 
+            {/* Usage & Quota Card */}
             <Card className="border shadow-sm rounded-2xl overflow-hidden">
               <CardHeader>
-                <CardTitle>Payment Method</CardTitle>
-                <CardDescription>Manage your payment details.</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-primary" />
+                  Usage & Quota
+                </CardTitle>
+                <CardDescription>
+                  Your monthly AI generation limits based on your current plan.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {user?.has_gemini_key ? (
+                  <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                    <Infinity className="h-6 w-6 text-primary shrink-0" />
+                    <div>
+                      <p className="font-medium text-sm">Unlimited via your own API key</p>
+                      <p className="text-xs text-muted-foreground">You're using your personal Gemini key — limits are set by Google, not by us.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {[
+                      { label: 'Summaries', free: 5, student: 50, pro: 'Unlimited' },
+                      { label: 'Quizzes', free: 5, student: 50, pro: 'Unlimited' },
+                      { label: 'Presentations', free: 3, student: 30, pro: 'Unlimited' },
+                      { label: 'Flashcard Decks', free: 5, student: 50, pro: 'Unlimited' },
+                    ].map((item) => {
+                      const plan = (user?.plan || 'free').toLowerCase()
+                      const limit = plan === 'pro' ? item.pro : plan === 'student' ? item.student : item.free
+                      return (
+                        <div key={item.label} className="flex items-center justify-between rounded-xl border bg-muted/20 px-4 py-3">
+                          <span className="text-sm font-medium">{item.label}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold">
+                              {typeof limit === 'number' ? `${limit} / month` : limit}
+                            </span>
+                            {typeof limit === 'number' && (
+                              <Badge variant="outline" className="text-xs">
+                                {plan === 'free' ? 'Free' : 'Student'}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <p className="text-xs text-muted-foreground pt-1">
+                      Add your own Gemini API key in the <strong>Security</strong> tab to bypass these limits for free.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border shadow-sm rounded-2xl overflow-hidden">
+              <CardHeader>
+                <CardTitle>Manage Subscription</CardTitle>
+                <CardDescription>View invoices, update card, or cancel subscription.</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-4 p-4 border rounded-lg">
+                <div className="flex items-center gap-4 p-4 border rounded-lg bg-card/60">
                   <div className="h-10 w-16 bg-secondary rounded flex items-center justify-center">
                     <CreditCard className="h-6 w-6 text-muted-foreground" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium">No payment method</p>
-                    <p className="text-sm text-muted-foreground">Add a card to upgrade.</p>
+                    <p className="font-medium">Stripe Billing Portal</p>
+                    <p className="text-sm text-muted-foreground">Manage your payment methods and subscription status securely.</p>
                   </div>
-                  <Button variant="ghost" size="sm">Add Card</Button>
+                  <Button
+                    variant="outline"
+                    onClick={handlePortal}
+                    disabled={isPortalLoading}
+                  >
+                    {isPortalLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Manage Subscription
+                  </Button>
                 </div>
               </CardContent>
             </Card>

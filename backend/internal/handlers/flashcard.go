@@ -16,13 +16,16 @@ import (
 	"lectura-backend/internal/middleware"
 	"lectura-backend/internal/models"
 	"lectura-backend/internal/repository"
+	"lectura-backend/internal/services"
 )
 
 type FlashcardHandler struct {
-	flashRepo   flashcardRepository
-	summaryRepo flashcardSummaryRepository
-	jobRepo     flashcardJobRepository
-	redis       queuePusher
+	flashRepo    flashcardRepository
+	summaryRepo  flashcardSummaryRepository
+	jobRepo      flashcardJobRepository
+	redis        queuePusher
+	quotaService *services.QuotaService
+	userRepo     *repository.UserRepo
 }
 
 type flashcardSummaryRepository interface {
@@ -47,12 +50,14 @@ type flashcardRepository interface {
 	GetDeckStats(ctx context.Context, deckID uuid.UUID) (*models.DeckStats, error)
 }
 
-func NewFlashcardHandler(flashRepo *repository.FlashcardRepo, summaryRepo *repository.SummaryRepo, jobRepo *repository.JobRepo, redisClient *redis.Client) *FlashcardHandler {
+func NewFlashcardHandler(flashRepo *repository.FlashcardRepo, summaryRepo *repository.SummaryRepo, jobRepo *repository.JobRepo, redisClient *redis.Client, quotaService *services.QuotaService, userRepo *repository.UserRepo) *FlashcardHandler {
 	return &FlashcardHandler{
-		flashRepo:   flashRepo,
-		summaryRepo: summaryRepo,
-		jobRepo:     jobRepo,
-		redis:       redisClient,
+		flashRepo:    flashRepo,
+		summaryRepo:  summaryRepo,
+		jobRepo:      jobRepo,
+		redis:        redisClient,
+		quotaService: quotaService,
+		userRepo:     userRepo,
 	}
 }
 
@@ -99,6 +104,25 @@ func (h *FlashcardHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	if err != nil || summary.UserID != userID {
 		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "Summary not found", r))
 		return
+	}
+
+	// Quota Check
+	user, err := h.userRepo.GetByID(r.Context(), userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to load user profile", r))
+		return
+	}
+
+	if !user.HasGeminiKey {
+		allowed, err := h.quotaService.CheckQuota(r.Context(), userID, user.Plan, "flashcard_deck")
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to verify quota", r))
+			return
+		}
+		if !allowed {
+			writeJSON(w, http.StatusPaymentRequired, errorResp("QUOTA_EXCEEDED", "You have reached your monthly limit for Flashcards. Please upgrade your plan or add a custom API key.", r))
+			return
+		}
 	}
 
 	deck := &models.FlashcardDeck{

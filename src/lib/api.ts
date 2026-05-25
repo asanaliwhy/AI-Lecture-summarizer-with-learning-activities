@@ -435,6 +435,7 @@ export interface UserProfileResponse {
     is_verified: boolean
     is_active: boolean
     plan: string
+    has_gemini_key?: boolean
     created_at?: string
     last_login_at?: string | null
 }
@@ -857,6 +858,11 @@ export const api = {
             apiFetch<UserProfileResponse>('/user/me', { method: 'PUT', body: JSON.stringify(data) }),
         changePassword: (data: { current_password: string; new_password: string }) =>
             apiFetch('/user/password', { method: 'PUT', body: JSON.stringify(data) }),
+        setGeminiKey: (geminiApiKey: string) =>
+            apiFetch<{ has_gemini_key: boolean; message: string }>('/user/gemini-key', {
+                method: 'PUT',
+                body: JSON.stringify({ gemini_api_key: geminiApiKey }),
+            }),
         deleteMe: () => apiFetch('/user/me', { method: 'DELETE' }),
         getSettings: () => apiFetch<UserSettingsResponse>('/user/settings'),
         updateSettings: (data: UpdateUserSettingsPayload) =>
@@ -873,5 +879,16 @@ export const api = {
     jobs: {
         get: (id: string) => apiFetch<JobResponse>(`/jobs/${id}`),
         cancel: (id: string) => apiFetch(`/jobs/${id}`, { method: 'DELETE' }),
+    },
+
+    // Billing
+    billing: {
+        checkout: (plan: 'student' | 'pro') =>
+            apiFetch<{ url: string }>('/billing/checkout', {
+                method: 'POST',
+                body: JSON.stringify({ plan }),
+            }),
+        portal: () =>
+            apiFetch<{ url: string }>('/billing/portal', { method: 'POST' }),
     },
 }
