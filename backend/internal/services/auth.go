@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"net/url"
 	"regexp"
 	"strings"
@@ -116,11 +117,13 @@ func (s *AuthService) Register(ctx context.Context, req models.RegisterRequest) 
 		return nil, "", fmt.Errorf("failed to hash password: %w", err)
 	}
 
+	skipVerify := strings.ToLower(strings.TrimSpace(os.Getenv("SKIP_EMAIL_VERIFICATION"))) == "true"
+
 	user := &models.User{
 		Email:        req.Email,
 		PasswordHash: string(hash),
 		FullName:     req.FullName,
-		IsVerified:   false,
+		IsVerified:   skipVerify,
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
@@ -129,6 +132,10 @@ func (s *AuthService) Register(ctx context.Context, req models.RegisterRequest) 
 
 	// Create default settings
 	s.userRepo.CreateSettings(ctx, user.ID)
+
+	if skipVerify {
+		return user, "", nil
+	}
 
 	// Generate verification token
 	token, err := GenerateToken(32)
