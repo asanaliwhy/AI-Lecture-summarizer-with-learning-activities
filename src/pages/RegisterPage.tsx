@@ -11,7 +11,7 @@ import { Eye, EyeOff, Check, X, Sparkles } from 'lucide-react'
 import { cn } from '../lib/utils'
 export function RegisterPage() {
   const navigate = useNavigate()
-  const { register } = useAuth()
+  const { register, login } = useAuth()
   const { success: toastSuccess, error: toastError } = useToast()
   const [showPassword, setShowPassword] = useState(false)
   const [firstName, setFirstName] = useState('')
@@ -82,9 +82,21 @@ export function RegisterPage() {
       const normalizedEmail = email.trim().toLowerCase()
 
       await register(fullName, normalizedEmail, password)
-      localStorage.setItem('pending_verification_email', normalizedEmail)
-      toastSuccess('Account created! Check your email to verify.')
-      navigate('/verify-email')
+      
+      try {
+        await login(normalizedEmail, password)
+        toastSuccess('Account created successfully!')
+        navigate('/dashboard')
+      } catch (loginErr) {
+        if (loginErr instanceof ApiError && (loginErr.status === 403 || loginErr.status === 401)) {
+          localStorage.setItem('pending_verification_email', normalizedEmail)
+          toastSuccess('Account created! Check your email to verify.')
+          navigate('/verify-email')
+        } else {
+          toastSuccess('Account created! Please sign in.')
+          navigate('/login')
+        }
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.fields) setFieldErrors(err.fields)
