@@ -115,6 +115,7 @@ func (h *BillingHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 	signature := r.Header.Get("Stripe-Signature")
 	event, err := h.stripeService.ConstructWebhookEvent(payload, signature)
 	if err != nil {
+		log.Printf("Stripe Webhook Signature Error: %v", err)
 		http.Error(w, "Invalid signature", http.StatusBadRequest)
 		return
 	}

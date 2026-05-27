@@ -73,5 +73,8 @@ func (s *StripeService) CreateBillingPortalSession(ctx context.Context, customer
 }
 
 func (s *StripeService) ConstructWebhookEvent(payload []byte, signature string) (stripe.Event, error) {
+	if s.webhookSecret == "" {
+		return stripe.Event{}, fmt.Errorf("webhook signature verification failed: STRIPE_WEBHOOK_SECRET is empty in server environment")
+	}
 	return webhook.ConstructEvent(payload, signature, s.webhookSecret)
 }
