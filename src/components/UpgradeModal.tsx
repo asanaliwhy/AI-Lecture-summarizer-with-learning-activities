@@ -1,4 +1,5 @@
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { Check, Zap } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { api } from '../lib/api'
@@ -101,8 +102,10 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
     }
   ]
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+  if (!isOpen) return null
+
+  const modalContent = (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
         className="fixed inset-0" 
         onClick={onClose}
@@ -184,4 +187,8 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
       </div>
     </div>
   )
+
+  return typeof document !== 'undefined' 
+    ? createPortal(modalContent, document.body)
+    : null
 }
