@@ -21,7 +21,7 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
 
     try {
       // Hit the checkout endpoint
-      const data = await api.post('/billing/checkout', { plan: planName })
+      const data = await api.billing.checkout(planName)
       if (data.url) {
         window.location.href = data.url
       }
