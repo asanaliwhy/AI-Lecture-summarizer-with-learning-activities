@@ -670,6 +670,7 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 
 type UserHandler struct {
 	userRepo      userSettingsRepo
+	quotaService  *services.QuotaService
 	encryptionKey string
 }
 
@@ -737,8 +738,8 @@ func defaultSettings(userID uuid.UUID) *models.UserSettings {
 	}
 }
 
-func NewUserHandler(userRepo *repository.UserRepo, encryptionKey string) *UserHandler {
-	return &UserHandler{userRepo: userRepo, encryptionKey: encryptionKey}
+func NewUserHandler(userRepo userSettingsRepo, quotaService *services.QuotaService, encryptionKey string) *UserHandler {
+	return &UserHandler{userRepo: userRepo, quotaService: quotaService, encryptionKey: encryptionKey}
 }
 
 func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
@@ -748,7 +749,17 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errorResp("NOT_FOUND", "User not found", r))
 		return
 	}
-	writeJSON(w, http.StatusOK, user)
+	used, total, _ := h.quotaService.GetUserCreditStatus(r.Context(), userID, user.Plan)
+	resp := struct {
+		*models.User
+		UsedCredits  int `json:"used_credits"`
+		TotalCredits int `json:"total_credits"`
+	}{
+		User:         user,
+		UsedCredits:  used,
+		TotalCredits: total,
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {

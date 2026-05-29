@@ -44,7 +44,7 @@ func (h *BillingHandler) CreateCheckoutSession(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if req.Plan != "student" && req.Plan != "pro" {
+	if req.Plan != "plus" && req.Plan != "pro" && req.Plan != "ultra" {
 		http.Error(w, "Invalid plan selected", http.StatusBadRequest)
 		return
 	}

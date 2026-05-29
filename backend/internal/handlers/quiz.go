@@ -107,6 +107,10 @@ func (h *QuizHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	if !user.HasGeminiKey {
 		allowed, err := h.quotaService.CheckQuota(r.Context(), userID, user.Plan, "quiz")
 		if err != nil {
+			if err.Error() == "API_KEY_REQUIRED" {
+				writeJSON(w, http.StatusPaymentRequired, errorResp("API_KEY_REQUIRED", "Your Plus plan requires a custom Gemini API key. Please add it in settings.", r))
+				return
+			}
 			writeJSON(w, http.StatusInternalServerError, errorResp("INTERNAL_ERROR", "Failed to verify quota", r))
 			return
 		}

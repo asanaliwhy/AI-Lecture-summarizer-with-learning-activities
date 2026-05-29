@@ -11,6 +11,8 @@ interface User {
     is_verified: boolean
     plan: string
     has_gemini_key?: boolean
+    used_credits?: number
+    total_credits?: number
 }
 
 interface AuthContextType {

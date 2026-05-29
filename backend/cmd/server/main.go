@@ -110,7 +110,7 @@ func main() {
 	studySessionHandler := handlers.NewStudySessionHandler(studySessionRepo)
 	dashboardHandler := handlers.NewDashboardHandler(pool, userRepo)
 	libraryHandler := handlers.NewLibraryHandler(pool)
-	userHandler := handlers.NewUserHandler(userRepo, cfg.JWTSecret)
+	userHandler := handlers.NewUserHandler(userRepo, quotaService, cfg.JWTSecret)
 	jobHandler := handlers.NewJobHandler(jobRepo, summaryRepo, quizRepo, flashcardRepo, presentationRepo)
 	screenOCRService := services.NewScreenOCRService(contentRepo, youtubeService, geminiService)
 	chatHandler := handlers.NewChatHandler(summaryRepo, chatMessageRepo, geminiService, contentRepo, screenOCRService)

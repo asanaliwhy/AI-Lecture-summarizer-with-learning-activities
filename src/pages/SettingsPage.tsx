@@ -1035,81 +1035,12 @@ export function SettingsPage() {
                   <CreditCard className="h-5 w-5 text-primary" />
                   Subscription Plan
                 </CardTitle>
-                <CardDescription>You are currently on the Free plan.</CardDescription>
+                <CardDescription>You are currently on the <strong className="capitalize">{user?.plan || 'Free'}</strong> plan.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className={`rounded-xl border p-4 ${user?.plan === 'student' ? 'bg-primary/5 border-primary/20' : 'bg-card/60'}`}>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold">Student Plan</h3>
-                      {user?.plan === 'student' && <Badge>Current</Badge>}
-                      {user?.plan !== 'student' && (
-                        <span className="font-bold text-lg">
-                          $5<span className="text-sm font-normal text-muted-foreground">/mo</span>
-                        </span>
-                      )}
-                    </div>
-                    <ul className="space-y-2 text-sm text-muted-foreground mb-6">
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500" /> 50 Summaries / mo
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500" /> 50 Quizzes & Flashcards / mo
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500" /> 30 Presentations / mo
-                      </li>
-                    </ul>
-                    {user?.plan === 'student' ? (
-                      <Button variant="outline" className="w-full" disabled>Current Plan</Button>
-                    ) : (
-                      <Button
-                        className="w-full"
-                        variant="outline"
-                        onClick={() => handleUpgrade('student')}
-                        disabled={isCheckoutLoading !== null}
-                      >
-                        {isCheckoutLoading === 'student' && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                        Upgrade to Student
-                      </Button>
-                    )}
-                  </div>
-                  <div className={`rounded-xl border p-4 ${user?.plan === 'pro' ? 'bg-primary/5 border-primary/20' : 'bg-card/60'}`}>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold">Pro Plan</h3>
-                      {user?.plan === 'pro' && <Badge>Current</Badge>}
-                      {user?.plan !== 'pro' && (
-                        <span className="font-bold text-lg">
-                          $12<span className="text-sm font-normal text-muted-foreground">/mo</span>
-                        </span>
-                      )}
-                    </div>
-                    <ul className="space-y-2 text-sm text-muted-foreground mb-6">
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500" /> Unlimited Summaries
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500" /> Advanced Quizzes
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-500" /> Priority Support
-                      </li>
-                    </ul>
-                    {user?.plan === 'pro' ? (
-                      <Button variant="outline" className="w-full" disabled>Current Plan</Button>
-                    ) : (
-                      <Button
-                        className="w-full"
-                        variant="outline"
-                        onClick={() => handleUpgrade('pro')}
-                        disabled={isCheckoutLoading !== null}
-                      >
-                        {isCheckoutLoading === 'pro' && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                        Upgrade to Pro
-                      </Button>
-                    )}
-                  </div>
-                </div>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  To view all available plans or upgrade your current subscription, click the <strong>⚡ Credits</strong> button in the top right corner of the screen.
+                </p>
               </CardContent>
             </Card>
 
@@ -1118,14 +1049,14 @@ export function SettingsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Zap className="h-5 w-5 text-primary" />
-                  Usage & Quota
+                  Monthly Credits
                 </CardTitle>
                 <CardDescription>
-                  Your monthly AI generation limits based on your current plan.
+                  Your current credit usage for this month.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {user?.has_gemini_key ? (
+                {user?.plan === 'plus' ? (
                   <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
                     <Infinity className="h-6 w-6 text-primary shrink-0" />
                     <div>
@@ -1135,32 +1066,19 @@ export function SettingsPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {[
-                      { label: 'Summaries', free: 5, student: 50, pro: 'Unlimited' },
-                      { label: 'Quizzes', free: 5, student: 50, pro: 'Unlimited' },
-                      { label: 'Presentations', free: 3, student: 30, pro: 'Unlimited' },
-                      { label: 'Flashcard Decks', free: 5, student: 50, pro: 'Unlimited' },
-                    ].map((item) => {
-                      const plan = (user?.plan || 'free').toLowerCase()
-                      const limit = plan === 'pro' ? item.pro : plan === 'student' ? item.student : item.free
-                      return (
-                        <div key={item.label} className="flex items-center justify-between rounded-xl border bg-muted/20 px-4 py-3">
-                          <span className="text-sm font-medium">{item.label}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold">
-                              {typeof limit === 'number' ? `${limit} / month` : limit}
-                            </span>
-                            {typeof limit === 'number' && (
-                              <Badge variant="outline" className="text-xs">
-                                {plan === 'free' ? 'Free' : 'Student'}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
+                    <div className="flex items-center justify-between rounded-xl border bg-muted/20 px-4 py-4">
+                      <span className="text-sm font-medium">Credits Used</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl font-bold text-primary">
+                          {user?.used_credits ?? 0}
+                        </span>
+                        <span className="text-sm text-muted-foreground font-medium">
+                          / {user?.total_credits ?? 100}
+                        </span>
+                      </div>
+                    </div>
                     <p className="text-xs text-muted-foreground pt-1">
-                      Add your own Gemini API key in the <strong>Security</strong> tab to bypass these limits for free.
+                      Summary (10), Quiz (10), Flashcards (10), Presentation (20).
                     </p>
                   </div>
                 )}

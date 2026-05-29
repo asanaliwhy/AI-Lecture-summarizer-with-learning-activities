@@ -883,7 +883,7 @@ export const api = {
 
     // Billing
     billing: {
-        checkout: (plan: 'student' | 'pro') =>
+        checkout: (plan: string) =>
             apiFetch<{ url: string }>('/billing/checkout', {
                 method: 'POST',
                 body: JSON.stringify({ plan }),

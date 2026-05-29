@@ -4,6 +4,7 @@ import { Search, ChevronRight, Menu } from 'lucide-react'
 import { Input } from '../ui/Input'
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/Avatar'
 import { useAuth } from '../../lib/AuthContext'
+import { UpgradeModal } from '../UpgradeModal'
 
 interface HeaderProps {
   onMenuToggle: () => void
@@ -15,6 +16,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const { user } = useAuth()
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [searchValue, setSearchValue] = useState('')
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false)
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -90,6 +92,19 @@ export function Header({ onMenuToggle }: HeaderProps) {
       </div>
 
       <div className="ml-2 flex shrink-0 items-center gap-2 sm:gap-4">
+        {/* Credits Indicator */}
+        <button
+          onClick={() => setIsUpgradeModalOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary hover:bg-secondary/80 rounded-full transition-colors text-sm font-medium border border-border/50"
+        >
+          <span className="text-primary">⚡</span>
+          {user?.plan === 'plus' ? (
+            <span>Unlimited</span>
+          ) : (
+            <span>{user?.used_credits ?? 0} / {user?.total_credits ?? 100}</span>
+          )}
+        </button>
+
         <button
           type="button"
           onClick={() => navigate('/settings')}
@@ -100,7 +115,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
             <span className="text-sm font-medium leading-none group-hover:text-primary transition-colors">
               {user?.full_name || 'User'}
             </span>
-            <span className="text-xs text-muted-foreground mt-1">{user?.plan || 'Free'} Plan</span>
+            <span className="text-xs text-muted-foreground mt-1 capitalize">{user?.plan || 'Free'} Plan</span>
           </div>
           <Avatar className="h-9 w-9 border ring-2 ring-background transition-transform group-hover:scale-105 group-hover:ring-primary/20">
             <AvatarImage src={user?.avatar_url || ''} alt={user?.full_name || 'User'} />
@@ -108,6 +123,11 @@ export function Header({ onMenuToggle }: HeaderProps) {
           </Avatar>
         </button>
       </div>
+
+      <UpgradeModal 
+        isOpen={isUpgradeModalOpen} 
+        onClose={() => setIsUpgradeModalOpen(false)} 
+      />
     </header>
   )
 }
