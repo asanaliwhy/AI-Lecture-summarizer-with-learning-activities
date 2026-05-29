@@ -111,19 +111,19 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative w-full max-w-6xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl border shadow-2xl animate-in zoom-in-95 duration-200">
-        <div className="p-6 sm:p-10 text-center">
-          <h2 className="text-3xl font-bold tracking-tight mb-4">Upgrade your experience</h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto mb-10">
+      <div className="relative w-full max-w-5xl max-h-[90vh] overflow-y-auto bg-card rounded-2xl border shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="p-4 sm:p-6 sm:pb-4 text-center">
+          <h2 className="text-2xl font-bold tracking-tight mb-2">Upgrade your experience</h2>
+          <p className="text-sm text-muted-foreground max-w-2xl mx-auto mb-6">
             Choose the plan that best fits your needs. 
             Generation costs: Summary (10), Quiz (10), Flashcards (10), Presentation (20).
           </p>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 text-left">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 text-left">
             {plans.map((plan) => (
               <div 
                 key={plan.name} 
-                className={`relative flex flex-col p-6 rounded-xl border ${
+                className={`relative flex flex-col p-4 rounded-xl border ${
                   plan.highlighted 
                     ? 'border-primary ring-1 ring-primary shadow-xl bg-primary/5' 
                     : 'bg-background hover:border-border/80 hover:shadow-md transition-all'
@@ -135,18 +135,18 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
                   </div>
                 )}
                 
-                <div className="mb-4">
-                  <h3 className="text-xl font-bold">{plan.name}</h3>
-                  <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
+                <div className="mb-2">
+                  <h3 className="text-lg font-bold">{plan.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">{plan.description}</p>
                 </div>
 
-                <div className="mb-6">
+                <div className="mb-4">
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-bold">{plan.price}</span>
-                    <span className="text-muted-foreground">{plan.period}</span>
+                    <span className="text-2xl font-bold">{plan.price}</span>
+                    <span className="text-sm text-muted-foreground">{plan.period}</span>
                   </div>
-                  <div className="flex items-center gap-1 mt-2 text-primary font-medium">
-                    <Zap className="h-4 w-4 fill-primary/20" />
+                  <div className="flex items-center gap-1 mt-1 text-sm text-primary font-medium">
+                    <Zap className="h-3.5 w-3.5 fill-primary/20" />
                     <span>{plan.credits} Credits</span>
                   </div>
                 </div>
@@ -154,7 +154,7 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
                 <button
                   onClick={() => handleUpgrade(plan.planId)}
                   disabled={user?.plan === plan.planId}
-                  className={`mt-auto w-full py-2.5 px-4 rounded-lg font-medium transition-colors ${
+                  className={`mt-auto w-full py-2 px-4 rounded-lg font-medium text-sm transition-colors ${
                     user?.plan === plan.planId
                       ? 'bg-secondary text-secondary-foreground cursor-not-allowed opacity-50'
                       : plan.highlighted
@@ -165,11 +165,11 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
                   {plan.buttonText}
                 </button>
 
-                <div className="mt-6 space-y-3 flex-1">
+                <div className="mt-4 space-y-2 flex-1">
                   {plan.features.map((feature, i) => (
                     <div key={i} className="flex items-start gap-2 text-sm">
-                      <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                      <span>{feature}</span>
+                      <Check className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                      <span className="text-xs">{feature}</span>
                     </div>
                   ))}
                 </div>
@@ -179,7 +179,7 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
           
           <button 
             onClick={onClose}
-            className="mt-8 text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+            className="mt-4 text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
           >
             Cancel and close
           </button>
