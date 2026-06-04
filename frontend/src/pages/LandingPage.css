@@ -1048,14 +1048,14 @@
 
 .plans-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border: 1px solid var(--rule);
   border-radius: 12px;
   overflow: hidden;
 }
 
 .plan {
-  padding: 40px 36px;
+  padding: 36px 28px;
   border-right: 1px solid var(--rule);
   background: var(--white);
   position: relative;
@@ -1364,6 +1364,18 @@
 
   .pricing-right {
     align-items: flex-start;
+  }
+
+  .plans-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .plan:nth-child(2n) {
+    border-right: none;
+  }
+
+  .plan:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--rule);
   }
 
   .cta-banner {
