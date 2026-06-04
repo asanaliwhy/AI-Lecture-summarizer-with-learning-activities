@@ -1,0 +1,97 @@
+\chapter{Literature Review}
+\label{chap:lit_review}
+\setlength{\parskip}{1em}
+
+\section{Artificial Intelligence in Education (AIEd)}
+The use of Artificial Intelligence in education has moved from rigid rule-based tutoring software to flexible models capable of processing natural language. Early Intelligent Tutoring Systems (ITS) relied on manually authored logical rules, which were effective but difficult to scale. 
+
+Current research frames AI as a tool to support rather than replace human instruction. Luckin et al. \cite{luckin2016intelligence} argue that effective AIEd tools must be grounded in established learning sciences. Broader evaluations of AI in educational technology \cite{kazim2024ai} suggest that data-driven systems are useful primarily when they act as an augmentation layer. The Lectura design approach aligns with this perspective, utilizing algorithms to reduce administrative friction so the student can focus on learning.
+
+\section{Large Language Models in Educational Contexts}
+The adoption of Large Language Models (LLMs) has heavily influenced educational software development. Kasneci et al. \cite{kasneci2023chatgpt} point out that these models lower the technical barrier to creating adaptive study materials. However, they also emphasize the risk of factual hallucinations. Wang et al. \cite{wang2024large} similarly note in their recent survey that while LLMs demonstrate strong reasoning and summarization capabilities, deploying them in an academic setting requires strict alignment mechanisms to ensure the outputs remain factually grounded in the source texts.
+
+In practice, the reliability of an LLM depends on context constraints and prompt engineering. If a model is not strictly guided, it may generate coherent but factually incorrect explanations. In the Lectura architecture, the external LLM is forced to operate within a tight contextual boundary, utilizing transcripts as its only source of truth.
+
+\subsection{Context Grounding and Chain-of-Thought Prompting}
+To prevent an LLM from deviating from the source material, developers typically use specific architectural strategies. Gao et al. \cite{gao2023retrieval} outline Retrieval-Augmented Generation (RAG) as the standard method for querying large external databases by dividing text into vector embeddings. While Lectura does not use a full vector database for simple file uploads, it relies heavily on similar context-injection principles by passing the entire cleaned document directly into models with large context windows.
+
+Furthermore, ensuring logical accuracy during quiz and summary generation requires specific instruction formatting. Wei et al. \cite{wei2022chain} introduced Chain-of-Thought (CoT) prompting, a technique that forces the language model to output its intermediate reasoning steps before providing a final answer. By implementing CoT structures in backend API requests, educational platforms can significantly reduce logical errors when parsing complex academic texts.
+
+\subsection{Transformer Architecture and Attention Mechanisms}
+To understand the LLM's text-processing capability, it is necessary to look at the Transformer architecture. Unlike older Recurrent Neural Networks (RNNs) that struggled with long texts, Transformers use a self-attention mechanism to process context. 
+
+The self-attention algorithm calculates the relationships between all words in a sequence simultaneously. Given an input matrix $X$, it maps localized inputs to Query ($Q$), Key ($K$), and Value ($V$) vectors:
+
+\begin{equation}
+    \text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+\end{equation}
+
+Where $d_k$ is the scaling factor. This allows the model to connect a concept introduced on the first page of a document with its conclusion pages later, making it highly effective for summarizing unsegmented lecture transcripts.
+
+\section{Automatic Summarization Techniques}
+Automatic Summarization (AS) is a major application of NLP. Extractive models, like the TextRank algorithm \cite{mihalcea2004textrank}, select and compile the most important existing sentences from a text. While this guarantees factual accuracy, it often results in text that lacks natural flow.
+
+Abstractive summarization, conversely, generates new sentences to capture the original meaning. Early improvements in this area utilized sequence-to-sequence networks with copy-mechanisms \cite{see2017get}. More recently, a comprehensive survey by Liu et al. \cite{liu2023summary} confirms that LLM-based abstractive summarization has largely surpassed older methods in both coherence and structure. Mani \cite{mani2001automatic} established that a summary's usefulness depends on the user's specific goal. By applying LLMs, modern applications can force the abstractive summary to follow specific templates, such as Cornell notes, which is practically impossible with pure extractive methods.
+
+\section{Automated Visual Instructional Design}
+Beyond text, structuring academic information visually improves readability. Richard E. Mayer’s Cognitive Theory of Multimedia Learning \cite{mayer2014cambridge} suggests that humans process audio and visual channels separately, and properly combining them reduces cognitive overload. Dense blocks of text are harder to study than segmented, visual information. 
+
+Automating this requires parsing the text for logical breaks. By prompting the model to identify key statistics and macro-concepts, the text can be formatted into presentation slides. This provides a clear visual hierarchy without requiring the student to manually format documents in presentation software.
+
+\section{Spaced Repetition and Cognitive Retrieval}
+Testing and flashcards rely on active recall and spaced repetition. Roediger and Karpicke \cite{roediger2006test} showed that active retrieval (testing memory) is much more effective for long-term retention than passive reading. 
+
+Spaced repetition addresses the forgetting curve modeled by Hermann Ebbinghaus \cite{ebbinghaus1885memory}. By scheduling reviews at increasing intervals, students can maintain memory retention with less total study time \cite{cepeda2006distributed}.
+
+\subsection{Mathematical Modeling of Sequential Forgetting}
+Memory retention $R$ degrades exponentially over time $t$ relative to memory strength $S$:
+
+\begin{equation}
+    R = e^{-\frac{t}{S}}
+\end{equation}
+
+Retrieving the information resets $t$ and increases $S$. The SuperMemo-2 (SM-2) algorithm uses an Easiness Factor ($EF$) to calculate the next review interval $I_n$:
+
+\begin{equation}
+    I_n = 
+    \begin{cases} 
+      1 & \text{if } n = 1 \\
+      6 & \text{if } n = 2 \\
+      \lceil I_{n-1} \times EF \rceil & \text{if } n > 2 
+   \end{cases}
+\end{equation}
+
+While SM-2 has been the standard for decades, recent advancements have refined these scheduling intervals. Ye et al. \cite{ye2022stochastic} introduced the Free Spaced Repetition Scheduler (FSRS), utilizing a stochastic shortest path algorithm. FSRS optimizes review schedules based on historical memory retention data rather than the rigid, hard-coded multipliers used in SM-2. By automatically generating flashcards, Lectura provides the raw data needed to utilize these types of algorithmic review schedules.
+
+\section{Automated Question Generation}
+Automated Question Generation (AQG) used to rely on syntax trees and manual templates, which often produced shallow questions \cite{kurdi2020systematic}. 
+
+Transformer models changed this by understanding context better. For multiple-choice questions (MCQs), Kurdi et al. \cite{kurdi2020systematic} note that the difficulty lies in generating plausible distractors (incorrect answers). A useful educational tool must prompt the LLM to generate distractors that are related to the topic but factually incorrect based on the text, ensuring the student actually understands the nuances of the material.
+
+\section{Conversational AI Tutors}
+Integrating chatbot interfaces into educational tools provides a scalable way to support students \cite{winkler2020conversational}. Instead of just giving answers, these systems can be prompted to ask guiding questions. 
+
+Dan et al. \cite{dan2023educhat} demonstrated with the EduChat system that large-scale language models can successfully emulate Socratic tutoring interactions natively, acting as an active participant in the learning process. As Fiorella and Mayer \cite{fiorella2015learning} note, explaining a concept is a generative activity that aids learning. A localized AI tutor encourages this active engagement by allowing students to ask contextual questions about their generated notes.
+
+\section{Summary of Literature Review}
+Table~\ref{tab:lit_summary} outlines the core research concepts driving the system's architecture.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|p{5.5cm}|l|}
+\hline
+\textbf{Research Domain} & \textbf{Core Finding / Concept} & \textbf{Key Literature} \\ \hline
+AI in Education & AI is best used as a cognitive support tool. Generative AI alters traditional study mechanics. & Luckin \cite{luckin2016intelligence}, Baidoo-Anu \cite{baidoo2023education} \\ \hline
+Large Language Models & LLMs handle complex text processing but need alignment and strict contextual boundaries. & Kasneci \cite{kasneci2023chatgpt}, Wang \cite{wang2024large} \\ \hline
+Context Grounding & RAG and Chain-of-Thought prompting reduce factual hallucinations and logical errors. & Gao \cite{gao2023retrieval}, Wei \cite{wei2022chain} \\ \hline
+Summarization & LLMs outperform sequence-to-sequence abstractive models in structured formatting tasks. & Liu \cite{liu2023summary}, See \cite{see2017get} \\ \hline
+Instructional Design & Visual distillation reduces cognitive overload. & Mayer \cite{mayer2014cambridge} \\ \hline
+Cognitive Retrieval & Active recall and spaced repetition combat exponential memory decay. & Roediger \cite{roediger2006test}, Cepeda \cite{cepeda2006distributed} \\ \hline
+Review Algorithms & FSRS and stochastic models offer optimized scheduling over traditional SM-2 multipliers. & Ye \cite{ye2022stochastic} \\ \hline
+Question Generation & Pedagogical value in MCQs relies on generating plausible, text-based distractors. & Kurdi \cite{kurdi2020systematic} \\ \hline
+Socratic Tutoring & AI chatbots can emulate active dialogue, forcing generative learning behaviors. & Dan \cite{dan2023educhat}, Fiorella \cite{fiorella2015learning} \\ \hline
+\end{tabular}
+\vspace{6pt}
+\caption{Consolidation of academic literature driving the Lectura framework.}
+\label{tab:lit_summary}
+\end{table}

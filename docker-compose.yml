@@ -82,7 +82,7 @@ services:
   # ─── Frontend (Nginx) ───
   frontend:
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile
     container_name: lectura-frontend
     restart: unless-stopped

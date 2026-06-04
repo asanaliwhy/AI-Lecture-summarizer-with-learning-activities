@@ -1,0 +1,9 @@
+{
+  "counts": {
+    "Critical": 8,
+    "High": 18,
+    "Medium": 55,
+    "Low": 19
+  },
+  "total": 100
+}

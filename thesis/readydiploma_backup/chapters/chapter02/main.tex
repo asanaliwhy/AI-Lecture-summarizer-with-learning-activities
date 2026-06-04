@@ -1,0 +1,82 @@
+\chapter{Analysis of Existing Systems}
+\label{chap:analysis}
+\setlength{\parskip}{1em}
+
+When developing a new educational platform, it is necessary to examine existing software solutions to understand current approaches and identify areas for improvement. The current market for study tools is fragmented into specialized applications. This chapter analyzes several major platforms across different categories, comparing their functionality to the proposed Lectura system.
+
+\section{Methodology of Data Collection}
+The competitive analysis was conducted using a mixed-methods empirical approach. Primary data was gathered through direct usability testing, where the author created active accounts on each target platform and attempted to process a standardized university lecture transcript. Secondary data was aggregated by reviewing official API documentation, published feature changelogs, and user-community forums to assess long-term platform stability and feature roadmaps. 
+
+\subsection{Challenges in Obtaining Data}
+Executing a comprehensive competitor analysis presented notable challenges. First, several proprietary algorithms (such as the specific spaced-repetition multipliers used by Quizlet or the backend context-window parsing of Gamma.app) are closed-source, forcing the analysis to rely on black-box behavioral observation rather than code-level inspection. Second, rapid iteration cycles in generative AI mean that feature sets change weekly, creating a moving target for documentation; a platform's limitations recorded during the initial research phase occasionally shifted before final deployment.
+
+\section{General-Purpose AI Assistants}
+
+\subsection{Notion AI}
+Notion AI integrates generative text features directly into the Notion workspace. It is primarily designed to help users write, summarize, and format notes within their existing databases. For students, Notion is useful for organizing information and generating quick summaries of text they have already typed.
+
+However, Notion AI is optimized for general productivity rather than structured learning. It operates as a flexible text editor, but it does not have built-in algorithms for active recall or testing. From an engineering perspective, it lacks a dedicated ingestion pipeline for multimedia formats like video transcripts. Furthermore, it cannot natively generate academic formats like spaced-repetition flashcards or structured quizzes. While it is an excellent tool for storing notes, it does not actively participate in the student's memorization process.
+
+\subsection{ChatGPT}
+Since its release, ChatGPT has become a common tool for students to explain complex topics, summarize texts, and brainstorm ideas. Because it uses large language models trained on massive datasets, it can handle a wide variety of academic subjects.
+
+The main limitation of using ChatGPT for regular studying is its lack of structure and persistence. To use it effectively, a student must manually copy and paste text (such as video transcripts), manage context limits, and write specific prompts to get the desired output format. This requires significant manual effort for every study session. In addition, ChatGPT does not save these outputs into an organized library of flashcards or quizzes. Lectura addresses this by automating the prompt engineering and file parsing processes, wrapping the LLM capabilities in a structured academic environment.
+
+\section{Automated Slide Generators}
+
+\subsection{Gamma.app}
+Gamma.app focuses on generating presentations and documents from text prompts. Unlike traditional software such as Microsoft PowerPoint, Gamma uses AI to automatically format content, create visual layouts, and organize text into readable slides. It is particularly effective at turning long paragraphs into structured visual presentations.
+
+While Gamma is highly capable at creating visual slides, it functions in isolation from other study methods. A student cannot use Gamma to generate flashcards or practice tests from the same material. Lectura aims to incorporate this kind of automated slide generation alongside other tools. By doing so, a student can generate a presentation, a quiz, and a set of flashcards all from the same initial lecture transcript, without needing to export data to multiple different applications.
+
+\section{Spaced Repetition and Flashcard Tools}
+
+\subsection{Quizlet}
+Quizlet is one of the most widely used platforms for digital flashcards and rote memorization. It provides features like the "Learn" and "Test" modes to help students memorize terms through repetitive practice. Recently, Quizlet added "Q-Chat," an AI-assisted tool to help students study conversationally.
+
+Despite these features, Quizlet's main drawback is that it relies heavily on manual data entry. Students typically have to read a textbook or watch a lecture, manually identify key terms, and type them into the system one by one. While some features try to automate this from uploaded text, they often struggle with long or messy inputs like unedited video transcripts. Lectura improves upon this by automating the extraction of key concepts directly from the source material and generating the flashcards automatically.
+
+\subsection{Anki}
+Anki is an open-source spaced repetition system (SRS) that uses scheduling algorithms to determine exactly when a student should review a flashcard to prevent forgetting. It is highly effective and widely used in demanding fields like medicine and language learning. 
+
+However, Anki is known for having a steep learning curve and a complicated user interface. More importantly, like Quizlet, Anki requires the user to create their own cards or find community-made decks. It does not generate content. Lectura is designed to automate the card-creation step, allowing students to benefit from spaced repetition without spending hours manually creating the decks themselves.
+
+\section{Massive Open Online Courses (MOOCs)}
+
+\subsection{Coursera}
+Coursera provides access to video lectures, reading materials, and assignments from universities worldwide. It is a highly effective platform for delivering structured educational content to a large audience.
+
+The platform is designed primarily for content delivery rather than personalized revision. While students can watch lectures and take standard quizzes, Coursera does not automatically generate personalized study guides or flashcards based on the user's specific weaknesses. Lectura is designed to complement platforms like Coursera. A student can take the transcript from a Coursera lecture and input it into Lectura to generate localized, interactive study materials for that specific module.
+
+\section{Comparative Synthesis and SWOT Analysis}
+Each of the analyzed applications performs well in its specific area, but they often require students to use multiple disconnected tools. A student might use ChatGPT to summarize a lecture, Notion to store the notes, and Anki to memorize the terms. This fragmentation increases the administrative workload on the student.
+
+To formalize the strategic positioning of Lectura within this competitive landscape, a SWOT (Strengths, Weaknesses, Opportunities, Threats) analysis was conducted:
+
+\begin{itemize}[label=\textendash]
+    \item \textit{Strengths:} The primary advantage of Lectura is its automated, unified pipeline. Unlike Anki or Notion, it does not require manual data entry, successfully bridging the gap between raw video transcripts and final spaced-repetition flashcards in a single environment.
+    \item \textit{Weaknesses:} Lectura is heavily dependent on the uptime, cost, and rate limits of external third-party APIs (such as Google Gemini). Furthermore, unlike native desktop applications, it currently lacks robust offline functionality.
+    \item \textit{Opportunities:} There is significant potential to integrate Lectura directly with university Learning Management Systems (LMS) or to expand the ingestion engine to process live, synchronous audio during in-person lectures.
+    \item \textit{Threats:} The educational technology market is highly volatile. Rapid feature deployments by massive technology conglomerates (e.g., OpenAI or Google natively implementing multi-modal study pipelines) pose a constant competitive threat to independent platforms.
+\end{itemize}
+
+Table~\ref{tab:feature_matrix} summarizes how Lectura compares to these existing platforms. By combining automated ingestion, visual slide generation, and algorithmic rehearsal into one system, Lectura attempts to streamline the study process, allowing students to focus on learning rather than managing software.
+
+\begin{table}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|c|c|c|c|c|c|}
+\hline
+\textbf{Feature} & \textbf{Lectura} & \textbf{Gamma.app} & \textbf{Notion AI} & \textbf{Quizlet} & \textbf{Anki} & \textbf{ChatGPT} \\ \hline
+Video Ingestion & Native API & Limited & None & Limited & None & Manual \\ \hline
+Visual Slides & Auto/Gen & Yes & None & None & None & None \\ \hline
+Summary Gen. & Templated & Document & Unstruct. & None & None & Manual \\ \hline
+Auto Quizzes & Contextual & None & None & Yes, Basic & None & Manual \\ \hline
+SRS Flashcards & Generated & None & None & User-Auth & User-Auth & None \\ \hline
+Context. Chat & Anchored & None & Doc-level & Q-Chat & None & Stateless \\ \hline
+\end{tabular}%
+}
+\vspace{6pt}
+\caption{Feature comparison of Lectura against existing educational and productivity platforms.}
+\label{tab:feature_matrix}
+\end{table}

@@ -1,0 +1,70 @@
+\chapter{Introduction}
+\label{chap:intro}
+
+\section{Background and Motivation}
+The shift toward digital education architectures has changed how university students acquire and process knowledge. According to recent EDUCAUSE data \cite{educause2022students}, over 63\% of university students engage in online learning activities daily, exponentially increasing their exposure to fragmented digital materials. Contemporary learners frequently rely on asynchronous formats: recorded lectures, digital course packs, parsed journal articles, and multimedia platforms. While this decentralization allows easier access to information, it creates a noticeable cognitive bottleneck. A recent study by Kwiatkowska et al. \cite{kwiatkowska2023information} analyzing 131 university students found that 61.1\% of respondents identify course-related instructions and navigating digital assignments as their most significant source of academic information overload. Students are routinely tasked with navigating a much higher volume of unstructured data, often without the scaffolding needed to decode it efficiently.
+
+In traditional synchronous environments, learning is guided by the physical presence of a lecturer and immediate peer discourse. Modern hybrid paradigms, however, require significant self-regulation. To extract useful notes from a two-hour technical video, a student usually has to perform continuous playback interruptions, transcribe timestamps, and organize sparse notes across different applications. This friction consumes time that should ideally be spent on actual knowledge assimilation and active practice. Baidoo-Anu and Ansah [15] observe that generative AI is already altering these learning mechanics, forcing academia to reevaluate how students manage coursework. 
+
+The recent maturation of natural language processing (NLP) offers a practical way to handle this bottleneck. High-parameter foundational models can parse extensive transcripts, identify core concepts, and generate formative assessment materials. A recent survey by Wang et al. [16] highlights that large language models (LLMs) present a clear opportunity to personalize education by acting as adaptable study assistants, provided they are constrained to factual inputs. The rationale for developing AI-driven educational software is not just basic automation; it is about accommodating different learning preferences. Some students prefer structured bullet points, while others need interrogative flashcards. The Lectura framework documented in this thesis was built to address this specific need.
+
+\section{Problem Statement}
+The primary challenge addressed in this thesis is the difficulty students face when converting lengthy, unstructured multimedia files into formatted, usable learning materials. This problem consists of several specific issues:
+
+First, untreated educational media contains a lot of noise. A standard lecture recording includes tangents, repetitive phrasing, and administrative dialogue that obscure the actual academic concepts. Similarly, OCR-processed PDFs often contain spatial errors and massive text blocks that require effort simply to read.
+
+Second, manually formatting this knowledge takes too much time. While writing Cornell notes or creating spaced repetition decks helps reinforce memory, doing this manually across a full university schedule is difficult to sustain. This time constraint often prevents students from maintaining a consistent review schedule, leading to last-minute cramming.
+
+Third, attempting to use general-purpose conversational AI (like the standard ChatGPT interface) introduces prompt-engineering fatigue. Students have to manage token limits, repeatedly type formatting instructions, and double-check outputs for hallucinations. As Gao et al. [17] note in their evaluation of LLM retrieval systems, relying on raw models without a structured retrieval or grounding pipeline often leads to inconsistent or factually unanchored responses. 
+
+In short, students lack an integrated processing engine capable of systematically ingesting lecture media and outputting validated, interactive study artifacts without requiring constant manual prompt adjustments.
+
+\section{Objectives of the Project}
+The main goal of Lectura is to design and develop a web application that processes raw educational inputs and converts them into structured study materials. To achieve this, the following specific objectives were set:
+
+\begin{enumerate}
+    \item \textit{Multimodal Ingestion Pipelines:} Build extraction mechanisms to retrieve transcripts from YouTube URLs and extract text from PDFs and local documents.
+    \item \textit{Algorithmic Cleaning Protocols:} Implement preprocessing routines to strip HTML tags, fix timestamps, and format text strings for LLM processing.
+    \item \textit{Generative Summarization:} Use structured prompting to generate consistent outputs, specifically targeting Cornell notes and bulleted hierarchies.
+    \item \textit{Visual Presentation Genesis:} Transform academic transcripts into presentation slides with defined structures and integrated inline editing.
+    \item \textit{Formative Assessment Generation:} Programmatically generate multiple-choice quizzes with plausible distractors based entirely on the uploaded source material.
+    \item \textit{Retrieval Infrastructure:} Generate flashcards designed for integration into spaced repetition workflows.
+    \item \textit{Conversational Anchoring:} Embed an AI tutor restricted to the generated summary context to minimize hallucinations.
+    \item \textit{Analytics and Persistence:} Log student assessment performance and session data using a PostgreSQL database.
+    \item \textit{Portable Document Export:} Build a server-side layout engine to export web components into PDF and PPTX formats for offline use.
+    \item \textit{Cloud-Native Resilience:} Structure the backend using Go’s concurrency model to handle slow LLM API responses without blocking the main server thread.
+\end{enumerate}
+
+Table~\ref{tab:workflow_comparison} illustrates the difference between traditional study routines and the workflow proposed by this project.
+
+\section{Scope and Limitations}
+The scope of the Lectura project covers the development of a production-ready web stack integrated with external AI APIs. It includes the React frontend, the Go backend pipeline, database schema design, user authentication, and document export functions.
+
+However, the application is strictly a secondary processing tool. It does not author new curricula or replace instructors. Its function is limited to media ingestion, text parsing, formatting, and data storage. 
+
+Certain limitations exist due to the nature of stochastic models. Generative AI remains probabilistic. Despite strict system prompts, minor contextual errors may occur, requiring the user to verify the generated outputs. Furthermore, the system depends heavily on input quality. Poorly transcribed YouTube captions or badly scanned documents will degrade the AI's output accuracy. Finally, the current implementation requires an active internet connection; offline processing is outside the scope of this version.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{|l|p{5cm}|p{5cm}|}
+\hline
+\textbf{Learning Phase} & \textbf{Traditional Workflow} & \textbf{Lectura (AI-Augmented)} \\ \hline
+Ingestion & Manual playback, pausing, and arbitrary highlighting. & API-driven automated extraction of text blocks. \\ \hline
+Syntax/Structure & Human transcription; high time cost for formatting. & LLM generation into predefined templates. \\ \hline
+Visual Authoring & Formatting slides manually in desktop software. & Automated generation of presentations with inline editing. \\ \hline
+Assessment & Searching for past papers; manual question creation. & Generated multiple-choice questions with distractors. \\ \hline
+Retention & Rereading notes; minimal active retrieval. & Generated flashcards for self-testing. \\ \hline
+\end{tabular}
+\vspace{6pt}
+\caption{Comparative analysis of traditional versus Lectura-based study workflows.}
+\label{tab:workflow_comparison}
+\end{table}
+
+\section{Structure of the Thesis}
+This manuscript is systematically delineated into seven primary chapters, formulated to seamlessly transition from theoretical problematics to empirical deployment.
+
+Chapter 1 executes a rigorous literature review, establishing the theoretical underpinning concerning cognitive retrieval, AI in Education (AIEd), and structural summarization. Chapter 2 contextualizes the application via a critical comparative dissection of incumbent platforms such as Notion AI and Anki, mathematically isolating Lectura’s unique value proposition.
+
+Chapter 3 investigates the rigorous mechanics of data extraction, focusing tightly on the sanitization and contextual parsing of chaotic multimedia inputs. Chapter 4 details the core methodology — exposing the specific architectural design patterns, the exact prompt engineering chains, and the rationale behind asynchronous worker pool selection. 
+
+Chapter 5 visualizes this methodology through explicit architectural mapping, rendering sequence, entity-relationship, and deployment diagrams. Chapter 6 vigorously defends the selected technology stack via empirical tabular comparisons, detailing why Go outpaced Node.js for concurrency and why PostgreSQL overshadowed NoSQL variants. Finally, Chapter 7 analyzes operational latency and benchmarks, culminating in a reflection of project outcomes against initial hypotheses and prescribing trajectories for future augmentation.

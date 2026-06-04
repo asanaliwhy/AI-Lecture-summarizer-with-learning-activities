@@ -1,0 +1,379 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 47.4% 11.2%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 215 20.2% 65.1%;
+
+    --radius: 0.5rem;
+  }
+
+  :root[class~="dark"] {
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
+
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --popover: 224 71% 4%;
+    --popover-foreground: 215 20.2% 65.1%;
+
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+
+    --card: 224 71% 4%;
+    --card-foreground: 213 31% 91%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 1.2%;
+
+    --secondary: 222.2 47.4% 11.2%;
+    --secondary-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 216 34% 17%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .smart-summary-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  .smart-summary-scroll::-webkit-scrollbar {
+    height: 10px;
+  }
+
+  .smart-summary-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .smart-summary-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .smart-summary-content {
+    @apply p-0.5 md:p-1;
+    font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #0f172a;
+  }
+
+  .smart-summary-content.smart-summary-scroll {
+    @apply rounded-none border-0 bg-transparent shadow-none;
+  }
+
+  .smart-summary-content .smart-summary-body {
+    @apply space-y-4;
+  }
+
+  .smart-summary-content .smart-summary-section {
+    @apply rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 px-3 py-3 md:px-4 md:py-4;
+  }
+
+  .smart-summary-content.smart-summary-modern {
+    --smart-accent: #2563eb;
+  }
+
+  .smart-summary-content .smart-summary-section>h1,
+  .smart-summary-content .smart-summary-section>h2 {
+    @apply flex items-center gap-2 text-slate-900 font-extrabold;
+  }
+
+  .smart-summary-content .smart-summary-section>h1::before,
+  .smart-summary-content .smart-summary-section>h2::before {
+    content: "";
+    @apply inline-block h-2.5 w-2.5 rounded-full bg-blue-500/90 ring-4 ring-blue-200/60;
+  }
+
+  .smart-summary-content .smart-summary-section>h1,
+  .smart-summary-content .smart-summary-section>h2 {
+    @apply pb-2 mb-3 border-b border-slate-200/80;
+  }
+
+  .smart-summary-content .smart-key-row {
+    @apply bg-blue-50/55 border border-blue-100 rounded-lg px-3 py-2;
+  }
+
+  .smart-summary-content .smart-key-label {
+    @apply inline-flex items-center rounded-md bg-blue-100 text-blue-700 font-extrabold px-2 py-0.5 mr-1;
+  }
+
+  .smart-summary-content .smart-key-title {
+    @apply inline-block font-semibold text-slate-900;
+  }
+
+  .smart-summary-content .smart-key-detail {
+    @apply block mt-1.5 text-slate-800;
+  }
+
+  .smart-summary-content .smart-facts-list {
+    @apply mt-2 list-disc pl-6 space-y-2;
+  }
+
+  .smart-summary-content table {
+    @apply w-full border-separate border-spacing-0 overflow-hidden rounded-lg border border-slate-300 bg-white text-[14px];
+    min-width: 640px;
+  }
+
+  .smart-summary-content thead th {
+    @apply sticky top-0 z-10 bg-slate-100 font-semibold text-slate-900 border-b border-slate-300;
+  }
+
+  .smart-summary-content th,
+  .smart-summary-content td {
+    @apply px-3 py-2.5 align-top border-r border-slate-200;
+  }
+
+  .smart-summary-content th:last-child,
+  .smart-summary-content td:last-child {
+    @apply border-r-0;
+  }
+
+  .smart-summary-content tbody tr {
+    @apply border-b border-slate-200;
+  }
+
+  .smart-summary-content tbody tr:nth-child(even) {
+    @apply bg-slate-50/70;
+  }
+
+  .smart-summary-content tbody tr:hover {
+    @apply bg-blue-50/70;
+  }
+
+  .smart-summary-content tbody tr:last-child {
+    @apply border-b-0;
+  }
+
+  .smart-summary-content blockquote {
+    @apply border-l-4 border-blue-300 bg-blue-50/60 px-4 py-3 rounded-r-md text-slate-700;
+  }
+
+  .smart-summary-content ul>li::marker,
+  .smart-summary-content ol>li::marker {
+    color: var(--smart-accent);
+    font-weight: 700;
+  }
+
+  .smart-summary-content h2 {
+    color: var(--smart-accent);
+  }
+
+  .smart-summary-content code {
+    @apply bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded text-[0.9em];
+  }
+
+  .dark .smart-summary-scroll {
+    scrollbar-color: #475569 transparent;
+  }
+
+  .dark .smart-summary-scroll::-webkit-scrollbar-thumb {
+    background: #475569;
+  }
+
+  .dark .smart-summary-content {
+    color: #e2e8f0;
+  }
+
+  .dark .smart-summary-content .smart-summary-section {
+    border-color: rgba(51, 65, 85, 0.8);
+    background: linear-gradient(to bottom, #0f172a, rgba(30, 41, 59, 0.75));
+  }
+
+  .dark .smart-summary-content .smart-summary-section>h1,
+  .dark .smart-summary-content .smart-summary-section>h2 {
+    color: #f1f5f9;
+    border-bottom-color: rgba(71, 85, 105, 0.8);
+  }
+
+  .dark .smart-summary-content .smart-summary-section>h1::before,
+  .dark .smart-summary-content .smart-summary-section>h2::before {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.22);
+  }
+
+  .dark .smart-summary-content .smart-key-row {
+    background: rgba(37, 99, 235, 0.14);
+    border-color: rgba(96, 165, 250, 0.28);
+  }
+
+  .dark .smart-summary-content .smart-key-label {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+  }
+
+  .dark .smart-summary-content .smart-key-title {
+    color: #f1f5f9;
+  }
+
+  .dark .smart-summary-content .smart-key-detail {
+    color: #e2e8f0;
+  }
+
+  .dark .smart-summary-content table {
+    border-color: #475569;
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+
+  .dark .smart-summary-content thead th {
+    background: #1e293b;
+    color: #f1f5f9;
+    border-bottom-color: #475569;
+  }
+
+  .dark .smart-summary-content th,
+  .dark .smart-summary-content td {
+    border-right-color: #334155;
+  }
+
+  .dark .smart-summary-content tbody tr {
+    border-bottom-color: #334155;
+  }
+
+  .dark .smart-summary-content tbody tr:nth-child(even) {
+    background: rgba(30, 41, 59, 0.6);
+  }
+
+  .dark .smart-summary-content tbody tr:hover {
+    background: rgba(59, 130, 246, 0.16);
+  }
+
+  .dark .smart-summary-content blockquote {
+    border-left-color: rgba(96, 165, 250, 0.75);
+    background: rgba(59, 130, 246, 0.14);
+    color: #cbd5e1;
+  }
+
+  .dark .smart-summary-content code {
+    background: #1e293b;
+    color: #e2e8f0;
+  }
+}
+
+/* Chat panel markdown prose */
+.chat-prose p {
+  margin: 0 0 0.5em;
+}
+
+.chat-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-prose ul,
+.chat-prose ol {
+  margin: 0.25em 0 0.5em;
+  padding-left: 1.25em;
+}
+
+.chat-prose ul {
+  list-style-type: disc;
+}
+
+.chat-prose ol {
+  list-style-type: decimal;
+}
+
+.chat-prose li {
+  margin: 0.15em 0;
+}
+
+.chat-prose code {
+  background: hsl(var(--muted));
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+}
+
+.chat-prose pre {
+  background: hsl(var(--muted));
+  padding: 0.5em 0.75em;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 0.5em 0;
+  font-size: 0.85em;
+}
+
+.chat-prose pre code {
+  background: none;
+  padding: 0;
+}
+
+.chat-prose h1,
+.chat-prose h2,
+.chat-prose h3 {
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+}
+
+.chat-prose h1 {
+  font-size: 1.1em;
+}
+
+.chat-prose h2 {
+  font-size: 1.05em;
+}
+
+.chat-prose h3 {
+  font-size: 1em;
+}
+
+.chat-prose blockquote {
+  border-left: 3px solid hsl(var(--border));
+  padding-left: 0.75em;
+  margin: 0.5em 0;
+  color: hsl(var(--muted-foreground));
+}
+
+.chat-prose strong {
+  font-weight: 600;
+}

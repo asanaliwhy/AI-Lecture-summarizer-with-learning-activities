@@ -1,0 +1,702 @@
+[
+  {
+    "severity": "Critical",
+    "file": ".env.production",
+    "line": 18,
+    "issue": "Sensitive value appears committed in env file.",
+    "fix": "Remove secrets from repository, rotate credentials, and keep only placeholders in tracked env templates."
+  },
+  {
+    "severity": "Critical",
+    "file": ".env.production",
+    "line": 22,
+    "issue": "Sensitive value appears committed in env file.",
+    "fix": "Remove secrets from repository, rotate credentials, and keep only placeholders in tracked env templates."
+  },
+  {
+    "severity": "Critical",
+    "file": ".env.production",
+    "line": 45,
+    "issue": "Sensitive value appears committed in env file.",
+    "fix": "Remove secrets from repository, rotate credentials, and keep only placeholders in tracked env templates."
+  },
+  {
+    "severity": "Critical",
+    "file": ".env.production",
+    "line": 57,
+    "issue": "Sensitive value appears committed in env file.",
+    "fix": "Remove secrets from repository, rotate credentials, and keep only placeholders in tracked env templates."
+  },
+  {
+    "severity": "Critical",
+    "file": "backend/.env",
+    "line": 17,
+    "issue": "Sensitive value appears committed in env file.",
+    "fix": "Remove secrets from repository, rotate credentials, and keep only placeholders in tracked env templates."
+  },
+  {
+    "severity": "Critical",
+    "file": "backend/.env",
+    "line": 21,
+    "issue": "Sensitive value appears committed in env file.",
+    "fix": "Remove secrets from repository, rotate credentials, and keep only placeholders in tracked env templates."
+  },
+  {
+    "severity": "Critical",
+    "file": "backend/.env",
+    "line": 43,
+    "issue": "Sensitive value appears committed in env file.",
+    "fix": "Remove secrets from repository, rotate credentials, and keep only placeholders in tracked env templates."
+  },
+  {
+    "severity": "Critical",
+    "file": "backend/.env",
+    "line": 52,
+    "issue": "Sensitive value appears committed in env file.",
+    "fix": "Remove secrets from repository, rotate credentials, and keep only placeholders in tracked env templates."
+  },
+  {
+    "severity": "High",
+    "file": "backend/internal/middleware/middleware.go",
+    "line": 1,
+    "issue": "CORS appears to allow wildcard origins.",
+    "fix": "Restrict origins per environment and enforce strict allowlist in production."
+  },
+  {
+    "severity": "High",
+    "file": "backend/internal/router/router_integration_test.go",
+    "line": 1,
+    "issue": "CORS appears to allow wildcard origins.",
+    "fix": "Restrict origins per environment and enforce strict allowlist in production."
+  },
+  {
+    "severity": "High",
+    "file": "backend/internal/router/router.go",
+    "line": 1,
+    "issue": "CORS appears to allow wildcard origins.",
+    "fix": "Restrict origins per environment and enforce strict allowlist in production."
+  },
+  {
+    "severity": "High",
+    "file": "src/__tests__/api.test.ts",
+    "line": 15,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/__tests__/api.test.ts",
+    "line": 19,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/__tests__/api.test.ts",
+    "line": 20,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/__tests__/api.test.ts",
+    "line": 23,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/__tests__/api.test.ts",
+    "line": 24,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/__tests__/api.test.ts",
+    "line": 142,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/__tests__/api.test.ts",
+    "line": 171,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/__tests__/api.test.ts",
+    "line": 197,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/components/SummaryChatPanel.tsx",
+    "line": 251,
+    "issue": "dangerouslySetInnerHTML is used; XSS risk if sanitization assumptions break.",
+    "fix": "Ensure strict sanitization with vetted allowlist and centralize safe HTML rendering wrapper."
+  },
+  {
+    "severity": "High",
+    "file": "src/lib/api.ts",
+    "line": 46,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/lib/api.ts",
+    "line": 53,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/lib/AuthContext.tsx",
+    "line": 45,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/lib/useWebSocket.ts",
+    "line": 62,
+    "issue": "Token is stored/read from localStorage (XSS exfiltration risk).",
+    "fix": "Move access token to in-memory storage and refresh token to httpOnly secure cookie."
+  },
+  {
+    "severity": "High",
+    "file": "src/pages/SummaryPage.tsx",
+    "line": 4933,
+    "issue": "dangerouslySetInnerHTML is used; XSS risk if sanitization assumptions break.",
+    "fix": "Ensure strict sanitization with vetted allowlist and centralize safe HTML rendering wrapper."
+  },
+  {
+    "severity": "High",
+    "file": "src/pages/SummaryPage.tsx",
+    "line": 4960,
+    "issue": "dangerouslySetInnerHTML is used; XSS risk if sanitization assumptions break.",
+    "fix": "Ensure strict sanitization with vetted allowlist and centralize safe HTML rendering wrapper."
+  },
+  {
+    "severity": "Medium",
+    "file": "backend/internal/handlers/api_integration_test.go",
+    "line": 34,
+    "issue": "Handler/function is long (136 LOC), likely mixing concerns.",
+    "fix": "Extract validation, business rules, and response mapping into services/helpers."
+  },
+  {
+    "severity": "Medium",
+    "file": "backend/internal/handlers/content.go",
+    "line": 61,
+    "issue": "Handler/function is long (130 LOC), likely mixing concerns.",
+    "fix": "Extract validation, business rules, and response mapping into services/helpers."
+  },
+  {
+    "severity": "Medium",
+    "file": "backend/internal/handlers/content.go",
+    "line": 192,
+    "issue": "Handler/function is long (110 LOC), likely mixing concerns.",
+    "fix": "Extract validation, business rules, and response mapping into services/helpers."
+  },
+  {
+    "severity": "Medium",
+    "file": "backend/internal/handlers/dashboard.go",
+    "line": 113,
+    "issue": "Handler/function is long (180 LOC), likely mixing concerns.",
+    "fix": "Extract validation, business rules, and response mapping into services/helpers."
+  },
+  {
+    "severity": "Medium",
+    "file": "backend/internal/handlers/dashboard.go",
+    "line": 471,
+    "issue": "Handler/function is long (122 LOC), likely mixing concerns.",
+    "fix": "Extract validation, business rules, and response mapping into services/helpers."
+  },
+  {
+    "severity": "Medium",
+    "file": "backend/internal/handlers/quiz_test.go",
+    "line": 192,
+    "issue": "Handler/function is long (243 LOC), likely mixing concerns.",
+    "fix": "Extract validation, business rules, and response mapping into services/helpers."
+  },
+  {
+    "severity": "Medium",
+    "file": "backend/internal/handlers/summary.go",
+    "line": 266,
+    "issue": "Handler/function is long (111 LOC), likely mixing concerns.",
+    "fix": "Extract validation, business rules, and response mapping into services/helpers."
+  },
+  {
+    "severity": "Medium",
+    "file": "backend/internal/handlers/summary.go",
+    "line": 743,
+    "issue": "Handler/function is long (101 LOC), likely mixing concerns.",
+    "fix": "Extract validation, business rules, and response mapping into services/helpers."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/ContentInputPage.test.tsx",
+    "line": 67,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/ContentInputPage.test.tsx",
+    "line": 87,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/ContentInputPage.test.tsx",
+    "line": 100,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/ContentInputPage.test.tsx",
+    "line": 102,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/ContentInputPage.test.tsx",
+    "line": 117,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/EmailVerificationPage.test.tsx",
+    "line": 48,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/EmailVerificationPage.test.tsx",
+    "line": 49,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/EmailVerificationPage.test.tsx",
+    "line": 50,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/EmailVerificationPage.test.tsx",
+    "line": 51,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/EmailVerificationPage.test.tsx",
+    "line": 52,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/EmailVerificationPage.test.tsx",
+    "line": 53,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/EmailVerificationPage.test.tsx",
+    "line": 57,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/EmailVerificationPage.test.tsx",
+    "line": 61,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/LibraryPage.test.tsx",
+    "line": 63,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/LibraryPage.test.tsx",
+    "line": 83,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/LibraryPage.test.tsx",
+    "line": 89,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/LibraryPage.test.tsx",
+    "line": 91,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/LibraryPage.test.tsx",
+    "line": 101,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/ProcessingPage.test.tsx",
+    "line": 14,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/ProcessingPage.test.tsx",
+    "line": 40,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/SettingsPage.test.tsx",
+    "line": 63,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/SettingsPage.test.tsx",
+    "line": 82,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/SettingsPage.test.tsx",
+    "line": 91,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/SettingsPage.test.tsx",
+    "line": 93,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/SettingsPage.test.tsx",
+    "line": 108,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/SettingsPage.test.tsx",
+    "line": 125,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/SettingsPage.test.tsx",
+    "line": 131,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/SettingsPage.test.tsx",
+    "line": 132,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/SettingsPage.test.tsx",
+    "line": 133,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/__tests__/SettingsPage.test.tsx",
+    "line": 135,
+    "issue": "Type safety bypass with any type.",
+    "fix": "Replace any with explicit interfaces, discriminated unions, or unknown + narrowing."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/ContentInputPage.tsx",
+    "line": 1,
+    "issue": "Large page component (704 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/DashboardPage.tsx",
+    "line": 1,
+    "issue": "Large page component (1062 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/FlashcardConfigPage.tsx",
+    "line": 1,
+    "issue": "Large page component (580 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/FlashcardResultPage.tsx",
+    "line": 1,
+    "issue": "Large page component (398 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/FlashcardsPage.tsx",
+    "line": 1,
+    "issue": "Large page component (443 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/FlashcardStudyPage.tsx",
+    "line": 1,
+    "issue": "Large page component (571 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/LandingPage.tsx",
+    "line": 1,
+    "issue": "Large page component (412 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/LibraryPage.tsx",
+    "line": 1,
+    "issue": "Large page component (1110 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/ProcessingPage.tsx",
+    "line": 1,
+    "issue": "Large page component (443 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/QuizConfigPage.tsx",
+    "line": 1,
+    "issue": "Large page component (593 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/QuizResultsPage.tsx",
+    "line": 1,
+    "issue": "Large page component (1458 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/QuizTakePage.tsx",
+    "line": 1,
+    "issue": "Large page component (413 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/QuizzesPage.tsx",
+    "line": 1,
+    "issue": "Large page component (588 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/RegisterPage.tsx",
+    "line": 1,
+    "issue": "Large page component (334 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/SettingsPage.tsx",
+    "line": 1,
+    "issue": "Large page component (954 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/SummariesPage.tsx",
+    "line": 1,
+    "issue": "Large page component (583 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Medium",
+    "file": "src/pages/SummaryPage.tsx",
+    "line": 1,
+    "issue": "Large page component (5165 LOC) increases maintenance risk.",
+    "fix": "Split into smaller presentational components and move logic to hooks/services."
+  },
+  {
+    "severity": "Low",
+    "file": "src/components/SummaryChatPanel.tsx",
+    "line": 81,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/components/SummaryChatPanel.tsx",
+    "line": 93,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/components/SummaryChatPanel.tsx",
+    "line": 124,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/lib/api.ts",
+    "line": 16,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/lib/api.ts",
+    "line": 35,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/lib/useWebSocket.ts",
+    "line": 51,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/lib/useWebSocket.ts",
+    "line": 66,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/lib/useWebSocket.ts",
+    "line": 77,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/lib/useWebSocket.ts",
+    "line": 96,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/lib/useWebSocket.ts",
+    "line": 127,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/lib/useWebSocket.ts",
+    "line": 135,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/lib/useWebSocket.ts",
+    "line": 160,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/pages/FlashcardResultPage.tsx",
+    "line": 276,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/pages/FlashcardStudyPage.tsx",
+    "line": 135,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/pages/FlashcardStudyPage.tsx",
+    "line": 277,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/pages/FlashcardStudyPage.tsx",
+    "line": 294,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/pages/ProcessingPage.tsx",
+    "line": 315,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/pages/SettingsPage.tsx",
+    "line": 374,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  },
+  {
+    "severity": "Low",
+    "file": "src/pages/SettingsPage.tsx",
+    "line": 391,
+    "issue": "Console logging left in production code path.",
+    "fix": "Replace with structured logger and redact sensitive values."
+  }
+]

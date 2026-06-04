@@ -1,0 +1,33 @@
+flowchart LR
+    %%{init: {'theme': 'neutral', "themeVariables": { "fontSize": "16px"}}}%%
+    A([User Input: Keypress])
+
+    subgraph Debounce [React Debounce State]
+        direction TB
+        B(Start Timer)
+        C(Input Resets Timer)
+        D(1000ms Elapses)
+        B -->|Interrupted| C
+        B -->|Clean| D
+    end
+
+    subgraph Sync [State Reconciliation]
+        direction TB
+        E(Merge Visual Delta)
+        F(HTTP PUT /edit/slide)
+        E --> F
+    end
+
+    subgraph Server [Go Backend API]
+        direction TB
+        G(Intercept & Validate JWT)
+        H(Persist JSONB to DB)
+        G --> H
+    end
+
+    I([UI Auto-Saved Alert])
+
+    A --> Debounce
+    Debounce --> Sync
+    Sync --> Server
+    Server --> I
