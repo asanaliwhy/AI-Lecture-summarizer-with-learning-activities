@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, type JobResponse } from '../lib/api'
 import { useWebSocket } from '../lib/useWebSocket'
+import { useAuth } from '../lib/AuthContext'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
@@ -18,6 +19,7 @@ import { cn } from '../lib/utils'
 export function ProcessingPage() {
   const navigate = useNavigate()
   const { jobId } = useParams()
+  const { refreshUser } = useAuth()
   const POLL_MAX_FAILURES = 6
   const POLL_BASE_MS = 5000
   const POLL_MAX_MS = 30000
@@ -206,6 +208,7 @@ export function ProcessingPage() {
         if (completedPayload.job_id === jobId || !jobId) {
           finalizingSinceRef.current = null
           setIsComplete(true)
+          refreshUser().catch(() => {})
         if (completedPayload.result_type === 'summary' && completedPayload.result_id) {
           navigate(`/summary/${completedPayload.result_id}`, { replace: true })
         } else if (completedPayload.result_type === 'quiz' && completedPayload.result_id) {
@@ -264,6 +267,7 @@ export function ProcessingPage() {
         if (data.status === 'completed') {
           finalizingSinceRef.current = null
           setIsComplete(true)
+          refreshUser().catch(() => {})
           if (data.type === 'summary-generation') {
             navigate(`/summary/${data.reference_id}`, { replace: true })
           } else if (data.type === 'quiz-generation') {

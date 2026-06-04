@@ -35,9 +35,10 @@ export function LandingPage() {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  const studentPrice = isYearly ? '4.9' : '7'
-  const proPrice = isYearly ? '8.4' : '12'
-  const period = isYearly ? 'per month, billed yearly' : 'per month'
+  const plusPrice = isYearly ? '1,400' : '2,000'
+  const proPrice = isYearly ? '2,100' : '3,000'
+  const ultraPrice = isYearly ? '7,000' : '10,000'
+  const period = isYearly ? '/month, billed yearly' : '/month'
 
   return (
     <div className="landing-page">
@@ -326,8 +327,8 @@ export function LandingPage() {
           {/* Free */}
           <div className="plan">
             <div className="plan-name">Free</div>
-            <div className="plan-price">$0</div>
-            <div className="plan-period">forever, no card required</div>
+            <div className="plan-price">0 ₸</div>
+            <div className="plan-period">/month, no card required</div>
             <div className="plan-rule" />
             <ul className="plan-feats">
               <li className="plan-feat"><span className="chk">✓</span> 5 summaries per month</li>
@@ -342,43 +343,56 @@ export function LandingPage() {
             <Link to="/register" className="plan-cta">Get started free</Link>
           </div>
 
-          {/* Student */}
-          <div className="plan highlight">
-            <div className="plan-badge">Popular</div>
-            <div className="plan-name">Student</div>
-            <div className="plan-price"><sup>$</sup>{studentPrice}</div>
+          {/* Plus */}
+          <div className="plan">
+            <div className="plan-name">Plus</div>
+            <div className="plan-price">{plusPrice} ₸</div>
             <div className="plan-period">{period}</div>
             <div className="plan-rule" />
             <ul className="plan-feats">
-              <li className="plan-feat"><span className="chk">✓</span> 50 summaries per month</li>
-              <li className="plan-feat"><span className="chk">✓</span> All 4 summary formats</li>
-              <li className="plan-feat"><span className="chk">✓</span> Quiz generation</li>
-              <li className="plan-feat"><span className="chk">✓</span> Spaced repetition flashcards</li>
-              <li className="plan-feat"><span className="chk">✓</span> AI presentation generation</li>
-              <li className="plan-feat"><span className="chk">✓</span> PDF + PPTX exports</li>
-              <li className="plan-feat"><span className="chk">✓</span> Ask AI chat</li>
-              <li className="plan-feat muted"><span className="dash">–</span> Unlimited summaries</li>
+              <li className="plan-feat"><span className="chk">✓</span> Unlimited Credits</li>
+              <li className="plan-feat"><span className="chk">✓</span> Bring your own Gemini API key</li>
+              <li className="plan-feat"><span className="chk">✓</span> Direct connection to Google</li>
+              <li className="plan-feat"><span className="chk">✓</span> No platform branding</li>
+              <li className="plan-feat"><span className="chk">✓</span> Early access to features</li>
+              <li className="plan-feat muted"><span className="dash">–</span> API key included</li>
             </ul>
-            <Link to="/register?plan=student" className="plan-cta">Start Student plan →</Link>
+            <Link to="/register?plan=plus" className="plan-cta">Start Plus plan →</Link>
           </div>
 
           {/* Pro */}
-          <div className="plan">
+          <div className="plan highlight">
+            <div className="plan-badge">Popular</div>
             <div className="plan-name">Pro</div>
-            <div className="plan-price"><sup>$</sup>{proPrice}</div>
+            <div className="plan-price">{proPrice} ₸</div>
             <div className="plan-period">{period}</div>
             <div className="plan-rule" />
             <ul className="plan-feats">
-              <li className="plan-feat"><span className="chk">✓</span> Unlimited summaries</li>
-              <li className="plan-feat"><span className="chk">✓</span> All 4 summary formats</li>
-              <li className="plan-feat"><span className="chk">✓</span> Quiz generation</li>
-              <li className="plan-feat"><span className="chk">✓</span> Spaced repetition flashcards</li>
-              <li className="plan-feat"><span className="chk">✓</span> AI presentation generation</li>
-              <li className="plan-feat"><span className="chk">✓</span> PDF + PPTX exports</li>
-              <li className="plan-feat"><span className="chk">✓</span> Ask AI chat</li>
-              <li className="plan-feat"><span className="chk">✓</span> Priority processing</li>
+              <li className="plan-feat"><span className="chk">✓</span> 4,000 Credits per month</li>
+              <li className="plan-feat"><span className="chk">✓</span> No API key required</li>
+              <li className="plan-feat"><span className="chk">✓</span> Premium quality generation</li>
+              <li className="plan-feat"><span className="chk">✓</span> No platform branding</li>
+              <li className="plan-feat"><span className="chk">✓</span> Priority email support</li>
+              <li className="plan-feat"><span className="chk">✓</span> AI presentations and exports</li>
             </ul>
             <Link to="/register?plan=pro" className="plan-cta">Start Pro plan →</Link>
+          </div>
+
+          {/* Ultra */}
+          <div className="plan">
+            <div className="plan-name">Ultra</div>
+            <div className="plan-price">{ultraPrice} ₸</div>
+            <div className="plan-period">{period}</div>
+            <div className="plan-rule" />
+            <ul className="plan-feats">
+              <li className="plan-feat"><span className="chk">✓</span> 20,000 Credits per month</li>
+              <li className="plan-feat"><span className="chk">✓</span> No API key required</li>
+              <li className="plan-feat"><span className="chk">✓</span> Highest priority generation</li>
+              <li className="plan-feat"><span className="chk">✓</span> Dedicated 24/7 support</li>
+              <li className="plan-feat"><span className="chk">✓</span> Custom domain support</li>
+              <li className="plan-feat"><span className="chk">✓</span> Best for schools and teams</li>
+            </ul>
+            <Link to="/register?plan=ultra" className="plan-cta">Start Ultra plan →</Link>
           </div>
         </div>
       </section>

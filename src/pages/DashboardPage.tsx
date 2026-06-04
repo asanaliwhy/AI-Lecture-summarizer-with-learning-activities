@@ -453,6 +453,7 @@ export function DashboardPage() {
       hours: formatActivityHours(value),
     }
   })
+  const isStreakActive = (streakData?.current_streak || 0) > 0
   return (
     <AppLayout>
       <div className="space-y-8 pb-8 animate-in fade-in duration-500">
@@ -469,10 +470,26 @@ export function DashboardPage() {
             </p>
           </div>
             <div className="flex items-center gap-3 flex-wrap justify-end">
-              <div className="flex items-center gap-2 bg-orange-50 text-orange-700 px-4 py-2 rounded-full border border-orange-100 shadow-sm hover:shadow-md transition-all cursor-default">
-                <Flame className="h-5 w-5 fill-orange-500 text-orange-500 animate-pulse" />
-                <span className="font-semibold">{streakData?.current_streak || 0} Day Streak</span>
-              </div>
+              {isStreakActive ? (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full border shadow-md cursor-pointer animate-flame-container-active">
+                  <div className="relative h-5 w-5">
+                    {/* Layer 1: Blurred deep red glow flame */}
+                    <Flame className="absolute inset-0 h-5 w-5 fill-red-600 text-red-600 blur-[2px] opacity-75 animate-flame-active" style={{ animationDelay: '-0.15s', transformOrigin: 'bottom center' }} />
+                    {/* Layer 2: Vibrating orange flame */}
+                    <Flame className="absolute inset-0 h-5 w-5 fill-orange-500 text-orange-500 blur-[0.5px] opacity-90 animate-flame-active" style={{ animationDelay: '-0.3s', transformOrigin: 'bottom center' }} />
+                    {/* Layer 3: Main bright amber/yellow core flame */}
+                    <Flame className="relative h-5 w-5 fill-amber-400 text-amber-400 animate-flame-active" style={{ transformOrigin: 'bottom center' }} />
+                  </div>
+                  <span className="font-bold tracking-wide animate-flame-text-active">
+                    {streakData?.current_streak} Day Streak
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 bg-muted text-muted-foreground/60 px-4 py-2 rounded-full border border-border/50 shadow-sm cursor-pointer transition-all duration-300 hover:scale-105 hover:-translate-y-0.5 hover:shadow-md hover:bg-muted/80 hover:text-muted-foreground/75">
+                  <Flame className="h-5 w-5 text-muted-foreground/40" />
+                  <span className="font-semibold">{streakData?.current_streak || 0} Day Streak</span>
+                </div>
+              )}
               <Link to="/presentations/new">
                 <Button variant="outline" className="shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
                   <Presentation className="mr-2 h-4 w-4" /> New Presentation

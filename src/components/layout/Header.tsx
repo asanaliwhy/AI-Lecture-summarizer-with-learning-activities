@@ -101,7 +101,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
           {user?.plan === 'plus' ? (
             <span>Unlimited</span>
           ) : (
-            <span>{user?.used_credits ?? 0} / {user?.total_credits ?? 100}</span>
+            <span>{Math.max(0, (user?.total_credits ?? 100) - (user?.used_credits ?? 0))} / {user?.total_credits ?? 100}</span>
           )}
         </button>
 
