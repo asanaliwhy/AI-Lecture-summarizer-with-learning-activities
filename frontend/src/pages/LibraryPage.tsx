@@ -8,6 +8,7 @@ import {
   type SummaryDetailResponse,
   type QuizAttemptDetailsResponse,
   type QuizDetailResponse,
+  type FolderResponse,
 } from '../lib/api'
 import { exportQuizResultsPdf } from './QuizResultsPage'
 import { exportFlashcardResultsPdf } from './FlashcardResultPage'
@@ -34,12 +35,19 @@ import {
   Star,
   Heart,
   Loader2,
+  Folder,
+  FolderPlus,
+  FolderInput,
+  FolderEdit,
+  FolderOpen,
+  X,
+  CheckCircle,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useToast } from '../components/ui/Toast'
 import type { jsPDF } from 'jspdf'
 
-type LibraryTab = 'all' | 'favorites'
+type LibraryTab = string
 type ViewMode = 'grid' | 'list'
 type TypeFilter = 'all' | 'summary' | 'quiz' | 'flashcards' | 'presentations'
 
@@ -88,9 +96,15 @@ export function LibraryPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [items, setItems] = useState<LibraryItem[]>([])
+  const [folders, setFolders] = useState<FolderResponse[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isExporting, setIsExporting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isMoving, setIsMoving] = useState(false)
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false)
+  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [targetFolderId, setTargetFolderId] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
@@ -142,10 +156,14 @@ export function LibraryPage() {
         if (apiType) {
           params.type = apiType
         }
-        const data = await api.library.list(params)
+        const [data, foldersData] = await Promise.all([
+          api.library.list(params),
+          api.folders.list().catch(() => ({ folders: [] })) // Silently fail if folders fetch fails
+        ])
 
         if (!isAlive) return
         setItems(normalizeLibraryItems(data.items))
+        setFolders(foldersData.folders || [])
       } catch (err: unknown) {
         if (!isAlive) return
 
@@ -183,8 +201,12 @@ export function LibraryPage() {
         params.type = apiType
       }
 
-      const data = await api.library.list(params)
+      const [data, foldersData] = await Promise.all([
+        api.library.list(params),
+        api.folders.list().catch(() => ({ folders: [] }))
+      ])
       setItems(normalizeLibraryItems(data.items))
+      setFolders(foldersData.folders || [])
     } catch (err: unknown) {
       const message = err instanceof ApiError
         ? err.message
@@ -245,8 +267,12 @@ export function LibraryPage() {
     }
 
     try {
-      const data = await api.library.list(params)
+      const [data, foldersData] = await Promise.all([
+        api.library.list(params),
+        api.folders.list().catch(() => ({ folders: [] }))
+      ])
       setItems(normalizeLibraryItems(data.items))
+      setFolders(foldersData.folders || [])
     } catch (err: unknown) {
       const message = err instanceof ApiError
         ? err.message
@@ -830,7 +856,9 @@ export function LibraryPage() {
 
   const displayItems = activeTab === 'favorites'
     ? items.filter((item) => Boolean(item?.is_favorite))
-    : items
+    : activeTab.startsWith('folder_')
+      ? items.filter((item) => item.folder_id === activeTab.replace('folder_', ''))
+      : items
 
   const summaryCount = items.filter((item) => item?.type === 'summary').length
   const quizCount = items.filter((item) => item?.type === 'quiz').length
@@ -876,6 +904,84 @@ export function LibraryPage() {
       badgeClass: 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30',
       railClass: 'from-orange-500/80 to-orange-300/40',
     }
+  }
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return
+    try {
+      const folder = await api.folders.create({ name: newFolderName, color: 'blue' })
+      setFolders(prev => [folder, ...prev])
+      setNewFolderName('')
+      setIsCreateFolderOpen(false)
+      toast.success('Folder created')
+    } catch (err) {
+      toast.error('Failed to create folder')
+    }
+  }
+
+  const handleDeleteFolder = async (folderId: string) => {
+    if (!window.confirm('Are you sure you want to delete this folder? Items inside will not be deleted.')) return
+    try {
+      await api.folders.delete(folderId)
+      setFolders(prev => prev.filter(f => f.id !== folderId))
+      if (activeTab === `folder_${folderId}`) setActiveTab('all')
+      toast.success('Folder deleted')
+    } catch (err) {
+      toast.error('Failed to delete folder')
+    }
+  }
+
+  const handleMoveToFolder = async () => {
+    if (selectedItems.length === 0 || !targetFolderId || isMoving) return
+    setIsMoving(true)
+    
+    // Group selected items by type
+    const byType: Record<string, string[]> = {}
+    for (const id of selectedItems) {
+      const item = items.find(i => i.id === id)
+      if (item) {
+        if (!byType[item.type]) byType[item.type] = []
+        byType[item.type].push(id)
+      }
+    }
+
+    let successCount = 0
+    let failCount = 0
+
+    for (const [type, ids] of Object.entries(byType)) {
+      try {
+        if (targetFolderId === 'none') {
+          await api.folders.removeItems(ids, type)
+        } else {
+          await api.folders.moveItems(targetFolderId, ids, type)
+        }
+        successCount += ids.length
+      } catch {
+        failCount += ids.length
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success(`Moved ${successCount} items`)
+      // Refresh items to update their folder_id
+      const params: Record<string, string> = {}
+      if (debouncedSearchQuery) params.search = debouncedSearchQuery
+      const apiType = mapTypeFilterToApiType(typeFilter)
+      if (apiType) params.type = apiType
+      
+      const [data, foldersData] = await Promise.all([
+        api.library.list(params),
+        api.folders.list().catch(() => ({ folders: [] }))
+      ])
+      setItems(normalizeLibraryItems(data.items))
+      setFolders(foldersData.folders || [])
+      setSelectedItems([])
+      setIsMoveModalOpen(false)
+    }
+    if (failCount > 0) {
+      toast.error(`Failed to move ${failCount} items`)
+    }
+    setIsMoving(false)
   }
 
   return (
@@ -943,13 +1049,61 @@ export function LibraryPage() {
                   <Trash2 className="h-4 w-4 mr-2" />
                   {isDeleting ? 'Deleting...' : 'Delete'}
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting || isDeleting}>
+                <Button variant="outline" size="sm" onClick={() => setIsMoveModalOpen(true)} disabled={isExporting || isDeleting || isMoving}>
+                  <FolderInput className="h-4 w-4 mr-2" />
+                  Move to Folder
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting || isDeleting || isMoving}>
                   {isExporting ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
                     <Download className="h-4 w-4 mr-2" />
                   )}
                   {isExporting ? 'Exporting...' : 'Export'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isMoveModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in">
+            <div className="w-full max-w-md rounded-2xl border bg-card p-6 shadow-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold tracking-tight">Move to Folder</h2>
+                <Button variant="ghost" size="icon" onClick={() => setIsMoveModalOpen(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">Select a folder to move {selectedItems.length} items.</p>
+              
+              <div className="grid gap-2">
+                <Button 
+                  variant={targetFolderId === 'none' ? 'default' : 'outline'}
+                  className="justify-start h-12"
+                  onClick={() => setTargetFolderId('none')}
+                >
+                  <X className="h-4 w-4 mr-3" />
+                  Remove from current folder
+                </Button>
+                {folders.map(folder => (
+                  <Button 
+                    key={folder.id}
+                    variant={targetFolderId === folder.id ? 'default' : 'outline'}
+                    className="justify-start h-12"
+                    onClick={() => setTargetFolderId(folder.id)}
+                  >
+                    <Folder className="h-4 w-4 mr-3" />
+                    {folder.name}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setIsMoveModalOpen(false)}>Cancel</Button>
+                <Button onClick={handleMoveToFolder} disabled={isMoving || !targetFolderId}>
+                  {isMoving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+                  {isMoving ? 'Moving...' : 'Confirm Move'}
                 </Button>
               </div>
             </div>
@@ -1006,11 +1160,55 @@ export function LibraryPage() {
 
           {/* Content Grid */}
           <div className="lg:col-span-9">
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'all' | 'favorites')} className="w-full">
-              <TabsList className="mb-6 bg-muted/70 border">
-                <TabsTrigger value="all">All Items</TabsTrigger>
-                <TabsTrigger value="favorites">Favorites</TabsTrigger>
-              </TabsList>
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value)} className="w-full">
+              <div className="flex items-center justify-between mb-6">
+                <TabsList className="bg-muted/70 border flex-wrap h-auto py-1 px-1">
+                  <TabsTrigger value="all">All Items</TabsTrigger>
+                  <TabsTrigger value="favorites">Favorites</TabsTrigger>
+                  <div className="w-[1px] h-4 bg-border mx-2" />
+                  {folders.map(folder => (
+                    <TabsTrigger key={folder.id} value={`folder_${folder.id}`} className="flex items-center gap-2 group">
+                      <Folder className="h-3.5 w-3.5 text-primary" />
+                      {folder.name}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-4 w-4 ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteFolder(folder.id)
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                <Button variant="outline" size="sm" onClick={() => setIsCreateFolderOpen(true)}>
+                  <FolderPlus className="h-4 w-4 mr-2" />
+                  New Folder
+                </Button>
+              </div>
+
+              {isCreateFolderOpen && (
+                <div className="mb-6 p-4 rounded-xl border bg-card shadow-sm animate-in fade-in slide-in-from-top-2 flex gap-3 items-center">
+                  <FolderInput className="h-5 w-5 text-muted-foreground" />
+                  <Input 
+                    placeholder="Enter folder name..."
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    className="max-w-xs"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleCreateFolder()
+                      if (e.key === 'Escape') setIsCreateFolderOpen(false)
+                    }}
+                  />
+                  <Button onClick={handleCreateFolder} size="sm">Create</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setIsCreateFolderOpen(false)}>Cancel</Button>
+                </div>
+              )}
 
               <TabsContent value={activeTab} className="mt-0">
                 {isLoading ? (

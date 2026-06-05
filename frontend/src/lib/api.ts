@@ -419,6 +419,7 @@ export interface LibraryItemResponse {
     tags?: string[]
     is_favorite?: boolean
     created_at?: string
+    folder_id?: string | null
 }
 
 export interface LibraryListResponse {
@@ -438,6 +439,15 @@ export interface UserProfileResponse {
     has_gemini_key?: boolean
     created_at?: string
     last_login_at?: string | null
+}
+
+export interface FolderResponse {
+    id: string
+    user_id?: string
+    name: string
+    color: string
+    created_at?: string
+    updated_at?: string
 }
 
 export interface UserMeResponse extends UserProfileResponse {
@@ -849,6 +859,33 @@ export const api = {
             const qs = params ? '?' + new URLSearchParams(params).toString() : ''
             return apiFetch<LibraryListResponse>(`/library${qs}`)
         },
+    },
+
+    // Folders
+    folders: {
+        list: () => apiFetch<{ folders: FolderResponse[] }>('/folders'),
+        create: (data: { name: string; color: string }) => 
+            apiFetch<FolderResponse>('/folders', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            }),
+        update: (id: string, data: { name: string; color: string }) => 
+            apiFetch<FolderResponse>(`/folders/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify(data)
+            }),
+        delete: (id: string) => 
+            apiFetch(`/folders/${id}`, { method: 'DELETE' }),
+        moveItems: (id: string, item_ids: string[], item_type: string) =>
+            apiFetch<{ message: string }>(`/folders/${id}/items`, {
+                method: 'POST',
+                body: JSON.stringify({ item_ids, item_type })
+            }),
+        removeItems: (item_ids: string[], item_type: string) =>
+            apiFetch<{ message: string }>('/folders/items', {
+                method: 'DELETE',
+                body: JSON.stringify({ item_ids, item_type })
+            }),
     },
 
     // User & Settings
