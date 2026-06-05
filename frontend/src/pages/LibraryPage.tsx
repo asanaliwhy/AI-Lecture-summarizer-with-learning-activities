@@ -799,6 +799,35 @@ export function LibraryPage() {
     return '/library'
   }
 
+  const handleToggleFavorite = async (e: React.MouseEvent, item: LibraryItem) => {
+    e.stopPropagation()
+    
+    // Optimistic UI update
+    setItems((prev) => 
+      prev.map((i) => i.id === item.id ? { ...i, is_favorite: !i.is_favorite } : i)
+    )
+
+    try {
+      if (item.type === 'summary') {
+        await api.summaries.toggleFavorite(item.id)
+      } else if (item.type === 'quiz') {
+        await api.quizzes.toggleFavorite(item.id)
+      } else if (item.type === 'flashcard') {
+        await api.flashcards.toggleFavorite(item.id)
+      } else if (item.type === 'presentation') {
+        await api.presentations.toggleFavorite(item.id)
+      }
+      toast.success(item.is_favorite ? 'Removed from favorites' : 'Added to favorites')
+    } catch (err) {
+      // Revert on error
+      setItems((prev) => 
+        prev.map((i) => i.id === item.id ? { ...i, is_favorite: item.is_favorite } : i)
+      )
+      console.error('Toggle favorite error:', err)
+      toast.error('Failed to update favorite status')
+    }
+  }
+
   const displayItems = activeTab === 'favorites'
     ? items.filter((item) => Boolean(item?.is_favorite))
     : items
@@ -1043,11 +1072,17 @@ export function LibraryPage() {
                           }}
                         >
                           <div className={cn('absolute inset-x-0 top-0 h-1 bg-gradient-to-r opacity-70 group-hover:opacity-100 transition-opacity', typeMeta.railClass)} />
-                          {item.is_favorite && (
-                            <div className="absolute top-4 right-4 z-10 rounded-full bg-background/80 backdrop-blur-md p-1.5 shadow-sm border border-border/50">
-                              <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
-                            </div>
-                          )}
+                          <div 
+                            className={cn(
+                              "absolute top-4 right-4 z-10 rounded-full bg-background/80 backdrop-blur-md p-1.5 shadow-sm border border-border/50 cursor-pointer hover:bg-background transition-all",
+                              item.is_favorite ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                            )}
+                            onClick={(e) => handleToggleFavorite(e, item)}
+                            role="button"
+                            aria-label={item.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                          >
+                            <Star className={cn("h-3.5 w-3.5 transition-colors", item.is_favorite ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground hover:text-yellow-500")} />
+                          </div>
                           <div className="absolute bottom-4 left-5 z-10">
                             <Badge variant="outline" className={cn('text-[11px] font-medium bg-background/90 backdrop-blur-md shadow-sm', typeMeta.badgeClass)}>
                               {typeMeta.label}
@@ -1148,10 +1183,16 @@ export function LibraryPage() {
                           <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground w-24 justify-end rounded-md bg-secondary/40 px-2 py-1">
                             {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
                           </div>
-                          <div className="w-8 flex justify-end">
-                            {item.is_favorite && (
-                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                            )}
+                          <div 
+                            className="w-8 flex justify-end cursor-pointer"
+                            onClick={(e) => handleToggleFavorite(e, item)}
+                            role="button"
+                            aria-label={item.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                          >
+                            <Star className={cn(
+                              "h-4 w-4 transition-colors", 
+                              item.is_favorite ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground/30 hover:text-yellow-500 opacity-0 group-hover:opacity-100"
+                            )} />
                           </div>
                         </div>
                       )
