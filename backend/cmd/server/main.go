@@ -60,6 +60,7 @@ func main() {
 	jobRepo := repository.NewJobRepo(pool)
 	studySessionRepo := repository.NewStudySessionRepo(pool)
 	chatMessageRepo := repository.NewChatMessageRepo(pool)
+	folderRepo := repository.NewFolderRepo(pool)
 
 	// ──── Step 4: Initialize Gemini Client ────
 	geminiService, err := services.NewGeminiService(
@@ -115,6 +116,7 @@ func main() {
 	screenOCRService := services.NewScreenOCRService(contentRepo, youtubeService, geminiService)
 	chatHandler := handlers.NewChatHandler(summaryRepo, chatMessageRepo, geminiService, contentRepo, screenOCRService)
 	billingHandler := handlers.NewBillingHandler(stripeService, userRepo)
+	folderHandler := handlers.NewFolderHandler(folderRepo)
 
 	// ──── Step 6: Start Job Worker Pool ────
 	workerPool := worker.NewPool(
@@ -162,6 +164,7 @@ func main() {
 		jobHandler,
 		chatHandler,
 		billingHandler,
+		folderHandler,
 		wsHub,
 		cfg.FrontendURL,
 		cfg.TrustedProxyCIDRs,

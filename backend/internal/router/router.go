@@ -28,6 +28,7 @@ func New(
 	jobHandler *handlers.JobHandler,
 	chatHandler *handlers.ChatHandler,
 	billingHandler *handlers.BillingHandler,
+	folderHandler *handlers.FolderHandler,
 	wsHub *websocket.Hub,
 	frontendURL string,
 	trustedProxyCIDRs []string,
@@ -178,6 +179,17 @@ func New(
 		r.Route("/library", func(r chi.Router) {
 			r.Use(jwtAuth.Middleware)
 			r.Get("/", libraryHandler.List)
+		})
+
+		// ──── Folder Routes ────
+		r.Route("/folders", func(r chi.Router) {
+			r.Use(jwtAuth.Middleware)
+			r.Get("/", folderHandler.ListFolders)
+			r.Post("/", folderHandler.CreateFolder)
+			r.Put("/{id}", folderHandler.UpdateFolder)
+			r.Delete("/{id}", folderHandler.DeleteFolder)
+			r.Post("/{id}/items", folderHandler.MoveItems)
+			r.Delete("/items", folderHandler.RemoveItems)
 		})
 
 		// ──── User & Settings Routes ────

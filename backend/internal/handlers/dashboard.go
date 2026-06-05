@@ -517,18 +517,19 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 	searchLike := "%" + strings.ToLower(searchQuery) + "%"
 
 	type LibraryItem struct {
-		ID         uuid.UUID `json:"id"`
-		Type       string    `json:"type"`
-		Title      string    `json:"title"`
-		Tags       []string  `json:"tags,omitempty"`
-		IsFavorite bool      `json:"is_favorite"`
-		CreatedAt  time.Time `json:"created_at"`
+		ID         uuid.UUID  `json:"id"`
+		Type       string     `json:"type"`
+		Title      string     `json:"title"`
+		Tags       []string   `json:"tags,omitempty"`
+		IsFavorite bool       `json:"is_favorite"`
+		CreatedAt  time.Time  `json:"created_at"`
+		FolderID   *uuid.UUID `json:"folder_id,omitempty"`
 	}
 
 	var items []LibraryItem
 
 	if typeFilter == "" || typeFilter == "summary" {
-		query := "SELECT id, title, tags, is_favorite, created_at FROM summaries WHERE user_id = $1 AND is_archived = FALSE"
+		query := "SELECT id, title, tags, is_favorite, created_at, folder_id FROM summaries WHERE user_id = $1 AND is_archived = FALSE"
 		args := []interface{}{userID}
 		if searchQuery != "" {
 			query += " AND LOWER(title) LIKE $2"
@@ -544,7 +545,7 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		for rows.Next() {
 			item := LibraryItem{Type: "summary"}
-			if err := rows.Scan(&item.ID, &item.Title, &item.Tags, &item.IsFavorite, &item.CreatedAt); err != nil {
+			if err := rows.Scan(&item.ID, &item.Title, &item.Tags, &item.IsFavorite, &item.CreatedAt, &item.FolderID); err != nil {
 				rows.Close()
 				log.Printf("LibraryHandler.List: failed to scan summary row for user %s: %v", userID, err)
 				writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
@@ -562,7 +563,7 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if typeFilter == "" || typeFilter == "quiz" {
-		query := "SELECT id, title, is_favorite, created_at FROM quizzes WHERE user_id = $1"
+		query := "SELECT id, title, is_favorite, created_at, folder_id FROM quizzes WHERE user_id = $1"
 		args := []interface{}{userID}
 		if searchQuery != "" {
 			query += " AND LOWER(title) LIKE $2"
@@ -578,7 +579,7 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		for rows.Next() {
 			item := LibraryItem{Type: "quiz"}
-			if err := rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt); err != nil {
+			if err := rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt, &item.FolderID); err != nil {
 				rows.Close()
 				log.Printf("LibraryHandler.List: failed to scan quiz row for user %s: %v", userID, err)
 				writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
@@ -596,7 +597,7 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if typeFilter == "" || typeFilter == "flashcard" || typeFilter == "flashcards" {
-		query := "SELECT id, title, is_favorite, created_at FROM flashcard_decks WHERE user_id = $1"
+		query := "SELECT id, title, is_favorite, created_at, folder_id FROM flashcard_decks WHERE user_id = $1"
 		args := []interface{}{userID}
 		if searchQuery != "" {
 			query += " AND LOWER(title) LIKE $2"
@@ -612,7 +613,7 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		for rows.Next() {
 			item := LibraryItem{Type: "flashcard"}
-			if err := rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt); err != nil {
+			if err := rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt, &item.FolderID); err != nil {
 				rows.Close()
 				log.Printf("LibraryHandler.List: failed to scan flashcard row for user %s: %v", userID, err)
 				writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
@@ -630,7 +631,7 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if typeFilter == "" || typeFilter == "presentation" || typeFilter == "presentations" {
-		query := "SELECT id, title, is_favorite, created_at FROM presentations WHERE user_id = $1"
+		query := "SELECT id, title, is_favorite, created_at, folder_id FROM presentations WHERE user_id = $1"
 		args := []interface{}{userID}
 		if searchQuery != "" {
 			query += " AND LOWER(title) LIKE $2"
@@ -646,7 +647,7 @@ func (h *LibraryHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		for rows.Next() {
 			item := LibraryItem{Type: "presentation"}
-			if err := rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt); err != nil {
+			if err := rows.Scan(&item.ID, &item.Title, &item.IsFavorite, &item.CreatedAt, &item.FolderID); err != nil {
 				rows.Close()
 				log.Printf("LibraryHandler.List: failed to scan presentation row for user %s: %v", userID, err)
 				writeJSON(w, http.StatusInternalServerError, errorResp("DB_ERROR", "Failed to retrieve library", r))
