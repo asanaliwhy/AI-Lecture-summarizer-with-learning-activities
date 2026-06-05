@@ -53,10 +53,9 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
       name: 'Plus',
       price: '2,000 ₸',
       period: '/month',
-      credits: 'Unlimited',
+      credits: '',
       description: 'Bring Your Own Key (BYOK)',
       features: [
-        'Unlimited Credits',
         'Requires your own Gemini API Key',
         'Direct connection to Google',
         'No platform branding',
@@ -145,10 +144,12 @@ export function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
                     <span className="text-2xl font-bold">{plan.price}</span>
                     <span className="text-sm text-muted-foreground">{plan.period}</span>
                   </div>
-                  <div className="flex items-center gap-1 mt-1 text-sm text-primary font-medium">
-                    <Zap className="h-3.5 w-3.5 fill-primary/20" />
-                    <span>{plan.credits} Credits</span>
-                  </div>
+                  {plan.credits && (
+                    <div className="flex items-center gap-1 mt-1 text-sm text-primary font-medium">
+                      <Zap className="h-3.5 w-3.5 fill-primary/20" />
+                      <span>{plan.credits} Credits</span>
+                    </div>
+                  )}
                 </div>
 
                 <button

@@ -455,11 +455,11 @@
 }
 
 .animate-flame-active {
-  animation: active-flame-flicker 0.5s infinite linear;
+  /* animation: active-flame-flicker 0.5s infinite linear; */
 }
 
 .animate-flame-container-active {
-  animation: active-flame-glow 1.5s infinite ease-in-out;
+  /* animation: active-flame-glow 1.5s infinite ease-in-out; */
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -471,7 +471,7 @@
 }
 
 .dark .animate-flame-container-active {
-  animation: active-flame-glow-dark 1.5s infinite ease-in-out;
+  /* animation: active-flame-glow-dark 1.5s infinite ease-in-out; */
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -483,9 +483,9 @@
 }
 
 .animate-flame-text-active {
-  animation: active-flame-text 1.5s infinite ease-in-out;
+  /* animation: active-flame-text 1.5s infinite ease-in-out; */
 }
 
 .dark .animate-flame-text-active {
-  animation: active-flame-text-dark 1.5s infinite ease-in-out;
+  /* animation: active-flame-text-dark 1.5s infinite ease-in-out; */
 }
