@@ -1,6 +1,6 @@
 -- folders table
 CREATE TABLE IF NOT EXISTS folders (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     color VARCHAR(50) DEFAULT 'blue',
