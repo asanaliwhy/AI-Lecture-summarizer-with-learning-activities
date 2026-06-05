@@ -814,9 +814,9 @@ export function LibraryPage() {
       return {
         label: 'Summary',
         icon: FileText,
-        iconClass: 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300',
-        badgeClass: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/40',
-        railClass: 'from-blue-500/50 to-blue-300/20',
+        iconClass: 'bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 ring-1 ring-blue-500/20',
+        badgeClass: 'bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400 dark:border-blue-500/30',
+        railClass: 'from-blue-500/80 to-blue-300/40',
       }
     }
 
@@ -824,9 +824,9 @@ export function LibraryPage() {
       return {
         label: 'Quiz',
         icon: BrainCircuit,
-        iconClass: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-        badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/40',
-        railClass: 'from-emerald-500/50 to-emerald-300/20',
+        iconClass: 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 ring-1 ring-emerald-500/20',
+        badgeClass: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30',
+        railClass: 'from-emerald-500/80 to-emerald-300/40',
       }
     }
 
@@ -834,18 +834,18 @@ export function LibraryPage() {
       return {
         label: 'Presentation',
         icon: Presentation,
-        iconClass: 'bg-cyan-100 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300',
-        badgeClass: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/40',
-        railClass: 'from-cyan-500/50 to-cyan-300/20',
+        iconClass: 'bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 ring-1 ring-indigo-500/20',
+        badgeClass: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20 dark:bg-indigo-500/20 dark:text-indigo-400 dark:border-indigo-500/30',
+        railClass: 'from-indigo-500/80 to-indigo-300/40',
       }
     }
 
     return {
       label: 'Flashcards',
       icon: Layers,
-      iconClass: 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300',
-      badgeClass: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/40',
-      railClass: 'from-amber-500/50 to-amber-300/20',
+      iconClass: 'bg-orange-500/10 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400 ring-1 ring-orange-500/20',
+      badgeClass: 'bg-orange-500/10 text-orange-600 border-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30',
+      railClass: 'from-orange-500/80 to-orange-300/40',
     }
   }
 
@@ -929,25 +929,25 @@ export function LibraryPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Filters Sidebar */}
-          <div className="lg:col-span-3 space-y-6">
-            <Card className="border shadow-sm">
-              <CardContent className="p-4 space-y-6">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-6 z-10">
+            <Card className="border shadow-sm bg-card/80 backdrop-blur-xl">
+              <CardContent className="p-5 space-y-6">
+                <div className="relative group">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                   <Input
                     placeholder="Search library..."
-                    className="pl-8"
+                    className="pl-9 bg-background/50 border-border/50 focus-visible:ring-primary/30 transition-all"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
 
                 <div className="space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                     <Filter className="h-3.5 w-3.5" />
-                    Type
+                    Content Type
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {([
                       { id: 'all', label: 'All Content' },
                       { id: 'summary', label: 'Summaries' },
@@ -956,16 +956,17 @@ export function LibraryPage() {
                       { id: 'presentations', label: 'Presentations' },
                     ] as Array<{ id: TypeFilter; label: string }>).map(opt => (
                       <div key={opt.id} className={cn(
-                        'flex items-center space-x-2 rounded-lg border px-3 py-2 transition-colors',
-                        typeFilter === opt.id ? 'bg-secondary/60 border-primary/30' : 'hover:bg-secondary/30',
-                      )}>
+                        'flex items-center space-x-3 rounded-xl border border-transparent px-3 py-2.5 transition-all cursor-pointer',
+                        typeFilter === opt.id ? 'bg-primary/5 text-primary border-primary/20 shadow-sm' : 'hover:bg-secondary/40 text-foreground',
+                      )}
+                      onClick={() => setTypeFilter(opt.id)}>
                         <Checkbox
                           id={opt.id}
                           checked={typeFilter === opt.id}
                           aria-label={`Filter ${opt.label}`}
-                          onCheckedChange={() => setTypeFilter(opt.id)}
+                          className="pointer-events-none"
                         />
-                        <label htmlFor={opt.id} className="text-sm font-medium">{opt.label}</label>
+                        <label className="text-sm font-medium pointer-events-none flex-1">{opt.label}</label>
                       </div>
                     ))}
                   </div>
@@ -994,20 +995,26 @@ export function LibraryPage() {
                     <Button onClick={reloadLibrary}>Retry</Button>
                   </div>
                 ) : displayItems.length === 0 ? (
-                  <div className="text-center py-16">
-                    <div className="h-16 w-16 bg-secondary/50 rounded-full flex items-center justify-center mb-4 mx-auto">
-                      <Search className="h-8 w-8 text-muted-foreground" />
+                  <div className="text-center py-20 border border-dashed rounded-2xl bg-secondary/10 flex flex-col items-center">
+                    <div className="relative mb-6">
+                      <div className="absolute inset-0 bg-primary/20 blur-2xl rounded-full animate-pulse" />
+                      <div className="relative h-20 w-20 bg-background border rounded-2xl flex items-center justify-center shadow-sm">
+                        <Layers className="h-10 w-10 text-muted-foreground/50" />
+                      </div>
                     </div>
-                    <h3 className="text-lg font-semibold">
-                      {activeTab === 'favorites' ? 'No favorites yet' : 'No items found'}
+                    <h3 className="text-xl font-bold tracking-tight">
+                      {activeTab === 'favorites' ? 'No favorites yet' : 'Your library is empty'}
                     </h3>
-                    <p className="text-muted-foreground mt-2">
+                    <p className="text-muted-foreground mt-2 max-w-sm">
                       {activeTab === 'favorites'
-                        ? 'Star content to see it in Favorites.'
-                        : 'Create your first summary to get started.'}
+                        ? 'Star your favorite summaries and quizzes to easily access them here.'
+                        : 'Generate your first smart summary, quiz, or flashcards from any document to get started.'}
                     </p>
                     {activeTab !== 'favorites' && (
-                      <Button className="mt-4" onClick={() => navigate('/create')}>Create Content</Button>
+                      <Button className="mt-8 rounded-full shadow-md hover:shadow-lg transition-all" size="lg" onClick={() => navigate('/create')}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        Generate Content
+                      </Button>
                     )}
                   </div>
                 ) : viewMode === 'grid' ? (
@@ -1021,8 +1028,8 @@ export function LibraryPage() {
                         <Card
                           key={item.id}
                           className={cn(
-                            'group relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer border',
-                            selectedItems.includes(item.id) ? 'ring-2 ring-primary border-primary shadow-md' : 'border-border/70',
+                            'group relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-pointer border',
+                            selectedItems.includes(item.id) ? 'ring-2 ring-primary border-primary shadow-md' : 'border-border/60 hover:border-border',
                           )}
                           role="button"
                           tabIndex={0}
@@ -1035,18 +1042,21 @@ export function LibraryPage() {
                             }
                           }}
                         >
-                          <div className={cn('absolute inset-x-0 top-0 h-1 bg-gradient-to-r', typeMeta.railClass)} />
+                          <div className={cn('absolute inset-x-0 top-0 h-1 bg-gradient-to-r opacity-70 group-hover:opacity-100 transition-opacity', typeMeta.railClass)} />
                           {item.is_favorite && (
-                            <div className="absolute top-4 right-4 z-10 rounded-full bg-background/85 p-1 shadow-sm">
-                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                            <div className="absolute top-4 right-4 z-10 rounded-full bg-background/80 backdrop-blur-md p-1.5 shadow-sm border border-border/50">
+                              <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
                             </div>
                           )}
-                          <div className="absolute bottom-4 left-6 z-10">
-                            <Badge variant="outline" className={cn('text-[11px] font-medium bg-background/90 shadow-sm', typeMeta.badgeClass)}>
+                          <div className="absolute bottom-4 left-5 z-10">
+                            <Badge variant="outline" className={cn('text-[11px] font-medium bg-background/90 backdrop-blur-md shadow-sm', typeMeta.badgeClass)}>
                               {typeMeta.label}
                             </Badge>
                           </div>
-                          <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-md bg-background/85 p-1 shadow-sm">
+                          <div className={cn(
+                            "absolute bottom-4 right-4 z-10 rounded-md bg-background/90 backdrop-blur-md p-1 shadow-sm border border-border/50 transition-all duration-200",
+                            selectedItems.includes(item.id) ? "opacity-100 scale-100" : "opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100"
+                          )}>
                             <Checkbox
                               checked={selectedItems.includes(item.id)}
                               aria-label={`Select ${item.title}`}
@@ -1055,26 +1065,33 @@ export function LibraryPage() {
                             />
                           </div>
                           <CardContent
-                            className="p-6 pt-7 pb-12"
+                            className="p-5 pt-6 pb-14"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="flex items-start mb-4">
-                              <div className={cn('p-2 rounded-lg', typeMeta.iconClass)}>
+                              <div className={cn('p-2.5 rounded-xl transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3', typeMeta.iconClass)}>
                                 <TypeIcon className="h-5 w-5" />
                               </div>
                             </div>
-                            <h3 className="font-semibold text-lg mb-2 line-clamp-1 group-hover:text-primary transition-colors">
+                            <h3 className="font-semibold text-lg mb-2 line-clamp-2 group-hover:text-primary transition-colors leading-tight">
                               {item.title}
                             </h3>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 rounded-md bg-secondary/40 px-2 py-1 w-fit">
+                            <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground mb-4 opacity-80">
                               <Calendar className="h-3 w-3" />
-                              <span>{item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}</span>
+                              <span>{item.created_at ? new Date(item.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : ''}</span>
                             </div>
                             {item.type !== 'summary' && (item.tags || []).length > 0 && (
-                              <div className="flex flex-wrap gap-2">
-                                {(item.tags || []).slice(0, 4).map((tag: string) => (
-                                  <Badge key={tag} variant="secondary" className="text-xs font-normal">{tag}</Badge>
+                              <div className="flex flex-wrap gap-1.5">
+                                {(item.tags || []).slice(0, 3).map((tag: string) => (
+                                  <Badge key={tag} variant="secondary" className="text-[10px] font-medium px-1.5 py-0 bg-secondary/60 hover:bg-secondary/80 transition-colors">
+                                    {tag}
+                                  </Badge>
                                 ))}
+                                {(item.tags || []).length > 3 && (
+                                  <Badge variant="secondary" className="text-[10px] font-medium px-1.5 py-0 bg-secondary/40 text-muted-foreground">
+                                    +{(item.tags || []).length - 3}
+                                  </Badge>
+                                )}
                               </div>
                             )}
                           </CardContent>
