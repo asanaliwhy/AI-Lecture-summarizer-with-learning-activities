@@ -266,15 +266,25 @@ func (p *Pool) processSummary(ctx context.Context, job *models.Job) error {
 	}
 
 	transcript := ""
+	filePath := ""
+	mimeType := ""
+
 	if content.Transcript != nil && *content.Transcript != "" {
 		transcript = *content.Transcript
-	} else if content.Type == "file" || content.Type == "youtube" {
+	} else if content.Type == "file" {
+		if content.FilePath != nil && strings.HasSuffix(strings.ToLower(*content.FilePath), ".pdf") {
+			filePath = filepath.Join(p.storagePath, *content.FilePath)
+			mimeType = "application/pdf"
+		} else {
+			transcript = buildMetadataFallbackTranscript(content)
+		}
+	} else if content.Type == "youtube" {
 		transcript = buildMetadataFallbackTranscript(content)
 	} else {
 		return fmt.Errorf("cannot generate summary: transcript is not available")
 	}
 
-	return gemini.GenerateSummary(ctx, job, transcript)
+	return gemini.GenerateSummary(ctx, job, transcript, filePath, mimeType)
 }
 
 func (p *Pool) processPresentation(ctx context.Context, job *models.Job) error {
@@ -348,15 +358,25 @@ func (p *Pool) processPresentation(ctx context.Context, job *models.Job) error {
 	}
 
 	transcript := ""
+	filePath := ""
+	mimeType := ""
+
 	if content.Transcript != nil && *content.Transcript != "" {
 		transcript = *content.Transcript
-	} else if content.Type == "file" || content.Type == "youtube" {
+	} else if content.Type == "file" {
+		if content.FilePath != nil && strings.HasSuffix(strings.ToLower(*content.FilePath), ".pdf") {
+			filePath = filepath.Join(p.storagePath, *content.FilePath)
+			mimeType = "application/pdf"
+		} else {
+			transcript = buildMetadataFallbackTranscript(content)
+		}
+	} else if content.Type == "youtube" {
 		transcript = buildMetadataFallbackTranscript(content)
 	} else {
 		return fmt.Errorf("cannot generate presentation: transcript is not available")
 	}
 
-	return gemini.GeneratePresentation(ctx, job, transcript)
+	return gemini.GeneratePresentation(ctx, job, transcript, filePath, mimeType)
 }
 
 func (p *Pool) waitForContentReady(ctx context.Context, contentID uuid.UUID, timeout time.Duration) (*models.Content, error) {
@@ -568,28 +588,16 @@ func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
 		var extractErr error
 
 		switch ext {
-		case ".txt", ".pdf", ".docx":
+		case ".docx":
 			if p.fileExtract == nil {
 				extractErr = fmt.Errorf("file extraction service is not initialized")
 			} else {
 				extracted, extractErr = p.fileExtract.ExtractTextFromPath(fullPath)
 			}
-		case ".mp3", ".wav", ".mp4":
-			fileBytes, readErr := os.ReadFile(fullPath)
-			if readErr != nil {
-				extractErr = fmt.Errorf("failed to read media file: %w", readErr)
-				break
-			}
-
-			mimeType := "audio/mpeg"
-			switch ext {
-			case ".wav":
-				mimeType = "audio/wav"
-			case ".mp4":
-				mimeType = "video/mp4"
-			}
-
-			extracted, extractErr = gemini.TranscribeAudio(ctx, fileBytes, mimeType)
+		case ".pdf":
+			// Skip local extraction for PDF; we pass it via File API during generation
+			extracted = ""
+			extractErr = nil
 		default:
 			extractErr = fmt.Errorf("unsupported file type for extraction: %s", ext)
 		}

@@ -195,8 +195,37 @@ func (s *GeminiService) PublishUpdate(ctx context.Context, userID uuid.UUID, msg
 	s.redis.Publish(ctx, fmt.Sprintf("user_updates:%s", userID.String()), string(data))
 }
 
+func (s *GeminiService) uploadFileForContext(ctx context.Context, filePath, mimeType string) (*genai.File, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	file, err := s.client.UploadFile(ctx, "", f, &genai.UploadFileOptions{
+		DisplayName: "context-document",
+		MIMEType:    mimeType,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < 20; i++ {
+		current, getErr := s.client.GetFile(ctx, file.Name)
+		if getErr == nil && current.State == genai.FileStateActive {
+			return current, nil
+		}
+		if getErr == nil && current.State == genai.FileStateFailed {
+			return nil, fmt.Errorf("gemini failed to process uploaded document")
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	return nil, fmt.Errorf("uploaded document did not become active in time")
+}
+
 // GenerateSummary handles the full summary generation flow
-func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, transcript string) error {
+func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, transcript string, filePath string, mimeType string) error {
 	if err := s.acquireRate(ctx); err != nil {
 		return err
 	}
@@ -235,8 +264,21 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		},
 	})
 
+	// Prepare Gemini Call
+	var parts []genai.Part
+	if filePath != "" {
+		remoteFile, uploadErr := s.uploadFileForContext(ctx, filePath, mimeType)
+		if uploadErr != nil {
+			return fmt.Errorf("failed to upload document context: %w", uploadErr)
+		}
+		defer s.client.DeleteFile(context.Background(), remoteFile.Name)
+		parts = []genai.Part{genai.FileData{URI: remoteFile.URI}, genai.Text(prompt)}
+	} else {
+		parts = []genai.Part{genai.Text(prompt)}
+	}
+
 	// Call Gemini
-	resp, err := generateContentWithTimeout(ctx, summaryModel, 10*time.Minute, genai.Text(prompt))
+	resp, err := generateContentWithTimeout(ctx, summaryModel, 10*time.Minute, parts...)
 	if err != nil {
 		return fmt.Errorf("Gemini API error: %w", err)
 	}
@@ -598,7 +640,7 @@ Summary:
 	return nil
 }
 
-func (s *GeminiService) GeneratePresentation(ctx context.Context, job *models.Job, transcript string) error {
+func (s *GeminiService) GeneratePresentation(ctx context.Context, job *models.Job, transcript string, filePath string, mimeType string) error {
 	if err := s.acquireRate(ctx); err != nil {
 		return err
 	}
@@ -636,7 +678,20 @@ func (s *GeminiService) GeneratePresentation(ctx context.Context, job *models.Jo
 
 	cleanedTranscript := cleanTranscript(transcript)
 	prompt := buildPresentationPrompt(config, cleanedTranscript)
-	resp, err := generateContentWithTimeout(ctx, presentationModel, 10*time.Minute, genai.Text(prompt))
+
+	var parts []genai.Part
+	if filePath != "" {
+		remoteFile, uploadErr := s.uploadFileForContext(ctx, filePath, mimeType)
+		if uploadErr != nil {
+			return fmt.Errorf("failed to upload document context: %w", uploadErr)
+		}
+		defer s.client.DeleteFile(context.Background(), remoteFile.Name)
+		parts = []genai.Part{genai.FileData{URI: remoteFile.URI}, genai.Text(prompt)}
+	} else {
+		parts = []genai.Part{genai.Text(prompt)}
+	}
+
+	resp, err := generateContentWithTimeout(ctx, presentationModel, 10*time.Minute, parts...)
 	if err != nil {
 		return fmt.Errorf("Gemini API error: %w", err)
 	}

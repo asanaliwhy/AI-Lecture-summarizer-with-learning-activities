@@ -253,10 +253,6 @@ func (h *ContentHandler) SupportedFormats(w http.ResponseWriter, r *http.Request
 		"formats": []map[string]string{
 			{"extension": ".pdf", "mime_type": "application/pdf", "description": "PDF Document"},
 			{"extension": ".docx", "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "description": "Word Document"},
-			{"extension": ".txt", "mime_type": "text/plain", "description": "Plain Text"},
-			{"extension": ".mp4", "mime_type": "video/mp4", "description": "MP4 Video"},
-			{"extension": ".mp3", "mime_type": "audio/mpeg", "description": "MP3 Audio"},
-			{"extension": ".wav", "mime_type": "audio/wav", "description": "WAV Audio"},
 		},
 	})
 }
@@ -286,21 +282,16 @@ func (h *ContentHandler) GetContent(w http.ResponseWriter, r *http.Request) {
 
 func isAllowedMimeType(mime, filename string) bool {
 	allowed := map[string]bool{
-		"application/pdf":          true,
-		"text/plain":               true,
-		"video/mp4":                true,
-		"audio/mpeg":               true,
-		"audio/wav":                true,
-		"application/octet-stream": true,
+		"application/pdf":                                                             true,
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+		"application/octet-stream":                                                    true,
 	}
 	if allowed[mime] {
 		return true
 	}
 	// Check by extension as fallback
 	lower := strings.ToLower(filename)
-	return strings.HasSuffix(lower, ".pdf") || strings.HasSuffix(lower, ".docx") ||
-		strings.HasSuffix(lower, ".txt") || strings.HasSuffix(lower, ".mp4") ||
-		strings.HasSuffix(lower, ".mp3") || strings.HasSuffix(lower, ".wav")
+	return strings.HasSuffix(lower, ".pdf") || strings.HasSuffix(lower, ".docx")
 }
 
 func validateMagicBytes(data []byte, mimeType, filename string) bool {
@@ -320,35 +311,7 @@ func validateMagicBytes(data []byte, mimeType, filename string) bool {
 		return data[0] == 0x25 && data[1] == 0x50 && data[2] == 0x44 && data[3] == 0x46
 	}
 
-	if strings.HasSuffix(lowerName, ".mp3") || mimeType == "audio/mpeg" {
-		if len(data) < 3 {
-			return false
-		}
-		if data[0] == 'I' && data[1] == 'D' && data[2] == '3' {
-			return true
-		}
-		if len(data) >= 2 && data[0] == 0xFF && (data[1]&0xE0) == 0xE0 {
-			return true
-		}
-		return false
-	}
-
-	if strings.HasSuffix(lowerName, ".mp4") || mimeType == "video/mp4" {
-		if len(data) < 8 {
-			return false
-		}
-		return string(data[4:8]) == "ftyp"
-	}
-
-	if strings.HasSuffix(lowerName, ".wav") || mimeType == "audio/wav" {
-		if len(data) < 12 {
-			return false
-		}
-		return string(data[0:4]) == "RIFF" && string(data[8:12]) == "WAVE"
-	}
-
-	// Types without reliable magic bytes (e.g. txt) are accepted.
-	return true
+	return false
 }
 
 func getExtension(filename string) string {
