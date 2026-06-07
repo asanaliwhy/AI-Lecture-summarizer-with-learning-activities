@@ -15,8 +15,8 @@
 \contentsline {figure}{\numberline {3.1}{\ignorespaces System Architecture Diagram showing the three-tier application structure.}}{20}{figure.caption.27}%
 \contentsline {figure}{\numberline {3.2}{\ignorespaces Use Case Diagram showing interactions between users and system features.}}{20}{figure.caption.28}%
 \contentsline {figure}{\numberline {3.3}{\ignorespaces Sequence Diagram for asynchronous content generation via the LLM API.}}{21}{figure.caption.29}%
-\contentsline {figure}{\numberline {3.4}{\ignorespaces Sequence Diagram for the JWT-based authentication flow.}}{21}{figure.caption.30}%
-\contentsline {figure}{\numberline {3.5}{\ignorespaces Entity-Relationship Diagram for the PostgreSQL database schema.}}{22}{figure.caption.31}%
+\contentsline {figure}{\numberline {3.4}{\ignorespaces Sequence Diagram for the JWT-based authentication flow.}}{22}{figure.caption.30}%
+\contentsline {figure}{\numberline {3.5}{\ignorespaces Entity-Relationship Diagram for the PostgreSQL database schema.}}{23}{figure.caption.31}%
 \addvspace {10pt}
 \contentsline {figure}{\numberline {4.1}{\ignorespaces The main Lectura dashboard, demonstrating the unified ingestion pipeline connecting the frontend to the backend Go orchestration layer.}}{28}{figure.caption.37}%
 \contentsline {figure}{\numberline {4.2}{\ignorespaces The generated study materials view, illustrating the seamless retrieval of text from the database and its presentation in a structured, distraction-free environment.}}{29}{figure.caption.38}%

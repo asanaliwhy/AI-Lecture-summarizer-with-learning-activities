@@ -18,14 +18,14 @@
 \contentsline {section}{\numberline {1.5}Literature Review}{4}{section.1.5}%
 \contentsline {subsection}{\numberline {1.5.1}Artificial Intelligence in Education (AIEd)}{4}{subsection.1.5.1}%
 \contentsline {subsection}{\numberline {1.5.2}Large Language Models in Educational Contexts}{5}{subsection.1.5.2}%
-\contentsline {subsection}{\numberline {1.5.3}Automatic Summarization Techniques}{5}{subsection.1.5.3}%
+\contentsline {subsection}{\numberline {1.5.3}Automatic Summarization Techniques}{6}{subsection.1.5.3}%
 \contentsline {subsection}{\numberline {1.5.4}Spaced Repetition and Cognitive Retrieval}{6}{subsection.1.5.4}%
 \contentsline {subsection}{\numberline {1.5.5}Automated Question Generation and Conversational AI}{7}{subsection.1.5.5}%
-\contentsline {section}{\numberline {1.6}Review of Existing Solutions}{7}{section.1.6}%
+\contentsline {section}{\numberline {1.6}Review of Existing Solutions}{8}{section.1.6}%
 \contentsline {subsection}{\numberline {1.6.1}Methodology of Data Collection}{8}{subsection.1.6.1}%
-\contentsline {subsection}{\numberline {1.6.2}General-Purpose AI Assistants}{8}{subsection.1.6.2}%
+\contentsline {subsection}{\numberline {1.6.2}General-Purpose AI Assistants}{9}{subsection.1.6.2}%
 \contentsline {subsection}{\numberline {1.6.3}Automated Slide Generators}{9}{subsection.1.6.3}%
-\contentsline {subsection}{\numberline {1.6.4}Spaced Repetition and Flashcard Tools}{9}{subsection.1.6.4}%
+\contentsline {subsection}{\numberline {1.6.4}Spaced Repetition and Flashcard Tools}{10}{subsection.1.6.4}%
 \contentsline {subsection}{\numberline {1.6.5}Online Learning Platforms}{10}{subsection.1.6.5}%
 \contentsline {subsection}{\numberline {1.6.6}Comparative Synthesis and SWOT Analysis}{10}{subsection.1.6.6}%
 \contentsline {chapter}{\chapternumberline {2}Methodology and Data Processing}{12}{chapter.2}%
@@ -43,14 +43,14 @@
 \contentsline {chapter}{\chapternumberline {3}System Design and Architecture}{19}{chapter.3}%
 \contentsline {section}{\numberline {3.1}Minimum Viable Product (MVP) Scope}{19}{section.3.1}%
 \contentsline {section}{\numberline {3.2}System Architecture Overview}{19}{section.3.2}%
-\contentsline {section}{\numberline {3.3}UML Diagrams}{19}{section.3.3}%
-\contentsline {section}{\numberline {3.4}Entity-Relationship Diagram and Database Indexing}{22}{section.3.4}%
-\contentsline {section}{\numberline {3.5}Component Architecture and Worker Pool Design}{23}{section.3.5}%
+\contentsline {section}{\numberline {3.3}UML Diagrams}{20}{section.3.3}%
+\contentsline {section}{\numberline {3.4}Entity-Relationship Diagram and Database Indexing}{21}{section.3.4}%
+\contentsline {section}{\numberline {3.5}Component Architecture and Worker Pool Design}{22}{section.3.5}%
 \contentsline {section}{\numberline {3.6}Technology Stack Justification}{23}{section.3.6}%
 \contentsline {subsection}{\numberline {3.6.1}Frontend: React}{23}{subsection.3.6.1}%
 \contentsline {subsection}{\numberline {3.6.2}Backend: Go}{24}{subsection.3.6.2}%
 \contentsline {subsection}{\numberline {3.6.3}Database: PostgreSQL}{24}{subsection.3.6.3}%
-\contentsline {subsection}{\numberline {3.6.4}LLM Provider: Google Gemini}{24}{subsection.3.6.4}%
+\contentsline {subsection}{\numberline {3.6.4}LLM Provider: Google Gemini}{25}{subsection.3.6.4}%
 \contentsline {subsection}{\numberline {3.6.5}Document Export: Puppeteer}{25}{subsection.3.6.5}%
 \contentsline {chapter}{\chapternumberline {4}Results and Evaluation}{27}{chapter.4}%
 \contentsline {section}{\numberline {4.1}System Implementation Validation}{27}{section.4.1}%

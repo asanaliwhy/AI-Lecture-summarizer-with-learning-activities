@@ -207,8 +207,10 @@ export function QuizTakePage() {
 
   const handleNext = async () => {
     if (currentQuestion < totalQuestions - 1) {
-      setCurrentQuestion(prev => prev + 1)
-      setSelectedAnswer(answers[currentQuestion + 1] ?? null)
+      const nextIndex = currentQuestion + 1
+      const nextQ = questions[nextIndex]
+      setCurrentQuestion(nextIndex)
+      setSelectedAnswer(answers[nextQ?.originalIndex ?? nextIndex] ?? null)
       setShowHint(false)
     } else {
       // Submit quiz
@@ -225,8 +227,10 @@ export function QuizTakePage() {
 
   const handlePrev = () => {
     if (currentQuestion > 0) {
-      setCurrentQuestion(prev => prev - 1)
-      setSelectedAnswer(answers[currentQuestion - 1] ?? null)
+      const prevIndex = currentQuestion - 1
+      const prevQ = questions[prevIndex]
+      setCurrentQuestion(prevIndex)
+      setSelectedAnswer(answers[prevQ?.originalIndex ?? prevIndex] ?? null)
       setShowHint(false)
     }
   }

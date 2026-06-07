@@ -44,7 +44,7 @@ func main() {
 	defer redisClients.Close()
 	log.Println(" Redis connected")
 
-	// ──── Step 5: Run Database Migrations ────
+	// ──── Step 4: Run Database Migrations ────
 	if err := database.RunMigrations(pool, "migrations"); err != nil {
 		log.Fatalf(" Database migration failed: %v", err)
 	}
@@ -62,7 +62,7 @@ func main() {
 	chatMessageRepo := repository.NewChatMessageRepo(pool)
 	folderRepo := repository.NewFolderRepo(pool)
 
-	// ──── Step 4: Initialize Gemini Client ────
+	// ──── Step 5: Initialize Gemini Client ────
 	geminiService, err := services.NewGeminiService(
 		cfg.GeminiAPIKey,
 		cfg.GeminiConcurrentReqs,

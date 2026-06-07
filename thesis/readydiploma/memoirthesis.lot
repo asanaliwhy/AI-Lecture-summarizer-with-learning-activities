@@ -11,11 +11,11 @@
 \contentsline {table}{\numberline {1.3}{\ignorespaces Feature comparison of Lectura against existing educational and productivity platforms.}}{11}{table.caption.24}%
 \addvspace {10pt}
 \addvspace {10pt}
-\contentsline {table}{\numberline {3.1}{\ignorespaces Comparison of frontend SPA frameworks.}}{23}{table.caption.32}%
+\contentsline {table}{\numberline {3.1}{\ignorespaces Comparison of frontend SPA frameworks.}}{24}{table.caption.32}%
 \contentsline {table}{\numberline {3.2}{\ignorespaces Backend language comparison for concurrent workload handling.}}{24}{table.caption.33}%
 \contentsline {table}{\numberline {3.3}{\ignorespaces Database comparison based on schema flexibility and query performance.}}{25}{table.caption.34}%
 \contentsline {table}{\numberline {3.4}{\ignorespaces Comparison of LLM providers by context window, speed, and cost.}}{25}{table.caption.35}%
-\contentsline {table}{\numberline {3.5}{\ignorespaces Comparison of PDF export methods.}}{25}{table.caption.36}%
+\contentsline {table}{\numberline {3.5}{\ignorespaces Comparison of PDF export methods.}}{26}{table.caption.36}%
 \addvspace {10pt}
 \contentsline {table}{\numberline {4.1}{\ignorespaces Operational benchmarks measuring full-system generation performance.}}{30}{table.caption.40}%
 \contentsline {table}{\numberline {4.2}{\ignorespaces User Acceptance Testing (UAT) results across 15 participants ($N=15$), using a 5-point Likert scale.}}{32}{table.caption.41}%
