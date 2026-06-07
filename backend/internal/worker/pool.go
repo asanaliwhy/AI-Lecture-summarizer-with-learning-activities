@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	urlpkg "net/url"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
