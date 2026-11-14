@@ -9,11 +9,13 @@ function getProductionFallbackApiBase(): string {
 }
 
 function normalizeApiBase(raw: string | undefined): string {
-    const value = (raw || '').trim()
+    // Keep production builds pointed at the live Render API even when the
+    // hosting project has not defined VITE_API_BASE_URL yet. This avoids a
+    // noisy console warning while preserving the local development default.
+    const value = (raw || (import.meta.env.PROD ? PRODUCTION_API_BASE : '')).trim()
     if (!value) {
         if (import.meta.env.PROD) {
             const fallback = getProductionFallbackApiBase()
-            console.warn('VITE_API_BASE_URL is missing in production, falling back to', fallback)
             return fallback
         }
         return DEFAULT_API_BASE
