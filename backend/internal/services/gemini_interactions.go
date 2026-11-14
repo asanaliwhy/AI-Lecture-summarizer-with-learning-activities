@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	newgenai "google.golang.org/genai"
@@ -20,14 +21,18 @@ func (s *GeminiService) generateSummaryWithInteractions(ctx context.Context, pro
 		return "", fmt.Errorf("Gemini Interactions client is not configured")
 	}
 
+	requestCtx, cancel := context.WithTimeout(ctx, geminiSummaryTimeout)
+	defer cancel()
+	log.Printf("Gemini Interactions summary request started (timeout: %s)", geminiSummaryTimeout)
+
 	request := newInteractionsRequest(prompt, true)
 
-	response, err := s.interactions.Interactions.Create(ctx, request)
+	response, err := s.interactions.Interactions.Create(requestCtx, request)
 	if err != nil {
-		return s.retryInteractionsUnary(ctx, prompt, fmt.Errorf("stream request failed: %w", err))
+		return s.retryInteractionsUnary(requestCtx, prompt, fmt.Errorf("stream request failed: %w", err))
 	}
 	if response == nil || response.InteractionSSEStreamEvent == nil {
-		return s.retryInteractionsUnary(ctx, prompt, fmt.Errorf("Gemini Interactions API returned a non-stream response"))
+		return s.retryInteractionsUnary(requestCtx, prompt, fmt.Errorf("Gemini Interactions API returned a non-stream response"))
 	}
 
 	eventStream := response.InteractionSSEStreamEvent
@@ -46,13 +51,14 @@ func (s *GeminiService) generateSummaryWithInteractions(ctx context.Context, pro
 		}
 	}
 	if err := eventStream.Err(); err != nil {
-		return s.retryInteractionsUnary(ctx, prompt, fmt.Errorf("stream ended before completion: %w", err))
+		return s.retryInteractionsUnary(requestCtx, prompt, fmt.Errorf("stream ended before completion: %w", err))
 	}
 
 	text := strings.TrimSpace(output.String())
 	if text == "" {
-		return s.retryInteractionsUnary(ctx, prompt, fmt.Errorf("Gemini Interactions API returned empty text"))
+		return s.retryInteractionsUnary(requestCtx, prompt, fmt.Errorf("Gemini Interactions API returned empty text"))
 	}
+	log.Printf("Gemini Interactions summary request completed (%d characters)", len(text))
 	return text, nil
 }
 
