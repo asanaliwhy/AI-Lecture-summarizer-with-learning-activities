@@ -196,7 +196,18 @@ func (p *Pool) worker(id int, queues []string) {
 			continue // Another worker has this job
 		}
 
+		// A queued job may have been cancelled while it was waiting in Redis.
+		// Do not turn it back into processing or invoke the AI provider.
+		current, err := p.jobRepo.GetByID(ctx, job.ID)
+		if err != nil || current.Status == "cancelled" {
+			p.redis.Del(ctx, lockKey)
+			continue
+		}
+
 		log.Printf("Worker %d: processing job %s (type: %s)", id, job.ID, job.Type)
+		jobCtx, cancelJob := context.WithCancel(ctx)
+		watchDone := make(chan struct{})
+		go p.watchJobCancellation(jobCtx, cancelJob, job.ID, watchDone)
 
 		// Update status
 		p.jobRepo.UpdateStatus(ctx, job.ID, "processing")
@@ -218,27 +229,56 @@ func (p *Pool) worker(id int, queues []string) {
 		var processErr error
 		switch job.Type {
 		case "summary-generation":
-			processErr = p.processSummary(ctx, &job)
+			processErr = p.processSummary(jobCtx, &job)
 		case "presentation":
-			processErr = p.processPresentation(ctx, &job)
+			processErr = p.processPresentation(jobCtx, &job)
 		case "quiz-generation":
-			processErr = p.processQuiz(ctx, &job)
+			processErr = p.processQuiz(jobCtx, &job)
 		case "flashcard-generation":
-			processErr = p.processFlashcard(ctx, &job)
+			processErr = p.processFlashcard(jobCtx, &job)
 		case "content-processing":
-			processErr = p.processContent(ctx, &job)
+			processErr = p.processContent(jobCtx, &job)
 		default:
 			processErr = fmt.Errorf("unknown job type: %s", job.Type)
 		}
+		cancelJob()
+		<-watchDone
 
 		if processErr != nil {
-			p.handleFailure(ctx, &job, processErr)
+			latest, latestErr := p.jobRepo.GetByID(ctx, job.ID)
+			if latestErr == nil && latest.Status == "cancelled" {
+				log.Printf("Job %s cancelled while processing; skipping retry", job.ID)
+			} else {
+				p.handleFailure(ctx, &job, processErr)
+			}
 		} else {
 			p.handleSuccess(ctx, &job)
 		}
 
 		// Release lock
 		p.redis.Del(ctx, lockKey)
+	}
+}
+
+// watchJobCancellation turns the database cancellation flag into context
+// cancellation so in-flight HTTP calls to Groq/Gemini stop promptly. Without
+// this, cancelling a page only changed the DB row while the old worker kept
+// consuming an AI concurrency slot and made the next attempt appear stuck.
+func (p *Pool) watchJobCancellation(ctx context.Context, cancel context.CancelFunc, jobID uuid.UUID, done chan<- struct{}) {
+	defer close(done)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			job, err := p.jobRepo.GetByID(context.Background(), jobID)
+			if err == nil && job.Status == "cancelled" {
+				cancel()
+				return
+			}
+		}
 	}
 }
 
