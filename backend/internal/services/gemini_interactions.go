@@ -20,21 +20,14 @@ func (s *GeminiService) generateSummaryWithInteractions(ctx context.Context, pro
 		return "", fmt.Errorf("Gemini Interactions client is not configured")
 	}
 
-	stream := true
-	request := operations.CreateInteractionRequest{
-		Body: operations.NewCreateInteractionRequestBody(interactionsmodel.CreateModelInteraction{
-			Model:  interactionsmodel.Model("gemini-3.8-flash"),
-			Input:  newgenai.Ptr(interactionsmodel.NewInteractionsInput(prompt)),
-			Stream: &stream,
-		}),
-	}
+	request := newInteractionsRequest(prompt, true)
 
 	response, err := s.interactions.Interactions.Create(ctx, request)
 	if err != nil {
-		return "", err
+		return s.retryInteractionsUnary(ctx, prompt, fmt.Errorf("stream request failed: %w", err))
 	}
 	if response == nil || response.InteractionSSEStreamEvent == nil {
-		return "", fmt.Errorf("Gemini Interactions API returned a non-stream response")
+		return s.retryInteractionsUnary(ctx, prompt, fmt.Errorf("Gemini Interactions API returned a non-stream response"))
 	}
 
 	eventStream := response.InteractionSSEStreamEvent
@@ -53,12 +46,41 @@ func (s *GeminiService) generateSummaryWithInteractions(ctx context.Context, pro
 		}
 	}
 	if err := eventStream.Err(); err != nil {
-		return "", err
+		return s.retryInteractionsUnary(ctx, prompt, fmt.Errorf("stream ended before completion: %w", err))
 	}
 
 	text := strings.TrimSpace(output.String())
 	if text == "" {
-		return "", fmt.Errorf("Gemini Interactions API returned empty text")
+		return s.retryInteractionsUnary(ctx, prompt, fmt.Errorf("Gemini Interactions API returned empty text"))
+	}
+	return text, nil
+}
+
+func newInteractionsRequest(prompt string, stream bool) operations.CreateInteractionRequest {
+	return operations.CreateInteractionRequest{
+		Body: operations.NewCreateInteractionRequestBody(interactionsmodel.CreateModelInteraction{
+			Model:  interactionsmodel.Model("gemini-3.8-flash"),
+			Input:  newgenai.Ptr(interactionsmodel.NewInteractionsInput(prompt)),
+			Stream: newgenai.Ptr(stream),
+		}),
+	}
+}
+
+// retryInteractionsUnary keeps the new Interactions API as the source of
+// truth while protecting jobs from a proxy/API connection that closes an SSE
+// response before its [DONE] sentinel arrives.
+func (s *GeminiService) retryInteractionsUnary(ctx context.Context, prompt string, streamErr error) (string, error) {
+	response, err := s.interactions.Interactions.Create(ctx, newInteractionsRequest(prompt, false))
+	if err != nil {
+		return "", fmt.Errorf("%v; unary retry failed: %w", streamErr, err)
+	}
+	if response == nil || response.Interaction == nil || response.Interaction.OutputText == nil {
+		return "", fmt.Errorf("%v; unary retry returned empty output", streamErr)
+	}
+
+	text := strings.TrimSpace(*response.Interaction.OutputText)
+	if text == "" {
+		return "", fmt.Errorf("%v; unary retry returned empty text", streamErr)
 	}
 	return text, nil
 }
