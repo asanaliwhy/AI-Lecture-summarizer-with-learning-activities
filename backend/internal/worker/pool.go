@@ -123,6 +123,13 @@ func (p *Pool) recoverJobs() {
 		if job == nil {
 			continue
 		}
+		// A process restart can leave the old 10-minute lock behind. The
+		// database is the source of truth during recovery, so clear that
+		// stale lock before putting the job back on its queue.
+		if err := p.redis.Del(ctx, fmt.Sprintf("job_lock:%s", job.ID.String())).Err(); err != nil {
+			log.Printf("failed to clear stale lock for job %s: %v", job.ID, err)
+			continue
+		}
 		if job.Status == "processing" {
 			if err := p.jobRepo.UpdateStatus(ctx, job.ID, "pending"); err != nil {
 				log.Printf("failed to reset recoverable job %s: %v", job.ID, err)
