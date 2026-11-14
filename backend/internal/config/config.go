@@ -70,7 +70,7 @@ func Load() *Config {
 		JWTSecret:            mustGetEnv("JWT_SECRET"),
 		GeminiAPIKey:         mustGetEnv("GEMINI_API_KEY"),
 		GroqAPIKey:           strings.TrimSpace(os.Getenv("GROQ_API_KEY")),
-		GroqModel:            getEnvOrDefault("GROQ_MODEL", "llama-3.3-70b-versatile"),
+		GroqModel:            getEnvOrDefault("GROQ_MODEL", "openai/gpt-oss-20b"),
 		SupadataAPIKey:       os.Getenv("SUPADATA_API_KEY"),
 		GeminiRequestsPerMin: getEnvAsIntOrDefault("GEMINI_REQUESTS_PER_MINUTE", 60),
 		GeminiTokensPerMin:   getEnvAsIntOrDefault("GEMINI_TOKENS_PER_MINUTE", 1000000),

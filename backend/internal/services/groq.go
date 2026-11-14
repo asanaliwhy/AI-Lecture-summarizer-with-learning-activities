@@ -41,7 +41,7 @@ func (s *GeminiService) generateWithGroq(ctx context.Context, prompt string, tim
 	}
 	model := strings.TrimSpace(s.groqModel)
 	if model == "" {
-		model = "llama-3.3-70b-versatile"
+		model = "openai/gpt-oss-20b"
 	}
 
 	requestBody := groqChatRequest{
