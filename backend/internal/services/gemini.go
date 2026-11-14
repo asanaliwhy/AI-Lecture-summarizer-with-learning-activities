@@ -61,7 +61,7 @@ func NewGeminiService(
 		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 	}
 
-	model := client.GenerativeModel("gemini-3-flash-preview")
+	model := client.GenerativeModel("gemini-2.5-flash")
 	model.SetTemperature(0.3)
 	model.SetTopP(0.95)
 
@@ -105,7 +105,7 @@ func (s *GeminiService) WithAPIKey(apiKey string) (*GeminiService, error) {
 		return nil, fmt.Errorf("failed to create Gemini client with user key: %w", err)
 	}
 
-	model := client.GenerativeModel("gemini-3-flash-preview")
+	model := client.GenerativeModel("gemini-2.5-flash")
 	model.SetTemperature(0.3)
 	model.SetTopP(0.95)
 
@@ -245,7 +245,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 
 	summaryModel := s.model
 	if metadataOnlyMode {
-		metadataModel := s.client.GenerativeModel("gemini-3-flash-preview")
+		metadataModel := s.client.GenerativeModel("gemini-2.5-flash")
 		metadataModel.SetTemperature(0.3)
 		metadataModel.SetTopP(0.95)
 		metadataModel.SetMaxOutputTokens(3072)
@@ -665,7 +665,7 @@ func (s *GeminiService) GeneratePresentation(ctx context.Context, job *models.Jo
 		config.FocusAreas = []string{}
 	}
 
-	presentationModel := s.client.GenerativeModel("gemini-3-flash-preview")
+	presentationModel := s.client.GenerativeModel("gemini-2.5-flash")
 	presentationModel.SetTemperature(0.6)
 	presentationModel.SetTopP(0.95)
 
@@ -6609,7 +6609,7 @@ func (s *GeminiService) ChatWithSummary(ctx context.Context, summaryContent, use
 	defer s.releaseRate()
 
 	// Create a chat-specific model instance with a system instruction
-	chatModel := s.client.GenerativeModel("gemini-3-flash-preview")
+	chatModel := s.client.GenerativeModel("gemini-2.5-flash")
 	chatModel.SetTemperature(0.4)
 	chatModel.SetTopP(0.95)
 
@@ -6676,7 +6676,7 @@ func (s *GeminiService) OCRImage(ctx context.Context, imageBytes []byte, mimeTyp
 	}
 	defer s.releaseRate()
 
-	visionModel := s.client.GenerativeModel("gemini-3-flash-preview")
+	visionModel := s.client.GenerativeModel("gemini-2.5-flash")
 	visionModel.SetTemperature(0.1)
 	visionModel.SetTopP(0.9)
 	visionModel.SetMaxOutputTokens(2048)
