@@ -2,13 +2,10 @@ import type { GeneratePresentationConfig, Presentation, PresentationStatus, Slid
 import { normalizePresentation } from './presentationTypes'
 
 const DEFAULT_API_BASE = 'http://localhost:8081/api/v1'
+const PRODUCTION_API_BASE = 'https://ai-lecture-summarizer-with-learning.onrender.com/api/v1'
 
 function getProductionFallbackApiBase(): string {
-    if (typeof window !== 'undefined' && window.location?.origin) {
-        return `${window.location.origin.replace(/\/+$/, '')}/api/v1`
-    }
-
-    return DEFAULT_API_BASE
+    return PRODUCTION_API_BASE
 }
 
 function normalizeApiBase(raw: string | undefined): string {
