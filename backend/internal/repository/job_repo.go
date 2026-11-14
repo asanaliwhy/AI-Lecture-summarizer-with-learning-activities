@@ -53,6 +53,37 @@ func (r *JobRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Job, error
 	return j, nil
 }
 
+// ListRecoverable returns jobs that may have been left behind when the
+// process or Redis restarted before the queue acknowledged them.
+func (r *JobRepo) ListRecoverable(ctx context.Context) ([]*models.Job, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, user_id, type, reference_id, config_json, status, retry_count, error_message, created_at, completed_at
+		FROM jobs
+		WHERE status IN ('pending', 'processing')
+		ORDER BY created_at ASC
+		LIMIT 100`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var jobs []*models.Job
+	for rows.Next() {
+		j := &models.Job{}
+		if err := rows.Scan(
+			&j.ID, &j.UserID, &j.Type, &j.ReferenceID, &j.ConfigJSON, &j.Status,
+			&j.RetryCount, &j.ErrorMessage, &j.CreatedAt, &j.CompletedAt,
+		); err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, j)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return jobs, nil
+}
+
 func (r *JobRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
 	query := "UPDATE jobs SET status = $1 WHERE id = $2"
 	if updateStatusSetsCompletedAt(status) {

@@ -92,11 +92,55 @@ func (p *Pool) Start() {
 		"queue:flashcard-generation",
 	}
 
+	p.recoverJobs()
+
 	for i := 0; i < p.workerCount; i++ {
 		go p.worker(i, queues)
 	}
 
 	log.Printf("Started %d worker goroutines", p.workerCount)
+}
+
+// recoverJobs requeues jobs persisted in PostgreSQL but missing from Redis.
+// Render/Redis restarts can otherwise leave the UI polling a job forever.
+func (p *Pool) recoverJobs() {
+	repo, ok := p.jobRepo.(interface {
+		ListRecoverable(context.Context) ([]*models.Job, error)
+	})
+	if !ok {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	jJobs, err := repo.ListRecoverable(ctx)
+	if err != nil {
+		log.Printf("failed to recover queued jobs: %v", err)
+		return
+	}
+
+	for _, job := range jJobs {
+		if job == nil {
+			continue
+		}
+		if job.Status == "processing" {
+			if err := p.jobRepo.UpdateStatus(ctx, job.ID, "pending"); err != nil {
+				log.Printf("failed to reset recoverable job %s: %v", job.ID, err)
+				continue
+			}
+			job.Status = "pending"
+		}
+		payload, err := json.Marshal(job)
+		if err != nil {
+			log.Printf("failed to encode recoverable job %s: %v", job.ID, err)
+			continue
+		}
+		if err := p.redis.RPush(ctx, jobQueueName(job.Type), string(payload)).Err(); err != nil {
+			log.Printf("failed to requeue recoverable job %s: %v", job.ID, err)
+			continue
+		}
+		log.Printf("Recovered job %s (type: %s) after restart", job.ID, job.Type)
+	}
 }
 
 func (p *Pool) Stop() {
