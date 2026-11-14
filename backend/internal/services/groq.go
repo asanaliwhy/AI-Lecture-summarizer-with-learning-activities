@@ -52,7 +52,10 @@ func (s *GeminiService) generateWithGroq(ctx context.Context, prompt string, tim
 			{Role: "user", Content: prompt},
 		},
 		Temperature: 0.3,
-		MaxTokens:   8192,
+		// Groq's free on-demand tier currently enforces an 8k TPM request
+		// budget. Keeping completion tokens below that budget leaves room for
+		// the transcript and instructions in the same request.
+		MaxTokens:   6000,
 	}
 	body, err := json.Marshal(requestBody)
 	if err != nil {
