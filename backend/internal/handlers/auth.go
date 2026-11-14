@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net/http"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 
@@ -263,7 +263,10 @@ func setRefreshTokenCookie(w http.ResponseWriter, refreshToken string, secure bo
 		Path:     refreshTokenCookiePath,
 		HttpOnly: true,
 		Secure:   secure,
-		SameSite: http.SameSiteStrictMode,
+		// The frontend is hosted on a different site than the Render API.
+		// Strict cookies are not sent on the cross-site refresh request, so the
+		// 15-minute access token expiry leaves the UI stuck in processing.
+		SameSite: http.SameSiteNoneMode,
 		MaxAge:   int((7 * 24 * time.Hour).Seconds()),
 	})
 }
@@ -275,7 +278,7 @@ func clearRefreshTokenCookie(w http.ResponseWriter, secure bool) {
 		Path:     refreshTokenCookiePath,
 		HttpOnly: true,
 		Secure:   secure,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteNoneMode,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	})
