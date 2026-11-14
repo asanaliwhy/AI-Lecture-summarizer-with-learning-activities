@@ -20,6 +20,7 @@ import (
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	newgenai "google.golang.org/genai"
 
 	"google.golang.org/api/option"
 
@@ -29,6 +30,7 @@ import (
 
 type GeminiService struct {
 	client            *genai.Client
+	interactions      *newgenai.Client
 	model             *genai.GenerativeModel
 	summaryRepo       *repository.SummaryRepo
 	presentationRepo  *repository.PresentationRepo
@@ -44,8 +46,8 @@ type GeminiService struct {
 }
 
 const (
-	geminiSummaryTimeout  = 2 * time.Minute
-	geminiMetadataTimeout = 90 * time.Second
+	geminiSummaryTimeout  = 10 * time.Minute
+	geminiMetadataTimeout = 2 * time.Minute
 )
 
 func NewGeminiService(
@@ -66,6 +68,14 @@ func NewGeminiService(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 	}
+	interactions, err := newgenai.NewClient(ctx, &newgenai.ClientConfig{
+		APIKey:  apiKey,
+		Backend: newgenai.BackendGeminiAPI,
+	})
+	if err != nil {
+		client.Close()
+		return nil, fmt.Errorf("failed to create Gemini Interactions client: %w", err)
+	}
 
 	model := client.GenerativeModel("gemini-3.8-flash")
 	model.SetTemperature(0.3)
@@ -80,6 +90,7 @@ func NewGeminiService(
 
 	return &GeminiService{
 		client:            client,
+		interactions:      interactions,
 		model:             model,
 		summaryRepo:       summaryRepo,
 		presentationRepo:  presentationRepo,
@@ -111,6 +122,14 @@ func (s *GeminiService) WithAPIKey(apiKey string) (*GeminiService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Gemini client with user key: %w", err)
 	}
+	interactions, err := newgenai.NewClient(ctx, &newgenai.ClientConfig{
+		APIKey:  apiKey,
+		Backend: newgenai.BackendGeminiAPI,
+	})
+	if err != nil {
+		client.Close()
+		return nil, fmt.Errorf("failed to create Gemini Interactions client with user key: %w", err)
+	}
 
 	model := client.GenerativeModel("gemini-3.8-flash")
 	model.SetTemperature(0.3)
@@ -119,6 +138,7 @@ func (s *GeminiService) WithAPIKey(apiKey string) (*GeminiService, error) {
 
 	return &GeminiService{
 		client:            client,
+		interactions:      interactions,
 		model:             model,
 		summaryRepo:       s.summaryRepo,
 		presentationRepo:  s.presentationRepo,
@@ -286,21 +306,31 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		parts = []genai.Part{genai.Text(prompt)}
 	}
 
-	// Call Gemini
-	resp, err := generateContentWithTimeout(ctx, summaryModel, geminiSummaryTimeout, parts...)
-	if err != nil {
-		return fmt.Errorf("Gemini API error: %w", err)
-	}
-
-	// Debug logging for Gemini response
-	for i, cand := range resp.Candidates {
-		log.Printf("Gemini Candidate %d: FinishReason=%s, TokenCount=%d", i, cand.FinishReason, cand.TokenCount)
-		if cand.FinishReason != genai.FinishReasonStop {
-			log.Printf("WARNING: Gemini stopped due to %s", cand.FinishReason)
+	// Call Gemini. Text summaries use the new Interactions SSE API. File-backed
+	// summaries still use the legacy model until their file upload is migrated
+	// to the new SDK's file/content types.
+	var rawText string
+	if filePath == "" {
+		var interactionsErr error
+		rawText, interactionsErr = s.generateSummaryWithInteractions(ctx, prompt)
+		if interactionsErr != nil {
+			return fmt.Errorf("Gemini Interactions API error: %w", interactionsErr)
 		}
-	}
+	} else {
+		resp, err := generateContentWithTimeout(ctx, summaryModel, geminiSummaryTimeout, parts...)
+		if err != nil {
+			return fmt.Errorf("Gemini API error: %w", err)
+		}
 
-	rawText := extractText(resp)
+		// Debug logging for legacy file-backed Gemini response.
+		for i, cand := range resp.Candidates {
+			log.Printf("Gemini Candidate %d: FinishReason=%s, TokenCount=%d", i, cand.FinishReason, cand.TokenCount)
+			if cand.FinishReason != genai.FinishReasonStop {
+				log.Printf("WARNING: Gemini stopped due to %s", cand.FinishReason)
+			}
+		}
+		rawText = extractText(resp)
+	}
 	isQualityFallback := false
 	var qualityFallbackReason *string
 	if rawText == "" {
@@ -617,7 +647,7 @@ Summary:
 	description := metaData.description
 
 	// Update summary in database
-	err = s.summaryRepo.UpdateContent(
+	err := s.summaryRepo.UpdateContent(
 		ctx,
 		job.ReferenceID,
 		rawText,
