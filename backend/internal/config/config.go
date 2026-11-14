@@ -26,6 +26,8 @@ type Config struct {
 
 	// Gemini AI
 	GeminiAPIKey         string
+	GroqAPIKey           string
+	GroqModel            string
 	SupadataAPIKey       string
 	GeminiRequestsPerMin int
 	GeminiTokensPerMin   int
@@ -67,6 +69,8 @@ func Load() *Config {
 		RedisURL:             mustGetEnv("REDIS_URL"),
 		JWTSecret:            mustGetEnv("JWT_SECRET"),
 		GeminiAPIKey:         mustGetEnv("GEMINI_API_KEY"),
+		GroqAPIKey:           strings.TrimSpace(os.Getenv("GROQ_API_KEY")),
+		GroqModel:            getEnvOrDefault("GROQ_MODEL", "llama-3.3-70b-versatile"),
 		SupadataAPIKey:       os.Getenv("SUPADATA_API_KEY"),
 		GeminiRequestsPerMin: getEnvAsIntOrDefault("GEMINI_REQUESTS_PER_MINUTE", 60),
 		GeminiTokensPerMin:   getEnvAsIntOrDefault("GEMINI_TOKENS_PER_MINUTE", 1000000),

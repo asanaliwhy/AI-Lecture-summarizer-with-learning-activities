@@ -32,6 +32,8 @@ type GeminiService struct {
 	client            *genai.Client
 	interactions      *newgenai.Client
 	model             *genai.GenerativeModel
+	groqAPIKey        string
+	groqModel         string
 	summaryRepo       *repository.SummaryRepo
 	presentationRepo  *repository.PresentationRepo
 	quizRepo          *repository.QuizRepo
@@ -52,6 +54,8 @@ const (
 
 func NewGeminiService(
 	apiKey string,
+	groqAPIKey string,
+	groqModel string,
 	concurrentReqs int,
 	summaryRepo *repository.SummaryRepo,
 	presentationRepo *repository.PresentationRepo,
@@ -92,6 +96,8 @@ func NewGeminiService(
 		client:            client,
 		interactions:      interactions,
 		model:             model,
+		groqAPIKey:        strings.TrimSpace(groqAPIKey),
+		groqModel:         strings.TrimSpace(groqModel),
 		summaryRepo:       summaryRepo,
 		presentationRepo:  presentationRepo,
 		quizRepo:          quizRepo,
@@ -140,6 +146,8 @@ func (s *GeminiService) WithAPIKey(apiKey string) (*GeminiService, error) {
 		client:            client,
 		interactions:      interactions,
 		model:             model,
+		groqAPIKey:        s.groqAPIKey,
+		groqModel:         s.groqModel,
 		summaryRepo:       s.summaryRepo,
 		presentationRepo:  s.presentationRepo,
 		quizRepo:          s.quizRepo,
@@ -310,7 +318,13 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	// summaries still use the legacy model until their file upload is migrated
 	// to the new SDK's file/content types.
 	var rawText string
-	if filePath == "" {
+	var err error
+	if filePath == "" && s.groqAPIKey != "" {
+		rawText, err = s.generateWithGroq(ctx, prompt, geminiSummaryTimeout)
+		if err != nil {
+			return fmt.Errorf("Groq API error: %w", err)
+		}
+	} else if filePath == "" {
 		var interactionsErr error
 		rawText, interactionsErr = s.generateSummaryWithInteractions(ctx, prompt)
 		if interactionsErr != nil {
@@ -647,7 +661,7 @@ Summary:
 	description := metaData.description
 
 	// Update summary in database
-	err := s.summaryRepo.UpdateContent(
+	err = s.summaryRepo.UpdateContent(
 		ctx,
 		job.ReferenceID,
 		rawText,

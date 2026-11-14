@@ -65,6 +65,8 @@ func main() {
 	// ──── Step 5: Initialize Gemini Client ────
 	geminiService, err := services.NewGeminiService(
 		cfg.GeminiAPIKey,
+		cfg.GroqAPIKey,
+		cfg.GroqModel,
 		cfg.GeminiConcurrentReqs,
 		summaryRepo,
 		presentationRepo,

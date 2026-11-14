@@ -1,0 +1,100 @@
+package services
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+)
+
+const groqChatCompletionsURL = "https://api.groq.com/openai/v1/chat/completions"
+
+type groqChatRequest struct {
+	Model       string            `json:"model"`
+	Messages    []groqChatMessage `json:"messages"`
+	Temperature float64           `json:"temperature,omitempty"`
+	MaxTokens   int               `json:"max_tokens,omitempty"`
+}
+
+type groqChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type groqChatResponse struct {
+	Choices []struct {
+		Message groqChatMessage `json:"message"`
+	} `json:"choices"`
+	Error *struct {
+		Message string `json:"message"`
+		Type    string `json:"type"`
+	} `json:"error,omitempty"`
+}
+
+func (s *GeminiService) generateWithGroq(ctx context.Context, prompt string, timeout time.Duration) (string, error) {
+	if strings.TrimSpace(s.groqAPIKey) == "" {
+		return "", fmt.Errorf("GROQ_API_KEY is not configured")
+	}
+	model := strings.TrimSpace(s.groqModel)
+	if model == "" {
+		model = "llama-3.3-70b-versatile"
+	}
+
+	requestBody := groqChatRequest{
+		Model: model,
+		Messages: []groqChatMessage{
+			{Role: "user", Content: prompt},
+		},
+		Temperature: 0.3,
+		MaxTokens:   8192,
+	}
+	body, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", fmt.Errorf("encode request: %w", err)
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(callCtx, http.MethodPost, groqChatCompletionsURL, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+s.groqAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := s.httpClient
+	if client == nil {
+		client = &http.Client{}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		if callCtx.Err() != nil {
+			return "", fmt.Errorf("request timed out after %s", timeout)
+		}
+		return "", fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read response: %w", err)
+	}
+	var response groqChatResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return "", fmt.Errorf("decode response (%s): %w", resp.Status, err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if response.Error != nil && response.Error.Message != "" {
+			return "", fmt.Errorf("%s", response.Error.Message)
+		}
+		return "", fmt.Errorf("HTTP %s", resp.Status)
+	}
+	if len(response.Choices) == 0 || strings.TrimSpace(response.Choices[0].Message.Content) == "" {
+		return "", fmt.Errorf("empty response from model %s", model)
+	}
+	return strings.TrimSpace(response.Choices[0].Message.Content), nil
+}
