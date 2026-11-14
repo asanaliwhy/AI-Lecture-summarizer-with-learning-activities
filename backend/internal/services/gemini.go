@@ -1,4 +1,5 @@
 package services
+
 import (
 	"bytes"
 	"context"
@@ -42,6 +43,11 @@ type GeminiService struct {
 	encryptionKey     string        // For decrypting user API keys
 }
 
+const (
+	geminiSummaryTimeout  = 2 * time.Minute
+	geminiMetadataTimeout = 90 * time.Second
+)
+
 func NewGeminiService(
 	apiKey string,
 	concurrentReqs int,
@@ -64,6 +70,7 @@ func NewGeminiService(
 	model := client.GenerativeModel("gemini-3.8-flash")
 	model.SetTemperature(0.3)
 	model.SetTopP(0.95)
+	model.SetMaxOutputTokens(8192)
 
 	// Token bucket for rate limiting
 	rateChan := make(chan struct{}, concurrentReqs)
@@ -108,6 +115,7 @@ func (s *GeminiService) WithAPIKey(apiKey string) (*GeminiService, error) {
 	model := client.GenerativeModel("gemini-3.8-flash")
 	model.SetTemperature(0.3)
 	model.SetTopP(0.95)
+	model.SetMaxOutputTokens(8192)
 
 	return &GeminiService{
 		client:            client,
@@ -233,12 +241,12 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	defer s.releaseRate()
 
 	var config struct {
-		Format         string   `json:"format"`
-		Length         string   `json:"length"`
-		FocusAreas     []string `json:"focus_areas"`
-		TargetAudience string   `json:"target_audience"`
-		Language       string   `json:"language"`
-		ExtractScreenText bool `json:"extract_screen_text"`
+		Format            string   `json:"format"`
+		Length            string   `json:"length"`
+		FocusAreas        []string `json:"focus_areas"`
+		TargetAudience    string   `json:"target_audience"`
+		Language          string   `json:"language"`
+		ExtractScreenText bool     `json:"extract_screen_text"`
 	}
 	json.Unmarshal(job.ConfigJSON, &config)
 	metadataOnlyMode := isMetadataOnlyContent(transcript)
@@ -279,7 +287,7 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 	}
 
 	// Call Gemini
-	resp, err := generateContentWithTimeout(ctx, summaryModel, 10*time.Minute, parts...)
+	resp, err := generateContentWithTimeout(ctx, summaryModel, geminiSummaryTimeout, parts...)
 	if err != nil {
 		return fmt.Errorf("Gemini API error: %w", err)
 	}
@@ -544,7 +552,7 @@ Summary:
 			}
 		}()
 
-		metaCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		metaCtx, cancel := context.WithTimeout(ctx, geminiMetadataTimeout)
 		defer cancel()
 
 		metaPrompt := fmt.Sprintf(`Given this summary, return ONLY a valid JSON object with these fields:
@@ -596,7 +604,7 @@ Summary:
 	followUpQuestions := []string{}
 	select {
 	case metaData = <-metaCh:
-	case <-time.After(10 * time.Minute):
+	case <-time.After(geminiMetadataTimeout):
 		log.Printf("metadata generation timeout for summary %s — using defaults", job.ReferenceID)
 	}
 	select {
