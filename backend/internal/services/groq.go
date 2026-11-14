@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	oldgenai "github.com/google/generative-ai-go/genai"
 )
 
 const groqChatCompletionsURL = "https://api.groq.com/openai/v1/chat/completions"
@@ -66,10 +68,7 @@ func (s *GeminiService) generateWithGroq(ctx context.Context, prompt string, tim
 	req.Header.Set("Authorization", "Bearer "+s.groqAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := s.httpClient
-	if client == nil {
-		client = &http.Client{}
-	}
+	client := &http.Client{Timeout: timeout + 5*time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		if callCtx.Err() != nil {
@@ -97,4 +96,17 @@ func (s *GeminiService) generateWithGroq(ctx context.Context, prompt string, tim
 		return "", fmt.Errorf("empty response from model %s", model)
 	}
 	return strings.TrimSpace(response.Choices[0].Message.Content), nil
+}
+
+// generateTextWithProvider routes text-only generation to Groq when it is
+// configured, while retaining Gemini as the local/dev fallback.
+func (s *GeminiService) generateTextWithProvider(ctx context.Context, prompt string, timeout time.Duration) (string, error) {
+	if strings.TrimSpace(s.groqAPIKey) != "" {
+		return s.generateWithGroq(ctx, prompt, timeout)
+	}
+	resp, err := generateContentWithTimeout(ctx, s.model, timeout, oldgenai.Text(prompt))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(extractText(resp)), nil
 }

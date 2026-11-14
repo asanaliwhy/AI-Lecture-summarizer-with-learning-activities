@@ -371,9 +371,18 @@ func (s *GeminiService) GenerateSummary(ctx context.Context, job *models.Job, tr
 		}
 
 		restructurePrompt := buildSmartSummaryStructureFallbackPrompt(rawText, metadataOnlyMode)
-		resp2, err := generateContentWithTimeout(ctx, summaryModel, 90*time.Second, genai.Text(restructurePrompt))
+		var rawText2 string
+		var err error
+		if s.groqAPIKey != "" {
+			rawText2, err = s.generateTextWithProvider(ctx, restructurePrompt, 90*time.Second)
+		} else {
+			resp2, callErr := generateContentWithTimeout(ctx, summaryModel, 90*time.Second, genai.Text(restructurePrompt))
+			err = callErr
+			if err == nil {
+				rawText2 = extractText(resp2)
+			}
+		}
 		if err == nil {
-			rawText2 := extractText(resp2)
 			if strings.TrimSpace(rawText2) != "" {
 				rawText = rawText2
 			}
@@ -414,9 +423,9 @@ Summary:
 %s`, excerpt)
 			microCtx, microCancel := context.WithTimeout(ctx, 60*time.Second)
 			defer microCancel()
-			microResp, microErr := s.model.GenerateContent(microCtx, genai.Text(microPrompt))
+			paragraph, microErr := s.generateTextWithProvider(microCtx, microPrompt, 60*time.Second)
 			if microErr == nil {
-				paragraph := strings.TrimSpace(extractText(microResp))
+				paragraph = strings.TrimSpace(paragraph)
 				if paragraph != "" {
 					rawText = "## Summary of Video Content\n" + paragraph + "\n\n" + rawText
 					log.Println("INFO: Smart summary 'Summary of Video Content' section auto-repaired")
@@ -470,9 +479,8 @@ Summary:
 				"- The [SUMMARY] section must synthesize — do not paraphrase the Notes section.\n" +
 				"- Write the Summary as if explaining to someone who has not read the Notes.\n\n" +
 				"Text to restructure:\n" + rawText
-			resp2, err := summaryModel.GenerateContent(ctx, genai.Text(restructurePrompt))
+			rawText2, err := s.generateTextWithProvider(ctx, restructurePrompt, 90*time.Second)
 			if err == nil {
-				rawText2 := extractText(resp2)
 				if strings.TrimSpace(rawText2) != "" {
 					rawText = rawText2
 				}
@@ -540,13 +548,12 @@ Example format:
 Summary:
 %s`, excerpt)
 
-		resp, err := s.model.GenerateContent(followUpCtx, genai.Text(followUpPrompt))
+		raw, err := s.generateTextWithProvider(followUpCtx, followUpPrompt, 60*time.Second)
 		if err != nil {
 			log.Printf("follow-up questions generation failed for summary %s: %v", job.ReferenceID, err)
 			return
 		}
 
-		raw := extractText(resp)
 		raw = strings.TrimPrefix(raw, "```json")
 		raw = strings.TrimPrefix(raw, "```")
 		raw = strings.TrimSuffix(raw, "```")
@@ -610,9 +617,8 @@ Rules:
 Summary:
 %s`, summaryExcerpt)
 
-		metaResp, err := s.model.GenerateContent(metaCtx, genai.Text(metaPrompt))
+		metaJSON, err := s.generateTextWithProvider(metaCtx, metaPrompt, geminiMetadataTimeout)
 		if err == nil {
-			metaJSON := extractText(metaResp)
 			metaJSON = strings.TrimPrefix(metaJSON, "```json")
 			metaJSON = strings.TrimPrefix(metaJSON, "```")
 			metaJSON = strings.TrimSuffix(metaJSON, "```")
@@ -717,10 +723,6 @@ func (s *GeminiService) GeneratePresentation(ctx context.Context, job *models.Jo
 		config.FocusAreas = []string{}
 	}
 
-	presentationModel := s.client.GenerativeModel("gemini-3.8-flash")
-	presentationModel.SetTemperature(0.6)
-	presentationModel.SetTopP(0.95)
-
 	s.PublishUpdate(ctx, job.UserID, models.WSMessage{
 		Type: "status_update",
 		Payload: models.StatusUpdate{
@@ -744,12 +746,23 @@ func (s *GeminiService) GeneratePresentation(ctx context.Context, job *models.Jo
 		parts = []genai.Part{genai.Text(prompt)}
 	}
 
-	resp, err := generateContentWithTimeout(ctx, presentationModel, 10*time.Minute, parts...)
-	if err != nil {
-		return fmt.Errorf("Gemini API error: %w", err)
+	var rawText string
+	var err error
+	if filePath == "" && s.groqAPIKey != "" {
+		rawText, err = s.generateTextWithProvider(ctx, prompt, 10*time.Minute)
+	} else {
+		presentationModel := s.client.GenerativeModel("gemini-3.8-flash")
+		presentationModel.SetTemperature(0.6)
+		presentationModel.SetTopP(0.95)
+		resp, callErr := generateContentWithTimeout(ctx, presentationModel, 10*time.Minute, parts...)
+		err = callErr
+		if err == nil {
+			rawText = extractText(resp)
+		}
 	}
-
-	rawText := extractText(resp)
+	if err != nil {
+		return fmt.Errorf("AI API error: %w", err)
+	}
 	rawText = strings.TrimSpace(rawText)
 	rawText = strings.TrimPrefix(rawText, "```json")
 	rawText = strings.TrimPrefix(rawText, "```")
@@ -885,12 +898,10 @@ func (s *GeminiService) GenerateQuiz(ctx context.Context, job *models.Job, summa
 		},
 	})
 
-	resp, err := generateContentWithTimeout(ctx, s.model, 10*time.Minute, genai.Text(prompt))
+	rawText, err := s.generateTextWithProvider(ctx, prompt, 10*time.Minute)
 	if err != nil {
-		return fmt.Errorf("Gemini API error: %w", err)
+		return fmt.Errorf("AI API error: %w", err)
 	}
-
-	rawText := extractText(resp)
 	rawText = strings.TrimPrefix(rawText, "```json")
 	rawText = strings.TrimPrefix(rawText, "```")
 	rawText = strings.TrimSuffix(rawText, "```")
@@ -949,12 +960,10 @@ func (s *GeminiService) GenerateFlashcards(ctx context.Context, job *models.Job,
 		},
 	})
 
-	resp, err := generateContentWithTimeout(ctx, s.model, 10*time.Minute, genai.Text(prompt))
+	rawText, err := s.generateTextWithProvider(ctx, prompt, 10*time.Minute)
 	if err != nil {
-		return fmt.Errorf("Gemini API error: %w", err)
+		return fmt.Errorf("AI API error: %w", err)
 	}
-
-	rawText := extractText(resp)
 	rawText = strings.TrimPrefix(rawText, "```json")
 	rawText = strings.TrimPrefix(rawText, "```")
 	rawText = strings.TrimSuffix(rawText, "```")
@@ -2132,12 +2141,12 @@ Transcript excerpt:
 Current summary:
 %s`, snippet, summaryText)
 
-	resp, err := s.model.GenerateContent(ctx, genai.Text(prompt))
+	text, err := s.generateTextWithProvider(ctx, prompt, 90*time.Second)
 	if err != nil {
 		return summaryText
 	}
 
-	text := strings.TrimSpace(extractText(resp))
+	text = strings.TrimSpace(text)
 	if text == "" {
 		return summaryText
 	}
