@@ -611,6 +611,7 @@ Summary:
 
 Rules:
 - suggested_title: concise, specific, reflects the main topic of the ENTIRE summary
+- Never use structural labels such as Cues, Notes, Summary, [CUES], [NOTES], or [SUMMARY] as the title.
 - tags: cover the full range of topics across ALL sections, not just the opening
 - one_sentence_description: summarizes the complete content in plain language
 
@@ -660,8 +661,12 @@ Summary:
 		log.Printf("follow-up questions timeout for summary %s", job.ReferenceID)
 	}
 	title := metaData.title
-	if title == "Untitled Summary" {
-		title = deriveSummaryTitle(rawText)
+	if isPlaceholderSummaryTitle(title) {
+		if config.Format == "cornell" {
+			title = "Cornell Study Summary"
+		} else {
+			title = deriveSummaryTitle(rawText)
+		}
 	}
 	tags := metaData.tags
 	description := metaData.description
@@ -6676,7 +6681,9 @@ func deriveSummaryTitle(summary string) string {
 	for _, line := range strings.Split(summary, "\n") {
 		line = strings.TrimSpace(strings.TrimLeft(line, "#*- "))
 		line = strings.TrimSpace(line)
-		if line == "" || strings.Contains(strings.ToLower(line), "summary of video content") {
+		normalized := strings.ToLower(strings.Trim(line, "[]"))
+		if line == "" || strings.Contains(normalized, "summary of video content") ||
+			normalized == "cues" || normalized == "notes" || normalized == "summary" {
 			continue
 		}
 		if len([]rune(line)) > 60 {
@@ -6688,6 +6695,16 @@ func deriveSummaryTitle(summary string) string {
 		return strings.TrimSpace(strings.TrimRight(line, ".:;"))
 	}
 	return "Generated Summary"
+}
+
+func isPlaceholderSummaryTitle(title string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(strings.Trim(title, "#[]")))
+	switch normalized {
+	case "", "untitled summary", "unknown summary", "cues", "notes", "summary", "cornell":
+		return true
+	default:
+		return false
+	}
 }
 
 // ChatWithSummary answers a user question using the configured text provider.
