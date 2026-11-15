@@ -754,7 +754,9 @@ func (s *GeminiService) GeneratePresentation(ctx context.Context, job *models.Jo
 	var rawText string
 	var err error
 	if filePath == "" && s.groqAPIKey != "" {
-		rawText, err = s.generateTextWithProvider(ctx, prompt, 10*time.Minute)
+		// Keep presentation jobs bounded. If Groq is rate-limited or slow, the
+		// transcript-based fallback below can still produce a usable deck.
+		rawText, err = s.generateTextWithProvider(ctx, prompt, 90*time.Second)
 	} else {
 		presentationModel := s.client.GenerativeModel("gemini-3.8-flash")
 		presentationModel.SetTemperature(0.6)
@@ -770,6 +772,13 @@ func (s *GeminiService) GeneratePresentation(ctx context.Context, job *models.Jo
 		// content. Keep the presentation usable by falling back to the local
 		// slide builder below instead of failing the whole job.
 		if strings.Contains(strings.ToLower(err.Error()), "empty response from model") {
+			rawText = ""
+			err = nil
+		}
+	}
+	if err != nil {
+		if ctx.Err() == nil {
+			log.Printf("presentation AI generation unavailable, using transcript fallback: %v", err)
 			rawText = ""
 			err = nil
 		}
