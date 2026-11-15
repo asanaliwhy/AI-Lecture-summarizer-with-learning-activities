@@ -4883,8 +4883,8 @@ export function SummaryPage() {
             : 'Summary'
   // Keep the metadata/tools rail wide enough for its actions. The previous
   // 2-column rail made the icon and "Create Flashcards" label overflow.
-  const leftColumnClass = 'lg:col-span-3 space-y-6 min-w-0'
-  const centerColumnClass = isWideSummaryLayout ? 'lg:col-span-7 min-w-0' : 'lg:col-span-7 min-w-0'
+  const leftColumnClass = 'lg:col-span-4 space-y-6 min-w-0'
+  const centerColumnClass = 'lg:col-span-6 min-w-0'
   const rightColumnClass = 'lg:col-span-2 space-y-6'
 
   // Parse content sections
