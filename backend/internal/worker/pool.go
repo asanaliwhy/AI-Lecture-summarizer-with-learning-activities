@@ -631,26 +631,14 @@ func (p *Pool) processContent(ctx context.Context, job *models.Job) error {
 			// STT fallback via Gemini multimodal audio transcription
 			audioBytes, mimeType, audioErr := p.youtube.DownloadAudio(*content.SourceURL)
 			if audioErr != nil {
-				fallbackTranscript := buildMetadataFallbackTranscript(content)
-				if saveErr := p.contentRepo.UpdateTranscript(ctx, content.ID, fallbackTranscript); saveErr != nil {
-					p.contentRepo.UpdateStatus(ctx, content.ID, "failed")
-					return fmt.Errorf("transcript extraction failed for video %s: %v; audio fallback download failed: %w; failed to save metadata fallback transcript: %v", videoID, err, audioErr, saveErr)
-				}
-
-				log.Printf("Using metadata-only fallback transcript for %s after transcript/audio extraction failure", videoID)
-				return nil
+				p.contentRepo.UpdateStatus(ctx, content.ID, "failed")
+				return fmt.Errorf("transcript unavailable for video %s: %v; audio fallback failed: %w", videoID, err, audioErr)
 			}
 
 			transcribed, transcribeErr := gemini.TranscribeAudio(ctx, audioBytes, mimeType)
 			if transcribeErr != nil {
-				fallbackTranscript := buildMetadataFallbackTranscript(content)
-				if saveErr := p.contentRepo.UpdateTranscript(ctx, content.ID, fallbackTranscript); saveErr != nil {
-					p.contentRepo.UpdateStatus(ctx, content.ID, "failed")
-					return fmt.Errorf("transcript extraction failed for video %s: %v; STT fallback transcription failed: %w; failed to save metadata fallback transcript: %v", videoID, err, transcribeErr, saveErr)
-				}
-
-				log.Printf("Using metadata-only fallback transcript for %s after transcript + STT failure", videoID)
-				return nil
+				p.contentRepo.UpdateStatus(ctx, content.ID, "failed")
+				return fmt.Errorf("transcript unavailable for video %s: %v; audio transcription failed: %w", videoID, err, transcribeErr)
 			}
 
 			transcript = transcribed
