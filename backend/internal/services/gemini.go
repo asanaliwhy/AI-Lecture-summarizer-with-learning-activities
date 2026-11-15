@@ -2485,7 +2485,8 @@ func buildPresentationPrompt(config models.GeneratePresentationRequest, transcri
 
 func cleanTranscript(t string) string {
 	re := regexp.MustCompile(`(?i)\[Music\]|\[Applause\]|intro music|outro music`)
-	return re.ReplaceAllString(t, "")
+	caption := regexp.MustCompile(`(?i)translator\s*:\s*[A-Za-z]+(?:\s+[A-Za-z]+)?\s+reviewer\s*:\s*[A-Za-z]+(?:\s+[A-Za-z]+)?\s*`)
+	return caption.ReplaceAllString(re.ReplaceAllString(t, ""), "")
 }
 
 func parsePresentationSlidesPayload(raw string) []models.PresentationSlide {
@@ -4553,6 +4554,9 @@ func sanitizePresentationText(value string) string {
 	if value == "" {
 		return ""
 	}
+	caption := regexp.MustCompile(`(?i)translator\s*:\s*[A-Za-z]+(?:\s+[A-Za-z]+)?\s+reviewer\s*:\s*[A-Za-z]+(?:\s+[A-Za-z]+)?\s*`)
+	value = caption.ReplaceAllString(value, "")
+	value = strings.ReplaceAll(value, "\t", " ")
 	value = strings.Join(strings.Fields(value), " ")
 	value = regexp.MustCompile(`([A-Za-z]{2,})-\s+([A-Za-z]{2,})`).ReplaceAllString(value, "$1-$2")
 	return value
@@ -5139,6 +5143,9 @@ func normalizePresentationBullet(value string, maxWords int) string {
 	value = sanitizePresentationText(value)
 	if value == "" {
 		return ""
+	}
+	if strings.HasPrefix(strings.ToLower(value), "card:") && !strings.Contains(value, "||") {
+		value = strings.TrimSpace(regexp.MustCompile(`(?i)^card\s*:\s*`).ReplaceAllString(value, ""))
 	}
 
 	if isNumberedCardEncodedBullet(value) {
