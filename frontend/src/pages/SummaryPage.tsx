@@ -5001,19 +5001,19 @@ export function SummaryPage() {
               </p>
               <div className="space-y-2">
                 <Button
-                  className="w-full min-w-0 flex-wrap justify-center gap-1.5 px-2 whitespace-normal bg-blue-600 hover:bg-blue-700 text-white h-11 text-sm leading-tight"
+                  className="w-full min-w-0 flex-nowrap justify-center gap-1.5 overflow-hidden px-2 whitespace-normal bg-blue-600 hover:bg-blue-700 text-white h-11 text-sm leading-tight"
                   onClick={() => navigate(`/quiz/create/${id}`)}
                 >
                   <BrainCircuit className="h-4 w-4 mr-2" />
-                  <span className="min-w-0 whitespace-normal break-words text-center">Generate Quiz</span>
+                  <span className="min-w-0 flex-1 whitespace-normal break-words text-center">Generate Quiz</span>
                 </Button>
                 <Button
-                  className="w-full min-w-0 flex-wrap justify-center gap-1.5 px-2 whitespace-normal bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-200 h-auto min-h-11 py-2 text-sm leading-tight"
+                  className="w-full min-w-0 flex-nowrap justify-center gap-1.5 overflow-hidden px-2 whitespace-normal bg-white text-blue-700 border-blue-200 hover:bg-blue-50 hover:text-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:border-blue-500/40 dark:hover:bg-blue-500/10 dark:hover:text-blue-200 h-auto min-h-11 py-2 text-sm leading-tight"
                   variant="outline"
                   onClick={() => navigate(`/flashcards/create/${id}`)}
                 >
                   <Layers className="h-4 w-4 mr-2 shrink-0 text-blue-700" />
-                  <span className="min-w-0 whitespace-normal break-words text-center">Create Flashcards</span>
+                  <span className="min-w-0 flex-1 whitespace-normal break-words text-center">Create Flashcards</span>
                 </Button>
               </div>
             </div>
