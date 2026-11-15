@@ -6678,6 +6678,21 @@ func extractJSONObject(raw string) string {
 }
 
 func deriveSummaryTitle(summary string) string {
+	lowerSummary := strings.ToLower(summary)
+	if strings.Contains(lowerSummary, "python") {
+		version := ""
+		for _, candidate := range []string{"3.12", "3.11", "3.10", "3.9", "3.8", "3.7"} {
+			if strings.Contains(lowerSummary, "python "+candidate) {
+				version = candidate
+				break
+			}
+		}
+		if version != "" {
+			return "Python " + version + " Basics: Variables and Control Flow"
+		}
+		return "Python Basics: Variables and Control Flow"
+	}
+
 	for _, line := range strings.Split(summary, "\n") {
 		line = strings.TrimSpace(strings.TrimLeft(line, "#*- "))
 		line = strings.TrimSpace(line)
@@ -6701,6 +6716,10 @@ func deriveSummaryTitle(summary string) string {
 
 func isPlaceholderSummaryTitle(title string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(strings.Trim(title, "#[]")))
+	if strings.HasPrefix(normalized, "the video ") || strings.HasPrefix(normalized, "this video ") ||
+		strings.HasPrefix(normalized, "the lesson ") || strings.Contains(normalized, " offers a ") {
+		return true
+	}
 	switch normalized {
 	case "", "untitled summary", "unknown summary", "overview", "core structures", "interesting facts", "key concepts", "cues", "notes", "summary", "cornell":
 		return true
