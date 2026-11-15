@@ -766,6 +766,15 @@ func (s *GeminiService) GeneratePresentation(ctx context.Context, job *models.Jo
 		}
 	}
 	if err != nil {
+		// Groq can occasionally return a successful response without message
+		// content. Keep the presentation usable by falling back to the local
+		// slide builder below instead of failing the whole job.
+		if strings.Contains(strings.ToLower(err.Error()), "empty response from model") {
+			rawText = ""
+			err = nil
+		}
+	}
+	if err != nil {
 		return fmt.Errorf("AI API error: %w", err)
 	}
 	rawText = strings.TrimSpace(rawText)
