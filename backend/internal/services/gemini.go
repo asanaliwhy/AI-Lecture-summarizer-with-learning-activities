@@ -619,10 +619,7 @@ Summary:
 
 		metaJSON, err := s.generateTextWithProvider(metaCtx, metaPrompt, geminiMetadataTimeout)
 		if err == nil {
-			metaJSON = strings.TrimPrefix(metaJSON, "```json")
-			metaJSON = strings.TrimPrefix(metaJSON, "```")
-			metaJSON = strings.TrimSuffix(metaJSON, "```")
-			metaJSON = strings.TrimSpace(metaJSON)
+			metaJSON = extractJSONObject(metaJSON)
 
 			var meta struct {
 				Title       string   `json:"suggested_title"`
@@ -663,6 +660,9 @@ Summary:
 		log.Printf("follow-up questions timeout for summary %s", job.ReferenceID)
 	}
 	title := metaData.title
+	if title == "Untitled Summary" {
+		title = deriveSummaryTitle(rawText)
+	}
 	tags := metaData.tags
 	description := metaData.description
 
@@ -6662,8 +6662,74 @@ func isTrueFalseOptions(options []string) bool {
 	return (a == "true" && b == "false") || (a == "false" && b == "true")
 }
 
-// ChatWithSummary sends a user question to Gemini with summary content as context.
+func extractJSONObject(raw string) string {
+	raw = strings.TrimSpace(strings.Trim(raw, "`"))
+	start := strings.Index(raw, "{")
+	end := strings.LastIndex(raw, "}")
+	if start >= 0 && end > start {
+		return strings.TrimSpace(raw[start : end+1])
+	}
+	return raw
+}
+
+func deriveSummaryTitle(summary string) string {
+	for _, line := range strings.Split(summary, "\n") {
+		line = strings.TrimSpace(strings.TrimLeft(line, "#*- "))
+		line = strings.TrimSpace(line)
+		if line == "" || strings.Contains(strings.ToLower(line), "summary of video content") {
+			continue
+		}
+		if len([]rune(line)) > 60 {
+			line = string([]rune(line)[:60])
+			if idx := strings.LastIndex(line, " "); idx > 20 {
+				line = line[:idx]
+			}
+		}
+		return strings.TrimSpace(strings.TrimRight(line, ".:;"))
+	}
+	return "Generated Summary"
+}
+
+// ChatWithSummary answers a user question using the configured text provider.
 func (s *GeminiService) ChatWithSummary(ctx context.Context, summaryContent, userMessage string, history []models.ChatMessage) (string, error) {
+	if s.groqAPIKey != "" {
+		if err := s.acquireRate(ctx); err != nil {
+			return "", err
+		}
+		defer s.releaseRate()
+
+		contextText := summaryContent
+		if len(contextText) > 24000 {
+			contextText = contextText[:24000] + "\n\n[...content truncated for length]"
+		}
+		var prompt strings.Builder
+		prompt.WriteString(`You are an expert tutor. Answer the student's question using the summary as the primary source.
+Keep the answer concise (3-5 sentences), accurate, and conversational. Connect the answer to the summary when relevant. If unrelated, gently redirect to the topic. Return plain text only.
+
+SUMMARY:
+`)
+		prompt.WriteString(contextText)
+		prompt.WriteString("\n\nCONVERSATION HISTORY:\n")
+		for _, msg := range history {
+			role := "Student"
+			if msg.Role == "assistant" {
+				role = "Tutor"
+			}
+			prompt.WriteString(role + ": " + msg.Content + "\n")
+		}
+		prompt.WriteString("\nSTUDENT QUESTION:\n")
+		prompt.WriteString(userMessage)
+
+		reply, err := s.generateTextWithProvider(ctx, prompt.String(), 90*time.Second)
+		if err != nil {
+			return "", fmt.Errorf("Groq chat error: %w", err)
+		}
+		if strings.TrimSpace(reply) == "" {
+			return "I couldn't generate a response. Please try rephrasing your question.", nil
+		}
+		return strings.TrimSpace(reply), nil
+	}
+
 	if err := s.acquireRate(ctx); err != nil {
 		return "", err
 	}
