@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,7 +44,52 @@ type groqChatResponse struct {
 	} `json:"error,omitempty"`
 }
 
+var groqRetryDelayPattern = regexp.MustCompile(`(?i)(?:retry in|try again in)\s+([0-9]+(?:\.[0-9]+)?)s`)
+
 func (s *GeminiService) generateWithGroq(ctx context.Context, prompt string, timeout time.Duration) (string, error) {
+	for attempt := 0; attempt < 3; attempt++ {
+		result, err := s.generateWithGroqOnce(ctx, prompt, timeout)
+		if err == nil {
+			return result, nil
+		}
+		if !isGroqRateLimitError(err) || attempt == 2 {
+			return "", err
+		}
+
+		delay := groqRetryDelay(err)
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return "", ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return "", fmt.Errorf("Groq request failed after retries")
+}
+
+func isGroqRateLimitError(err error) bool {
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "rate limit") ||
+		strings.Contains(message, "too many requests") ||
+		strings.Contains(message, "tokens per minute") ||
+		strings.Contains(message, "tpm")
+}
+
+func groqRetryDelay(err error) time.Duration {
+	const fallback = 25 * time.Second
+	matches := groqRetryDelayPattern.FindStringSubmatch(err.Error())
+	if len(matches) != 2 {
+		return fallback
+	}
+	seconds, parseErr := strconv.ParseFloat(matches[1], 64)
+	if parseErr != nil || seconds <= 0 {
+		return fallback
+	}
+	return time.Duration(seconds*float64(time.Second)) + 500*time.Millisecond
+}
+
+func (s *GeminiService) generateWithGroqOnce(ctx context.Context, prompt string, timeout time.Duration) (string, error) {
 	if strings.TrimSpace(s.groqAPIKey) == "" {
 		return "", fmt.Errorf("GROQ_API_KEY is not configured")
 	}
@@ -72,7 +119,7 @@ func (s *GeminiService) generateWithGroq(ctx context.Context, prompt string, tim
 		// Groq's free on-demand tier currently enforces an 8k TPM request
 		// budget. Keeping completion tokens below that budget leaves room for
 		// the transcript and instructions in the same request.
-		MaxTokens:   completionTokens,
+		MaxTokens: completionTokens,
 	}
 	body, err := json.Marshal(requestBody)
 	if err != nil {
