@@ -164,6 +164,7 @@ export async function exportQuizResultsPdf(params: {
   const { attemptData, preferredFileTitle } = params
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  doc.setCharSpace(0)
 
   const safeParseJSON = (value: unknown): unknown => {
     if (typeof value !== 'string') return value
@@ -251,6 +252,7 @@ export async function exportQuizResultsPdf(params: {
 
   const stripInlineMarkdown = (value: string): string =>
     String(value || '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
       .replace(/<br\s*\/?>/gi, ' ')
       .replace(/\*\*(.*?)\*\*/g, '$1')
       .replace(/__(.*?)__/g, '$1')
@@ -926,6 +928,7 @@ export function QuizResultsPage() {
       setIsExportingPdf(true)
       const { jsPDF } = await import('jspdf')
       const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+      doc.setCharSpace(0)
 
       const margin = 42
       const quizPageWidth = doc.internal.pageSize.getWidth()

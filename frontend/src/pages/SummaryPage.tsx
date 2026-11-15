@@ -31,6 +31,7 @@ import {
 
 function cleanInlineMarkdown(value: string): string {
   return value
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/__(.*?)__/g, '$1')
@@ -1045,6 +1046,7 @@ export async function exportSummaryPdfFromData(params: {
 
       const { jsPDF } = await import('jspdf')
       const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+      doc.setCharSpace(0)
 
       const fileTitle = sanitizeFileName(preferredFileTitle || summary?.title || 'summary')
       const pageWidth = doc.internal.pageSize.getWidth()
@@ -3055,6 +3057,7 @@ export function SummaryPage() {
     try {
       const { jsPDF } = await import('jspdf')
       const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+      doc.setCharSpace(0)
 
       const fileTitle = sanitizeFileName(title || summary?.title || 'summary')
       const pageWidth = doc.internal.pageSize.getWidth()

@@ -30,6 +30,7 @@ export async function exportFlashcardResultsPdf(params: {
 }) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  doc.setCharSpace(0)
   const margin = 40
 
   const { title, cards, ratings } = params
@@ -139,7 +140,10 @@ export async function exportFlashcardResultsPdf(params: {
   const frontTextMaxWidth = Math.max(frontColWidth - 32, 80)
   const backTextMaxWidth = Math.max(backColWidth - 32, 80)
 
-  const normalizeInlineText = (value: string) => String(value || '').replace(/\s+/g, ' ').trim()
+  const normalizeInlineText = (value: string) => String(value || '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
   const fitLineToWidth = (line: string, maxWidth: number) => {
     const fitted = doc.splitTextToSize(line, maxWidth) as string[]
     if (fitted.length <= 1) return fitted[0] || ''
