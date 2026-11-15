@@ -15,6 +15,11 @@ import (
 
 const groqChatCompletionsURL = "https://api.groq.com/openai/v1/chat/completions"
 
+const (
+	groqRequestBudgetTokens = 7600 // keep a buffer below the 8k free-tier limit
+	groqMaxCompletionTokens = 6000
+)
+
 type groqChatRequest struct {
 	Model       string            `json:"model"`
 	Messages    []groqChatMessage `json:"messages"`
@@ -46,6 +51,18 @@ func (s *GeminiService) generateWithGroq(ctx context.Context, prompt string, tim
 		model = "openai/gpt-oss-20b"
 	}
 
+	// Groq's free tier counts prompt and completion tokens together. A fixed
+	// completion cap still fails for longer prompts, so reserve part of the
+	// request budget for the prompt itself.
+	promptTokens := (len([]rune(prompt)) + 3) / 4
+	completionTokens := groqMaxCompletionTokens
+	if available := groqRequestBudgetTokens - promptTokens; available < completionTokens {
+		completionTokens = available
+	}
+	if completionTokens < 512 {
+		return "", fmt.Errorf("prompt is too large for Groq free-tier request limit")
+	}
+
 	requestBody := groqChatRequest{
 		Model: model,
 		Messages: []groqChatMessage{
@@ -55,7 +72,7 @@ func (s *GeminiService) generateWithGroq(ctx context.Context, prompt string, tim
 		// Groq's free on-demand tier currently enforces an 8k TPM request
 		// budget. Keeping completion tokens below that budget leaves room for
 		// the transcript and instructions in the same request.
-		MaxTokens:   6000,
+		MaxTokens:   completionTokens,
 	}
 	body, err := json.Marshal(requestBody)
 	if err != nil {
