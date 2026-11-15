@@ -611,7 +611,7 @@ Summary:
 
 Rules:
 - suggested_title: concise, specific, reflects the main topic of the ENTIRE summary
-- Never use structural labels such as Cues, Notes, Summary, [CUES], [NOTES], or [SUMMARY] as the title.
+- Never use structural labels such as Overview, Core Structures, Interesting Facts, Key Concepts, Cues, Notes, Summary, [CUES], [NOTES], or [SUMMARY] as the title.
 - tags: cover the full range of topics across ALL sections, not just the opening
 - one_sentence_description: summarizes the complete content in plain language
 
@@ -6683,6 +6683,8 @@ func deriveSummaryTitle(summary string) string {
 		line = strings.TrimSpace(line)
 		normalized := strings.ToLower(strings.Trim(line, "[]"))
 		if line == "" || strings.Contains(normalized, "summary of video content") ||
+			normalized == "overview" || normalized == "core structures" ||
+			normalized == "interesting facts" || normalized == "key concepts" ||
 			normalized == "cues" || normalized == "notes" || normalized == "summary" {
 			continue
 		}
@@ -6700,7 +6702,7 @@ func deriveSummaryTitle(summary string) string {
 func isPlaceholderSummaryTitle(title string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(strings.Trim(title, "#[]")))
 	switch normalized {
-	case "", "untitled summary", "unknown summary", "cues", "notes", "summary", "cornell":
+	case "", "untitled summary", "unknown summary", "overview", "core structures", "interesting facts", "key concepts", "cues", "notes", "summary", "cornell":
 		return true
 	default:
 		return false
